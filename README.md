@@ -14,7 +14,7 @@ If you want to include live streaming abilities, you will need a stream server. 
 
 <h3>Claude Desktop Installation</h3>
 
-To install the server in Claude Destop, you can download the [installer](https://github.com/sr99622/onvif-mcp) to your local hard drive. Open Claude Desktop and use the hamburger icon in the upper left corner to open the File -> Settings menu and select Extensions from the left side panel. Click the Advanced Settings then click the Install Extension button to open a file selection dialog. Navigate to the repository and select the simple-mcp-server.mcpb file and the MCP server installer will present a dialog to be filled out with site parameters.
+To install the server in Claude Destop, you can download the [installer](https://github.com/sr99622/onvif-mcp/releases/download/v0.0.70/onvif-mcp.mcpb) to your local hard drive. Open Claude Desktop and use the hamburger icon in the upper left corner to open the File -> Settings menu and select Extensions from the left side panel. Click the Advanced Settings then click the Install Extension button to open a file selection dialog. Navigate to the repository and select the simple-mcp-server.mcpb file and the MCP server installer will present a dialog to be filled out with site parameters.
 
 To create the installer, you need the CLI tool from Anthropic
 
