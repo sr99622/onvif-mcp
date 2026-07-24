@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+claude/
+*.mcpb
+src/snapshots/
+src/sessions/
+src/subscribed_events.json
+src/camera_events.log
+.DS_Store
