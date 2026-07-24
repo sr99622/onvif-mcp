@@ -86,7 +86,7 @@ The default location for the .openclaw folder is in the users home directory. Fo
 The configuration is made by editing the file .codex/config.toml, add the following
 
 ```
-mcp_servers.camera]
+[mcp_servers.camera]
 command = "uv"
 args = ["run", "camera.py"]
 cwd = '/path/to/onvif-mcp/src'
