@@ -140,3 +140,5 @@ Please download the Driveway snapshot to file.
 ```
 
 Depending on agent abilities, the snapshot can be displayed in the model chat, and the model can be asked to describe the image. 
+
+There are many other functions available to control and observe the camera, you can ask the agent about it's abilities or to explain a function, and it will be able to come up with an answer for you.
