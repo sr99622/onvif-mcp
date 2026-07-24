@@ -5,7 +5,7 @@ description = "MCP server for ONVIF camera"
 requires-python = ">=3.10"
 dependencies = [
     "mcp>=1.0.0",
-    "libonvif==4.0.13",
+    "libonvif==4.0.23",
     "niquests==3.20.1",
 ]
 
