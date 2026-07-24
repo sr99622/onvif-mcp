@@ -83,9 +83,18 @@ The default location for the .openclaw folder is in the users home directory. Fo
 
 <h3>ChatGPT Desktop App Installation</h3>
 
-The configuration is made by editing the file .codex/config.toml, add the following
+The server is implemented in source code that you download with git.
 
 ```
+git clone https://github.com/sr99622/onvif-mcp
+```
+
+The configuration is made by editing the file .codex/config.toml, add the following. You can ask ChatGPT to do this for you if you add your specific path to onvif-mcp folder that you just downloaded from git. Tell the model
+
+```
+Please add the following MCP server configuration details to the $HOME/.codex/config.toml file.
+
+
 [mcp_servers.camera]
 command = "uv"
 args = ["run", "camera.py"]
@@ -96,6 +105,8 @@ CAMERA_USERNAME = "admin"
 CAMERA_PASSWORD = "admin123"
 STREAM_SERVER_IP = "10.1.1.13"
 ```
+
+You will need to re-start ChatGPT to get the server started.
 
 <h2>Using the ONVIF MCP Server</h2>
 
