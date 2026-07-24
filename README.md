@@ -124,3 +124,19 @@ To see the camera snapshot in your browser
 ```
 please show the camera snapshot from 10.1.1.77 in the browser
 ```
+
+There is a default name assigned to the camera when it is discovered. This is not necessarily the best name to work with, so you can set your own name using the change hostname function.
+
+```
+Please change the hostname on camera 10.1.1.77 to Driveway
+```
+
+You will then be able to address the camera by that name.
+
+You can introduce the camera snapshot into the model context by downloading to file
+
+```
+Please download the Driveway snapshot to file.
+```
+
+Depending on agent abilities, the snapshot can be displayed in the model chat, and the model can be asked to describe the image. 
