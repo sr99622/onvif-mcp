@@ -16,6 +16,8 @@ If you want to include live streaming abilities, you will need a stream server. 
 
 To install the server in Claude Destop, you can download the [installer](https://github.com/sr99622/onvif-mcp/releases/download/v0.0.70/onvif-mcp.mcpb) to your local hard drive. Open Claude Desktop and use the hamburger icon in the upper left corner to open the File -> Settings menu and select Extensions from the left side panel. Click the Advanced Settings then click the Install Extension button to open a file selection dialog. Navigate to the repository and select the simple-mcp-server.mcpb file and the MCP server installer will present a dialog to be filled out with site parameters.
 
+The installer will ask you for camera credentials and the STREAM_SERVER_IP. If you're not using the Cayenue server, you can leave that last one blank, but you will need camera credentials to log into the cameras. Enabled the MCP server and click Configure to view the settings and permissions for the server, the settings will be behind the current screen, so you might need to close that.
+
 To create the installer, you need the CLI tool from Anthropic
 
 ```
@@ -27,6 +29,8 @@ Then run the command
 ```
 mcpb pack
 ```
+
+If you want to uninstall, you might need to click the uninstall button twice to get it to stick.
 
 <h3>OpenClaw Installation</h3>
 
@@ -91,4 +95,32 @@ cwd = '/path/to/onvif-mcp/src'
 CAMERA_USERNAME = "admin"
 CAMERA_PASSWORD = "admin123"
 STREAM_SERVER_IP = "10.1.1.13"
+```
+
+<h2>Using the ONVIF MCP Server</h2>
+
+Once installed, the tool will be available for the agent. A good starting point is to query the agent to tell you the server version. 
+
+```
+Please tell me the current version of the camera mcp server.
+```
+
+On the first run, the model may not recognize the server right away. There may be some delay while the agent is asking permission to run the server. You might need to confirm the permission first before the agent is able to use the tool. If it struggles during the first run, ask again after you have granted permission.
+
+To see cameras on your local network
+
+```
+get cameras
+```
+
+This should produce a list of cameras that are connected to your local network. If your cameras are remote, you can ask to see a camera using its IP address
+
+```
+get camera at 10.1.1.77
+```
+
+To see the camera snapshot in your browser
+
+```
+please show the camera snapshot from 10.1.1.77 in the browser
 ```

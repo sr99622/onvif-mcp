@@ -1,9 +1,9 @@
 {
   "manifest_version": "0.4",
   "name": "camera",
-  "display_name": "ONVIF Camera (UV Runtime)",
+  "display_name": "ONVIF Camera",
   "version": "1.0.0",
-  "description": "Simple MCP server using UV runtime",
+  "description": "ONVIF MCP Server",
   "author": {
     "name": "Stephen Rhodes"
   },
