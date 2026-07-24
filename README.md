@@ -47,10 +47,10 @@ The default location for the .openclaw folder is in the users home directory. Fo
     "sessionIdleTtlMs": 0,
     "servers": {
       "camera": {
-        "command": "/Users/stephen/.local/bin/uv",
+        "command": "/path/to/bin/uv",
         "args": [
           "--directory",
-          "/Users/stephen/Projects/local.mcpb.stephen-rhodes.camera/src",
+          "/path/to/onvif-mcp/src",
           "run",
           "camera.py"
         ],
