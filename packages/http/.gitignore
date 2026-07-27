@@ -2,3 +2,5 @@
 __pycache__/
 claude/
 .DS_Store
+camera_events.log
+
