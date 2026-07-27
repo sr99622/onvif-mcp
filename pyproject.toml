@@ -1,6 +1,6 @@
 [project]
 name = "onvif-mcp"
-version = "0.0.70"
+version = "0.0.71"
 description = "MCP server for ONVIF camera"
 requires-python = ">=3.10"
 dependencies = [

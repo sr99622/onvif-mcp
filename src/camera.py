@@ -14,7 +14,7 @@ from libonvif.devices.camera import Camera, discover, get_camera_by_ip, set_host
         set_video_encoder_configuration, set_audio_encoder_configuration, camera_from_json, refresh_camera, \
         goto_preset, continuous_move, move_stop, get_local_date_and_time, set_system_date_and_time, \
         get_time_offset, set_preset, get_presets, remove_preset, create_preset_tour, modify_preset_tour, \
-        remove_preset_tour, operate_preset_tour, get_preset_tours
+        remove_preset_tour, operate_preset_tour, get_preset_tours, reboot
 from libonvif.datastructures.capabilities import Capabilities, PTZCapabilities
 from libonvif.datastructures.ptz import PTZPreset, PresetTour, TourSpot
 from libonvif.utils.serialization import to_dict
@@ -1790,6 +1790,45 @@ async def sync_camera_time(ip_address: str) -> str:
     except Exception as e:
         logger.error(f"Failed to sync time for camera at {camera.xaddr}: {e}")
         return f"Failed to sync time for camera at {camera.xaddr}: {e}"
+
+@mcp.tool()
+async def reboot_camera(ip_address: str) -> str:
+    """
+    Reboot a camera using the ONVIF SystemReboot operation.
+
+    This function queries the camera directly via ONVIF using its IP address
+    (with credentials from environment variables), builds a full Camera object,
+    and requests a reboot. No JSON payload is needed.
+
+    The camera will normally be unreachable for a short period after accepting
+    the request. A successful response confirms that the reboot request was
+    accepted, not that the camera has finished restarting.
+
+    Args:
+        ip_address: The IP address of the camera to reboot.
+
+    Returns:
+        A message indicating whether the reboot request succeeded or failed.
+    """
+    try:
+        camera = get_camera_by_ip(
+            ip_address,
+            os.environ.get("CAMERA_USERNAME", ""),
+            os.environ.get("CAMERA_PASSWORD", ""),
+        )
+    except Exception as e:
+        logger.error(f"Failed to query camera at {ip_address}: {e}")
+        return f"Failed to query camera at {ip_address}: {e}"
+
+    try:
+        camera.errors = None
+        reboot(camera)
+        if camera.errors:
+            raise Exception(f"Camera returned errors: {camera.errors}")
+        return f"Successfully requested reboot for camera at {camera.xaddr}."
+    except Exception as e:
+        logger.error(f"Failed to reboot camera at {camera.xaddr}: {e}")
+        return f"Failed to reboot camera at {camera.xaddr}: {e}"
 
 @mcp.tool()
 async def check_camera_mcp_environment() -> str:
