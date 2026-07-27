@@ -1,6 +1,6 @@
 [project]
 name = "onvif-mcp-http"
-version = "0.0.8"
+version = "0.0.9"
 description = "ONVIF MCP server using the streamable-http transport"
 requires-python = ">=3.10"
 dependencies = [
