@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Camera Switchboard</title>
+  <link rel="stylesheet" href="/cameras/styles.css">
+</head>
+<body>
+  <main class="app">
+    <aside class="sidebar">
+      <header>
+        <p class="eyebrow">LIVE VIEW</p>
+        <h1>Camera Switchboard</h1>
+        <p id="status" class="status">Loading cameras…</p>
+      </header>
+
+      <nav id="camera-list" class="camera-list" aria-label="Cameras"></nav>
+
+      <div class="controls">
+        <button id="previous" type="button">Previous</button>
+        <button id="next" type="button">Next</button>
+      </div>
+    </aside>
+
+    <section class="viewer">
+      <div class="viewer-header">
+        <div>
+          <p class="eyebrow">NOW VIEWING</p>
+          <h2 id="camera-name">Select a camera</h2>
+        </div>
+        <span id="camera-address" class="address"></span>
+      </div>
+      <iframe
+        id="player"
+        title="Camera live stream"
+        allow="autoplay; fullscreen"
+        referrerpolicy="no-referrer"
+      ></iframe>
+    </section>
+  </main>
+  <script src="/cameras/app.js"></script>
+</body>
+</html>
