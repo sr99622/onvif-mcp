@@ -108,9 +108,13 @@ The result is three distributions:
 
 ```text
 onvif-mcp-core
-onvif-mcp-stdio
 onvif-mcp-http
+stdio
 ```
+
+Note that there is a difference in the naming convention for stdio. This is
+an historical retention, and is kept for more easily read human instructions 
+for installing the MCP by hand.
 
 Both server packages declare `onvif-mcp-core` as a `uv` workspace dependency.
 
