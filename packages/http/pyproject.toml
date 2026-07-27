@@ -12,6 +12,9 @@ dependencies = [
     "niquests",
 ]
 
+[project.scripts]
+onvif-mcp-http = "onvif_mcp_http.main:main"
+
 [build-system]
 requires = ["uv_build>=0.8.0,<0.9.0"]
 build-backend = "uv_build"
