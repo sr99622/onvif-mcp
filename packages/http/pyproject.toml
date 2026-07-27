@@ -5,12 +5,16 @@ description = "ONVIF MCP server using the streamable-http transport"
 requires-python = ">=3.10"
 dependencies = [
     "mcp>=1.0.0",
+    "onvif-mcp-core",
     "starlette>=0.27.0",
     "uvicorn>=0.23.0",
     "libonvif==4.0.23",
     "pydantic>=2.0.0",
     "niquests",
 ]
+
+[tool.uv.sources]
+onvif-mcp-core = { workspace = true }
 
 [project.scripts]
 onvif-mcp-http = "onvif_mcp_http.main:main"
@@ -22,5 +26,4 @@ build-backend = "uv_build"
 # TEMPORARY: pointing libonvif at the local source directory, matching the
 # same pattern used in the camera MCP server, since we're not certain the
 # libonvif version this depends on is published to PyPI yet.
-#[tool.uv.sources]
-#libonvif = { path = "../libonvif" }
+# libonvif = { path = "../libonvif" }

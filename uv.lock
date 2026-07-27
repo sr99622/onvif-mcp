@@ -12,6 +12,7 @@ resolution-markers = [
 
 [manifest]
 members = [
+    "onvif-mcp-core",
     "onvif-mcp-http",
     "onvif-mcp-stdio",
 ]
@@ -728,6 +729,21 @@ wheels = [
 ]
 
 [[package]]
+name = "onvif-mcp-core"
+version = "0.1.0"
+source = { editable = "packages/core" }
+dependencies = [
+    { name = "libonvif" },
+    { name = "mcp" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "libonvif", specifier = "==4.0.23" },
+    { name = "mcp", specifier = ">=1.0.0" },
+]
+
+[[package]]
 name = "onvif-mcp-http"
 version = "0.0.8"
 source = { editable = "packages/http" }
@@ -735,6 +751,7 @@ dependencies = [
     { name = "libonvif" },
     { name = "mcp" },
     { name = "niquests" },
+    { name = "onvif-mcp-core" },
     { name = "pydantic" },
     { name = "starlette" },
     { name = "uvicorn" },
@@ -745,6 +762,7 @@ requires-dist = [
     { name = "libonvif", specifier = "==4.0.23" },
     { name = "mcp", specifier = ">=1.0.0" },
     { name = "niquests" },
+    { name = "onvif-mcp-core", editable = "packages/core" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "starlette", specifier = ">=0.27.0" },
     { name = "uvicorn", specifier = ">=0.23.0" },
@@ -758,6 +776,7 @@ dependencies = [
     { name = "libonvif" },
     { name = "mcp" },
     { name = "niquests" },
+    { name = "onvif-mcp-core" },
 ]
 
 [package.metadata]
@@ -765,6 +784,7 @@ requires-dist = [
     { name = "libonvif", specifier = "==4.0.23" },
     { name = "mcp", specifier = ">=1.0.0" },
     { name = "niquests", specifier = "==3.20.1" },
+    { name = "onvif-mcp-core", editable = "packages/core" },
 ]
 
 [[package]]

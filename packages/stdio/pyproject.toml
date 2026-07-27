@@ -5,9 +5,13 @@ description = "MCP server for ONVIF camera using stdio transport"
 requires-python = ">=3.10"
 dependencies = [
     "mcp>=1.0.0",
+    "onvif-mcp-core",
     "libonvif==4.0.23",
     "niquests==3.20.1",
 ]
+
+[tool.uv.sources]
+onvif-mcp-core = { workspace = true }
 
 # TEMPORARY: pointing libonvif at the local source directory during active
 # development, since we are iterating on unpublished fixes (e.g. the
@@ -18,5 +22,4 @@ dependencies = [
 # remove this [tool.uv.sources] override, re-pin "libonvif" to that exact
 # released version in [project].dependencies above, and run `uv lock` to
 # regenerate uv.lock against the published package.
-#[tool.uv.sources]
-#libonvif = { path = "../libonvif/packages/libonvif", editable = true }
+# libonvif = { path = "../libonvif/packages/libonvif", editable = true }

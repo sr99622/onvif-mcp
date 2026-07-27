@@ -17,17 +17,17 @@ from pydantic import BaseModel
 from mcp.server.fastmcp import FastMCP, Context
 from mcp.server.elicitation import AcceptedElicitation, DeclinedElicitation, CancelledElicitation
 from mcp.server.transport_security import TransportSecuritySettings
-from libonvif.utils.adapters import find_adapters
-from libonvif.utils.server import EventServer
-from libonvif.utils.subscriber import SubscriptionManager
-from libonvif.devices.camera import Camera, discover, get_camera_by_ip, set_hostname, \
-        set_video_encoder_configuration, set_audio_encoder_configuration, camera_from_json, refresh_camera, \
-        goto_preset, continuous_move, move_stop, get_local_date_and_time, set_system_date_and_time, \
-        get_time_offset, set_preset, get_presets, remove_preset, create_preset_tour, modify_preset_tour, \
-        remove_preset_tour, operate_preset_tour, get_preset_tours, reboot
-from libonvif.datastructures.capabilities import Capabilities, PTZCapabilities
-from libonvif.datastructures.ptz import PTZPreset, PresetTour, TourSpot
-from libonvif.utils.serialization import to_dict
+from onvif_mcp_core.camera_queries import (
+    get_camera as get_camera_query,
+    get_cameras as get_cameras_query,
+)
+from onvif_mcp_core.guidance import TOOL_GUIDANCE
+from onvif_mcp_core.tools import (
+    register_audio_configuration_tools,
+    register_device_management_tools,
+    register_ptz_tools,
+    register_video_configuration_tools,
+)
 
 
 LOG_FILE = Path(__file__).parent / "camera_events.log"
@@ -39,16 +39,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-
-def get_camera_credentials(camera: Camera) -> None:
-    camera.username = os.environ.get("CAMERA_USERNAME", "")
-    camera.password = os.environ.get("CAMERA_PASSWORD", "")
-
-def on_error(xaddr: str, ex: Exception) -> None:
-    logger.debug(f"error: {xaddr} - {ex}")
-
-def camera_filled(camera: Camera) -> None:
-    logger.debug(f"Camera Filled: {camera.hostname} : {camera.device_information.serial_number}")
 
 # --- Event listener integration ---
 # Bridges the standalone motion_watcher.py prototype (packages/sse) into
@@ -123,6 +113,10 @@ mcp = FastMCP(
         ],
     ),
 )
+register_video_configuration_tools(mcp)
+register_audio_configuration_tools(mcp)
+register_ptz_tools(mcp)
+register_device_management_tools(mcp)
 
 class TripTypeResponse(BaseModel):
     value: str
@@ -187,7 +181,7 @@ async def get_camera_mcp_version() -> str:
     }, indent=4)
 
 
-@mcp.tool()
+@mcp.tool(description=TOOL_GUIDANCE["get_camera"])
 async def get_camera(ip_address: str) -> str:
     """
     Query a camera by IP address and return its full state as a JSON
@@ -204,10 +198,9 @@ async def get_camera(ip_address: str) -> str:
     Returns:
         The camera's JSON representation, as produced by Camera.to_json().
     """
-    camera = get_camera_by_ip(ip_address, os.environ.get("CAMERA_USERNAME", ""), os.environ.get("CAMERA_PASSWORD", ""))
-    return camera.to_json()
+    return await get_camera_query(ip_address)
 
-@mcp.tool()
+@mcp.tool(description=TOOL_GUIDANCE["get_cameras"])
 async def get_cameras() -> str:
     """
     Discover cameras on the local network and return lightweight summaries.
@@ -224,114 +217,7 @@ async def get_cameras() -> str:
         the local network. Each camera's summary is separated by "\n--\n".
     """
 
-    ip_address = "0.0.0.0"
-    if sys.platform == "win32":
-        ips = find_adapters()
-        if len(ips):
-            ip_address = ips[0]
-            logger.debug(f"host ip addresses: {ips}")
-
-    cameras = discover(ip_address,
-                       get_camera_credentials,
-                       on_error=on_error,
-                       camera_filled=camera_filled,
-                       use_threads=True)
-
-    logger.debug(f"Discovered {len(cameras)} camera(s)")
-
-    summaries = []
-    for camera in cameras:
-        # Serialize once via the same codec used by Camera.to_json(), then
-        # project down to just the fields this summary needs. Every field
-        # below is read with `.get(key) or default` rather than
-        # `.get(key, default)`, since to_dict() always includes every
-        # dataclass field explicitly (even when its value is None) - the
-        # dict.get default only kicks in for a missing key, not a present
-        # key holding None, so relying on it here would silently produce
-        # None instead of the intended fallback.
-        try:
-            data = to_dict(camera)
-        except Exception as e:
-            logger.error(f"Failed to serialize camera at {getattr(camera, 'xaddr', '?')}: {e}")
-            continue
-
-        dev = data.get("device_information") or {}
-        hostname_obj = data.get("hostname") or {}
-        xaddr = data.get("xaddr") or ""
-        ip_addr = xaddr.split("://", 1)[1].split("/", 1)[0] if "://" in xaddr else ""
-
-        profiles = []
-        for p in data.get("profiles") or []:
-            video_encoder = p.get("video_encoder") or {}
-            rate_control = video_encoder.get("rate_control") or {}
-            audio_encoder = p.get("audio_encoder") or {}
-            profiles.append({
-                "token": p.get("token") or "",
-                "name": p.get("name") or "",
-                "video_encoder": {
-                    "encoding": video_encoder.get("encoding") or "",
-                    "resolution": video_encoder.get("resolution") or "",
-                    "frame_rate_limit": rate_control.get("frame_rate_limit") or 0,
-                    "bitrate_limit": rate_control.get("bitrate_limit") or 0,
-                    "gov_length": video_encoder.get("gov_length") or 0
-                },
-                "audio_encoder": {
-                    "encoding": audio_encoder.get("encoding") or "",
-                    "sample_rate": audio_encoder.get("sample_rate") or 0
-                },
-                "stream_uri": p.get("stream_uri") or "",
-                "snapshot_uri": p.get("snapshot_uri") or ""
-            })
-
-        ptz = data.get("ptz") or {}
-
-        presets = [
-            {"token": pr.get("token") or "", "name": pr.get("name") or ""}
-            for pr in ptz.get("presets") or []
-        ]
-
-        tours = []
-        for t in ptz.get("tours") or []:
-            tour_status = t.get("status") or {}
-            tours.append({
-                "token": t.get("token") or "",
-                "name": t.get("name") or "",
-                "status": tour_status.get("state") or "",
-                "spot_count": len(t.get("spots") or [])
-            })
-
-        ptz_status = ptz.get("status") or {}
-        ptz_st = {
-            "pan_tilt": ptz_status.get("pan_tilt_status") or "",
-            "zoom": ptz_status.get("zoom_status") or ""
-        }
-
-        caps = data.get("capabilities") or {}
-        ptz_caps = caps.get("ptz") or {}
-        ptz_xaddr = ptz_caps.get("xaddr") or ""
-
-        event_props = data.get("event_properties") or {}
-        event_topics = event_props.get("topic_set") or []
-
-        summary = {
-            "hostname": hostname_obj.get("name") or data.get("name") or "",
-            "ip_address": ip_addr,
-            "manufacturer": dev.get("manufacturer") or "",
-            "model": dev.get("model") or "",
-            "firmware_version": dev.get("firmware_version") or "",
-            "serial_number": dev.get("serial_number") or "",
-            "profiles": profiles,
-            "ptz_presets": presets,
-            "ptz_tours": tours,
-            "ptz_status": ptz_st,
-            "ptz_xaddr": ptz_xaddr,
-            "event_topics": event_topics,
-            "subscribed_events": list(_subscribed_events_by_camera.get(ip_addr, [])),
-            "time_offset": int(data.get("time_offset") or 0)
-        }
-        summaries.append(json.dumps(summary))
-
-    return "\n--\n".join(summaries)
+    return await get_cameras_query(_subscribed_events_by_camera)
 
 class PrivateNetworkAccessMiddleware:
     """
