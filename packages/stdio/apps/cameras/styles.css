@@ -97,18 +97,24 @@ h2 {
 }
 
 .controls {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  display: flex;
 }
 
-.controls button {
+.multiview-link {
+  width: 100%;
   padding: 10px;
   border: 1px solid #354151;
   border-radius: 9px;
   background: #1c2430;
   color: #fff;
-  cursor: pointer;
+  text-align: center;
+  text-decoration: none;
+}
+
+.multiview-link:hover,
+.multiview-link:focus-visible {
+  border-color: #75e3b2;
+  outline: none;
 }
 
 .viewer {

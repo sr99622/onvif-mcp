@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Camera Switchboard</title>
-  <link rel="stylesheet" href="/cameras/styles.css">
+  <link rel="stylesheet" href="/cameras/styles.css?v=2">
 </head>
 <body>
   <main class="app">
@@ -18,8 +18,7 @@
       <nav id="camera-list" class="camera-list" aria-label="Cameras"></nav>
 
       <div class="controls">
-        <button id="previous" type="button">Previous</button>
-        <button id="next" type="button">Next</button>
+        <a class="multiview-link" href="/multiview/">Multi View</a>
       </div>
     </aside>
 
@@ -39,6 +38,6 @@
       ></iframe>
     </section>
   </main>
-  <script src="/cameras/app.js"></script>
+  <script src="/cameras/app.js?v=2"></script>
 </body>
 </html>

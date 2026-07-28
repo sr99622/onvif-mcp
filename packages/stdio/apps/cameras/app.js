@@ -3,8 +3,6 @@ const player = document.querySelector("#player");
 const cameraName = document.querySelector("#camera-name");
 const cameraAddress = document.querySelector("#camera-address");
 const status = document.querySelector("#status");
-const previous = document.querySelector("#previous");
-const next = document.querySelector("#next");
 
 let cameras = [];
 let selectedIndex = -1;
@@ -54,8 +52,5 @@ async function initialize() {
     cameraAddress.textContent = error.message;
   }
 }
-
-previous.addEventListener("click", () => selectCamera(selectedIndex - 1));
-next.addEventListener("click", () => selectCamera(selectedIndex + 1));
 
 initialize();

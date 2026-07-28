@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Four-Camera View</title>
+  <link rel="stylesheet" href="/multiview/styles.css?v=2">
+</head>
+<body>
+  <main class="app">
+    <aside class="sidebar">
+      <header>
+        <p class="eyebrow">LIVE MONITORING</p>
+        <h1>Four-Camera View</h1>
+        <p id="status" class="status">Loading cameras...</p>
+      </header>
+
+      <section class="camera-controls" aria-label="Camera assignments">
+        <article class="camera-control" data-slot="0">
+          <label for="camera-1">Camera 1</label>
+          <select id="camera-1" aria-label="Camera 1 source"></select>
+          <p class="camera-details"></p>
+        </article>
+        <article class="camera-control" data-slot="1">
+          <label for="camera-2">Camera 2</label>
+          <select id="camera-2" aria-label="Camera 2 source"></select>
+          <p class="camera-details"></p>
+        </article>
+        <article class="camera-control" data-slot="2">
+          <label for="camera-3">Camera 3</label>
+          <select id="camera-3" aria-label="Camera 3 source"></select>
+          <p class="camera-details"></p>
+        </article>
+        <article class="camera-control" data-slot="3">
+          <label for="camera-4">Camera 4</label>
+          <select id="camera-4" aria-label="Camera 4 source"></select>
+          <p class="camera-details"></p>
+        </article>
+      </section>
+
+      <a class="switchboard-link" href="/cameras/">Single View</a>
+    </aside>
+
+    <section id="camera-grid" class="camera-grid" aria-label="Camera streams">
+      <article class="camera-tile" data-slot="0">
+        <h2>Camera 1</h2>
+        <iframe title="Camera 1 live stream" allow="autoplay; fullscreen" referrerpolicy="no-referrer"></iframe>
+      </article>
+      <article class="camera-tile" data-slot="1">
+        <h2>Camera 2</h2>
+        <iframe title="Camera 2 live stream" allow="autoplay; fullscreen" referrerpolicy="no-referrer"></iframe>
+      </article>
+      <article class="camera-tile" data-slot="2">
+        <h2>Camera 3</h2>
+        <iframe title="Camera 3 live stream" allow="autoplay; fullscreen" referrerpolicy="no-referrer"></iframe>
+      </article>
+      <article class="camera-tile" data-slot="3">
+        <h2>Camera 4</h2>
+        <iframe title="Camera 4 live stream" allow="autoplay; fullscreen" referrerpolicy="no-referrer"></iframe>
+      </article>
+    </section>
+  </main>
+  <script src="/multiview/app.js?v=2"></script>
+</body>
+</html>
