@@ -17,9 +17,9 @@ resume.
 The repository contains three `uv` workspace members:
 
 ```text
-packages/core   onvif-mcp-core   0.2.0
-packages/http   onvif-mcp-http   0.1.0
-packages/stdio  onvif-mcp-stdio  0.1.0
+packages/core   onvif-mcp-core   0.2.1
+packages/http   onvif-mcp-http   0.1.1
+packages/stdio  onvif-mcp-stdio  0.1.1
 ```
 
 Important commits from this work are:
