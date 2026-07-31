@@ -5,7 +5,6 @@ from .camera_queries import get_camera, get_cameras
 from .device import change_camera_hostname, reboot_camera, sync_camera_time
 from .tools import (
     register_audio_configuration_tools,
-    register_camera_query_tools,
     register_device_management_tools,
     register_ptz_tools,
     register_video_configuration_tools,
@@ -24,7 +23,6 @@ __all__ = [
     "reboot_camera",
     "sync_camera_time",
     "register_audio_configuration_tools",
-    "register_camera_query_tools",
     "register_device_management_tools",
     "register_ptz_tools",
     "register_video_configuration_tools",

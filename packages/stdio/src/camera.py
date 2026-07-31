@@ -122,13 +122,6 @@ _camera_subscriptions: dict[str, dict] = {}
 # deliberately separate from _event_server/_camera_subscriptions above:
 # those track live ONVIF subscription state (built lazily, in memory
 # only), while this needs to hold user preferences for potentially many
-# cameras (nothing stored on the Camera object itself persists across
-# get_cameras() calls, which rediscovers cameras fresh every time).
-#
-# This does not survive a server restart - it is reset to empty on
-# every process start.
-_subscribed_events_by_camera: dict[str, list[str]] = {}
-
 OPENCLAW_CHAT_SESSION_KEY = "agent:main:main"
 
 @mcp.tool()
@@ -943,7 +936,7 @@ async def update_camera_data(json_string: str) -> str:
 @mcp.tool(description=TOOL_GUIDANCE["get_cameras"])
 async def get_cameras() -> str:
 
-    return await get_cameras_query(_subscribed_events_by_camera)
+    return await get_cameras_query()
 
 @mcp.tool()
 async def add_subscribed_event(ip_address: str, event_topic: str) -> str:

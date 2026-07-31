@@ -87,14 +87,6 @@ _camera_subscriptions: dict[str, dict] = {}
 # deliberately separate from _event_server/_camera_subscriptions above:
 # those track live ONVIF subscription state (built lazily, in memory
 # only), while this needs to hold user preferences for potentially many
-# cameras (nothing stored on the Camera object itself persists across
-# get_cameras() calls, which rediscovers cameras fresh every time).
-#
-# This does not survive a server restart - it is reset to empty on
-# every process start.
-_subscribed_events_by_camera: dict[str, list[str]] = {}
-
-
 # DNS-rebinding protection stays enabled, but we explicitly allow the
 # llama.cpp web UI's origin (10.1.1.2) alongside the usual localhost
 # entries FastMCP would otherwise add automatically. Supplying our own
@@ -218,7 +210,7 @@ async def get_cameras() -> str:
         the local network. Each camera's summary is separated by "\n--\n".
     """
 
-    return await get_cameras_query(_subscribed_events_by_camera)
+    return await get_cameras_query()
 
 class PrivateNetworkAccessMiddleware:
     """

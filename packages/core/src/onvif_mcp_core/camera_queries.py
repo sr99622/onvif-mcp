@@ -45,7 +45,6 @@ async def get_camera(ip_address: str) -> str:
 
 def _camera_summary(
     camera: Camera,
-    subscribed_events_by_camera: Mapping[str, Sequence[str]],
 ) -> dict[str, Any]:
     data = to_dict(camera)
     dev = data.get("device_information") or {}
@@ -117,16 +116,12 @@ def _camera_summary(
         },
         "ptz_xaddr": ptz_capabilities.get("xaddr") or "",
         "event_topics": event_properties.get("topic_set") or [],
-        "subscribed_events": list(subscribed_events_by_camera.get(ip_addr, [])),
         "time_offset": int(data.get("time_offset") or 0),
     }
 
 
-async def get_cameras(
-    subscribed_events_by_camera: Mapping[str, Sequence[str]] | None = None,
-) -> str:
+async def get_cameras() -> str:
     """Discover cameras and return lightweight, delimited JSON summaries."""
-    subscribed_events = subscribed_events_by_camera or {}
     adapter_ip = "0.0.0.0"
     if sys.platform == "win32":
         ips = find_adapters()
@@ -147,7 +142,7 @@ async def get_cameras(
     for camera in cameras:
         try:
             summaries.append(
-                json.dumps(_camera_summary(camera, subscribed_events))
+                json.dumps(_camera_summary(camera))
             )
         except Exception as ex:
             logger.error(
