@@ -60,6 +60,16 @@ TOOL_GUIDANCE: dict[str, str] = {
         """
     ).rstrip("\n"),
 
+    "get_adapters": dedent(
+        """\
+        Return a list of available active network adapters.
+
+        Returns:
+            A delimited string containing the IP address of each active adapter,
+            one per line, separated by "\n--\n".
+        """
+    ).rstrip("\n"),
+
     "get_camera": dedent(
         """\
         Get information about a camera at the specified IP address.

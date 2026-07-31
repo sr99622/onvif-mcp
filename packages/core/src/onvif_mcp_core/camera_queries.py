@@ -120,6 +120,20 @@ def _camera_summary(
     }
 
 
+async def get_adapters() -> str:
+    """Return a list of available active network adapters.
+
+    Returns:
+        A delimited string containing the IP address of each active adapter,
+        one per line, separated by "\n--\n".
+    """
+    adapter_ips = find_adapters()
+    if not adapter_ips:
+        return ""
+
+    return "\n--\n".join(adapter_ips)
+
+
 async def get_cameras() -> str:
     """Discover cameras and return lightweight, delimited JSON summaries."""
     # Get all adapter IPs

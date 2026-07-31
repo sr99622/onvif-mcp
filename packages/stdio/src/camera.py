@@ -23,10 +23,6 @@ import re
 import shutil
 import subprocess
 from typing import Any
-from onvif_mcp_core.camera_queries import (
-    get_camera as get_camera_query,
-    get_cameras as get_cameras_query,
-)
 from onvif_mcp_core.audio import (
     set_camera_audio_encoding as set_camera_audio_encoding_core,
     set_camera_audio_sample_rate as set_camera_audio_sample_rate_core,
@@ -56,7 +52,15 @@ from onvif_mcp_core.device import (
     reboot_camera as reboot_camera_core,
     sync_camera_time as sync_camera_time_core,
 )
+from onvif_mcp_core.camera_queries import get_adapters as get_adapters_query
 from onvif_mcp_core.guidance import TOOL_GUIDANCE
+from onvif_mcp_core.tools import (
+    register_audio_configuration_tools,
+    register_camera_query_tools,
+    register_device_management_tools,
+    register_ptz_tools,
+    register_video_configuration_tools,
+)
 
 LOG_FILE = Path(__file__).parent / "camera_events.log"
 
@@ -69,6 +73,21 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 mcp = FastMCP("onvif-mcp")
+register_video_configuration_tools(mcp)
+register_audio_configuration_tools(mcp)
+register_ptz_tools(mcp)
+register_device_management_tools(mcp)
+register_camera_query_tools(mcp)
+
+@mcp.tool(description=TOOL_GUIDANCE["get_adapters"])
+async def get_adapters() -> str:
+    """Return a list of available active network adapters.
+
+    Returns:
+        A delimited string containing the IP address of each active adapter,
+        one per line, separated by "\n--\n".
+    """
+    return await get_adapters_query()
 
 USER_AGENT = "onvif-mcp-app/1.0"
 
@@ -883,11 +902,6 @@ async def show_snapshot_in_browser(url: str) -> str:
     else:
         return f"Failed to open {url}."
     
-@mcp.tool(description=TOOL_GUIDANCE["get_camera"])
-async def get_camera(ip_address: str) -> str:
-
-    return await get_camera_query(ip_address)
-
 @mcp.tool()
 async def update_camera_data(json_string: str) -> str:
     """
@@ -933,12 +947,7 @@ async def update_camera_data(json_string: str) -> str:
         logger.error(f"Failed to refresh camera at {camera.xaddr}: {e}")
         return f"Failed to refresh camera at {camera.xaddr}: {e}"
 
-@mcp.tool(description=TOOL_GUIDANCE["get_cameras"])
-async def get_cameras() -> str:
 
-    return await get_cameras_query()
-
-@mcp.tool()
 async def add_subscribed_event(ip_address: str, event_topic: str) -> str:
     """
     Subscribe a camera to an ONVIF event topic and mark it as observed.

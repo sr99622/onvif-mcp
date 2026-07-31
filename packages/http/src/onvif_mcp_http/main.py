@@ -18,12 +18,14 @@ from mcp.server.fastmcp import FastMCP, Context
 from mcp.server.elicitation import AcceptedElicitation, DeclinedElicitation, CancelledElicitation
 from mcp.server.transport_security import TransportSecuritySettings
 from onvif_mcp_core.camera_queries import (
+    get_adapters as get_adapters_query,
     get_camera as get_camera_query,
     get_cameras as get_cameras_query,
 )
 from onvif_mcp_core.guidance import TOOL_GUIDANCE
 from onvif_mcp_core.tools import (
     register_audio_configuration_tools,
+    register_camera_query_tools,
     register_device_management_tools,
     register_ptz_tools,
     register_video_configuration_tools,
@@ -110,6 +112,17 @@ register_video_configuration_tools(mcp)
 register_audio_configuration_tools(mcp)
 register_ptz_tools(mcp)
 register_device_management_tools(mcp)
+register_camera_query_tools(mcp)
+
+@mcp.tool(description=TOOL_GUIDANCE["get_adapters"])
+async def get_adapters() -> str:
+    """Return a list of available active network adapters.
+
+    Returns:
+        A delimited string containing the IP address of each active adapter,
+        one per line, separated by "\n--\n".
+    """
+    return await get_adapters_query()
 
 class TripTypeResponse(BaseModel):
     value: str
@@ -174,24 +187,7 @@ async def get_camera_mcp_version() -> str:
     }, indent=4)
 
 
-@mcp.tool(description=TOOL_GUIDANCE["get_camera"])
-async def get_camera(ip_address: str) -> str:
-    """
-    Query a camera by IP address and return its full state as a JSON
-    string. Credentials come from the CAMERA_USERNAME/CAMERA_PASSWORD
-    environment variables - the same pattern used by the camera MCP
-    server. Added here as a test of whether real camera data (a large,
-    deeply nested JSON payload) flows correctly through the
-    streamable-http transport and this server's CORS/session setup, not
-    just the trivial add() tool above.
 
-    Args:
-        ip_address: The IP address of the camera to query.
-
-    Returns:
-        The camera's JSON representation, as produced by Camera.to_json().
-    """
-    return await get_camera_query(ip_address)
 
 @mcp.tool(description=TOOL_GUIDANCE["get_cameras"])
 async def get_cameras() -> str:

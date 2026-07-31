@@ -74,3 +74,9 @@ def register_device_management_tools(mcp: FastMCP) -> None:
     _register_tool(mcp, change_camera_hostname)
     _register_tool(mcp, sync_camera_time)
     _register_tool(mcp, reboot_camera)
+
+
+def register_camera_query_tools(mcp: FastMCP) -> None:
+    """Register camera query tools shared by all MCP transports."""
+    _register_tool(mcp, query_camera)
+    _register_tool(mcp, query_cameras)
