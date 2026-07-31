@@ -122,28 +122,44 @@ def _camera_summary(
 
 async def get_cameras() -> str:
     """Discover cameras and return lightweight, delimited JSON summaries."""
-    adapter_ip = "0.0.0.0"
-    if sys.platform == "win32":
-        ips = find_adapters()
-        if ips:
-            adapter_ip = ips[0]
-            logger.debug("Host IP addresses: %s", ips)
+    # Get all adapter IPs
+    adapter_ips = find_adapters()
+    if adapter_ips:
+        logger.debug("Host IP addresses: %s", adapter_ips)
 
-    cameras = discover(
-        adapter_ip,
-        _get_camera_credentials,
-        on_error=_on_error,
-        camera_filled=_camera_filled,
-        use_threads=True,
-    )
-    logger.debug("Discovered %d camera(s)", len(cameras))
+    # Discover cameras on each adapter and merge results
+    all_cameras = []
+    seen_ips = set()
+
+    for adapter_ip in adapter_ips:
+        logger.debug("Discovering cameras on adapter %s", adapter_ip)
+        cameras = discover(
+            adapter_ip,
+            _get_camera_credentials,
+            on_error=_on_error,
+            camera_filled=_camera_filled,
+            use_threads=True,
+        )
+
+        for camera in cameras:
+            # Get camera IP for deduplication
+            xaddr = getattr(camera, "xaddr", None) or ""
+            ip_addr = xaddr.split("://", 1)[1].split("/", 1)[0] if "://" in xaddr else ""
+
+            # Skip if we've already seen this camera
+            if ip_addr in seen_ips:
+                logger.debug("Skipping duplicate camera %s (already discovered)", ip_addr)
+                continue
+
+            seen_ips.add(ip_addr)
+            all_cameras.append(camera)
+
+    logger.debug("Discovered %d camera(s) total", len(all_cameras))
 
     summaries = []
-    for camera in cameras:
+    for camera in all_cameras:
         try:
-            summaries.append(
-                json.dumps(_camera_summary(camera))
-            )
+            summaries.append(json.dumps(_camera_summary(camera)))
         except Exception as ex:
             logger.error(
                 "Failed to serialize camera at %s: %s",
