@@ -7,6 +7,7 @@ from mcp.server.fastmcp import FastMCP
 from .audio import set_camera_audio_encoding, set_camera_audio_sample_rate
 from .camera_queries import get_camera as query_camera
 from .camera_queries import get_cameras as query_cameras
+from .camera_queries import get_cameras_by_adapter
 from .device import change_camera_hostname, reboot_camera, sync_camera_time
 from .guidance import TOOL_GUIDANCE
 from .video import (
@@ -80,3 +81,4 @@ def register_camera_query_tools(mcp: FastMCP) -> None:
     """Register camera query tools shared by all MCP transports."""
     _register_tool(mcp, query_camera)
     _register_tool(mcp, query_cameras)
+    _register_tool(mcp, get_cameras_by_adapter)

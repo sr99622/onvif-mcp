@@ -182,3 +182,37 @@ async def get_cameras() -> str:
             )
 
     return "\n--\n".join(summaries)
+
+
+async def get_cameras_by_adapter(adapter_ip: str) -> str:
+    """Discover cameras on a specific adapter subnet and return lightweight summaries.
+
+    Args:
+        adapter_ip: The IP address of the adapter to discover cameras on.
+
+    Returns:
+        A delimited string containing a summary dict for each camera found on
+        the specified adapter subnet. Each camera's summary is separated by a line
+        containing `--`.
+    """
+    logger.debug("Discovering cameras on adapter %s", adapter_ip)
+    cameras = discover(
+        adapter_ip,
+        _get_camera_credentials,
+        on_error=_on_error,
+        camera_filled=_camera_filled,
+        use_threads=True,
+    )
+
+    summaries = []
+    for camera in cameras:
+        try:
+            summaries.append(json.dumps(_camera_summary(camera)))
+        except Exception as ex:
+            logger.error(
+                "Failed to serialize camera at %s: %s",
+                getattr(camera, "xaddr", "?"),
+                ex,
+            )
+
+    return "\n--\n".join(summaries)

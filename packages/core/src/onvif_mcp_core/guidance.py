@@ -70,6 +70,20 @@ TOOL_GUIDANCE: dict[str, str] = {
         """
     ).rstrip("\n"),
 
+    "get_cameras_by_adapter": dedent(
+        """\
+        Discover cameras on a specific adapter subnet and return lightweight summaries.
+
+        Args:
+            adapter_ip: The IP address of the adapter to discover cameras on.
+
+        Returns:
+            A delimited string containing a summary dict for each camera found on
+            the specified adapter subnet. Each camera's summary is separated by a line
+            containing `--`.
+        """
+    ).rstrip("\n"),
+
     "get_camera": dedent(
         """\
         Get information about a camera at the specified IP address.
