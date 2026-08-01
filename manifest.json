@@ -7,13 +7,13 @@
   "author": {
     "name": "Stephen Rhodes"
   },
-  "icon": "icon.png",
+  "icon": "packages/stdio/icon.png",
   "server": {
     "type": "uv",
-    "entry_point": "src/camera.py",
+    "entry_point": "packages/stdio/src/camera.py",
     "mcp_config": {
       "command": "uv",
-      "args": ["run", "--directory", "${__dirname}", "src/camera.py"],
+      "args": ["run", "--directory", "${__dirname}", "packages/stdio/src/camera.py"],
       "env": {
         "CAMERA_USERNAME": "${user_config.camera_username}",
         "CAMERA_PASSWORD": "${user_config.camera_password}",
