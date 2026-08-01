@@ -98,13 +98,13 @@ mcp = FastMCP(
     "sse-example",
     transport_security=TransportSecuritySettings(
         enable_dns_rebinding_protection=True,
-        allowed_hosts=["127.0.0.1:*", "localhost:*", "[::1]:*", "10.1.1.2:*", "10.1.1.1:*"],
+        allowed_hosts=["127.0.0.1:*", "localhost:*", "[::1]:*", "10.1.1.2:*", "10.1.1.75:*"],
         allowed_origins=[
             "http://127.0.0.1:*",
             "http://localhost:*",
             "http://[::1]:*",
             "http://10.1.1.2:*",
-            "http://10.1.1.1:*",
+            "http://10.1.1.75:*",
         ],
     ),
 )
@@ -276,7 +276,7 @@ def main():
     )
     # Defaults: host=127.0.0.1, port=8000, path=/mcp
     # -> server listens at http://127.0.0.1:8000/mcp
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="10.1.1.75", port=8000)
 
 if __name__ == "__main__":
     main()
