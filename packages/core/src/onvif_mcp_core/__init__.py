@@ -3,11 +3,13 @@
 from .audio import set_camera_audio_encoding, set_camera_audio_sample_rate
 from .camera_queries import get_adapters, get_camera, get_cameras
 from .device import change_camera_hostname, reboot_camera, sync_camera_time
+from .streaming import get_web_player_url
 from .tools import (
     register_audio_configuration_tools,
     register_camera_query_tools,
     register_device_management_tools,
     register_ptz_tools,
+    register_streaming_tools,
     register_video_configuration_tools,
 )
 from .video import (
@@ -21,6 +23,7 @@ __all__ = [
     "get_camera",
     "get_cameras",
     "get_adapters",
+    "get_web_player_url",
     "change_camera_hostname",
     "reboot_camera",
     "sync_camera_time",
@@ -28,6 +31,7 @@ __all__ = [
     "register_camera_query_tools",
     "register_device_management_tools",
     "register_ptz_tools",
+    "register_streaming_tools",
     "register_video_configuration_tools",
     "set_camera_audio_encoding",
     "set_camera_audio_sample_rate",

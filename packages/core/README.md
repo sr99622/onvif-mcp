@@ -49,6 +49,7 @@ The Python package is under `src/onvif_mcp_core`.
 | `audio.py` | Change audio encoding and sample rate. |
 | `ptz.py` | PTZ movement, stopping, presets, and preset tours. |
 | `device.py` | Change a hostname, synchronize a camera clock, and request a reboot. |
+| `streaming.py` | Build the web-player URL for a camera live stream. |
 | `guidance.py` | Canonical, human-editable MCP descriptions for every shared tool. |
 | `tools.py` | Register groups of shared functions on a `FastMCP` server. |
 | `__init__.py` | Export the primary public core functions and registration helpers. |
@@ -76,6 +77,7 @@ from onvif_mcp_core.tools import (
     register_audio_configuration_tools,
     register_device_management_tools,
     register_ptz_tools,
+    register_streaming_tools,
     register_video_configuration_tools,
 )
 
@@ -85,24 +87,23 @@ register_video_configuration_tools(mcp)
 register_audio_configuration_tools(mcp)
 register_ptz_tools(mcp)
 register_device_management_tools(mcp)
+register_streaming_tools(mcp)
 ```
 
 Calling a registration function attaches the core Python functions to that
 specific `FastMCP` instance. Importing a registration function alone does not
 register or run anything.
 
-Camera queries require one extra integration point because `get_cameras`
-includes the transport process's in-memory event-subscription state. The core
-query accepts that mapping from the caller instead of owning event state:
-
 ```python
 from onvif_mcp_core.camera_queries import get_cameras
 
-result = await get_cameras(subscribed_events_by_camera)
+result = await get_cameras()
 ```
 
-This keeps camera discovery and summary construction shared while allowing
-stdio and HTTP to develop different event implementations.
+`get_cameras` does not own event-subscription state; that remains
+process-local to each transport. This keeps camera discovery and summary
+construction shared while allowing stdio and HTTP to develop different event
+implementations.
 
 ## Credentials and camera access
 

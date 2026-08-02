@@ -125,13 +125,12 @@ Both server packages declare `onvif-mcp-core` as a `uv` workspace dependency.
 - Camera discovery callbacks
 - Construction of lightweight camera summaries
 
-`get_cameras` needs to include a `subscribed_events` field. Subscription
-selection is process-local state and will likely differ by transport, so the
-core does not own it. Instead, the caller supplies a mapping:
-
-```python
-await get_cameras(subscribed_events_by_camera)
-```
+`get_cameras` takes no arguments. An earlier design had it accept a
+`subscribed_events_by_camera` mapping so summaries could include a
+`subscribed_events` field, but that parameter was removed: subscription
+selection is process-local state that differs by transport, and the core
+query does not own it. Transports that need to report subscription state
+merge it into a summary themselves after calling `get_cameras`.
 
 This is an important boundary: discovery and summary construction are common;
 event lifecycle and subscription state remain transport concerns.
@@ -194,6 +193,25 @@ Do not merge those styles casually; they reflect how the existing
 These were grouped as basic device-management operations even though they do
 not form a large feature family.
 
+### Streaming
+
+`streaming.py` owns:
+
+- `get_web_player_url`
+
+This is pure string construction from the `STREAM_SERVER_IP` environment
+variable plus the caller-supplied serial number and profile token. It does
+not query the camera via `libonvif` and has no camera-specific error
+handling, unlike the rest of core. It was migrated from stdio's `camera.py`
+as an example of continuing the original stdio-to-core migration: `stdio` was
+the first transport implemented, and existing stdio behavior is moved into
+`packages/core` incrementally, tool by tool, as this work resumes.
+
+`stream_camera` (opens the URL in a local web browser via `webbrowser.open`)
+was deliberately left stdio-only rather than migrated alongside
+`get_web_player_url`: opening a browser is local-process, deployment-specific
+behavior, not a general camera operation.
+
 ## Tool registration design
 
 `tools.py` contains registration functions:
@@ -204,6 +222,7 @@ register_video_configuration_tools(...)
 register_audio_configuration_tools(...)
 register_ptz_tools(...)
 register_device_management_tools(...)
+register_streaming_tools(...)
 ```
 
 Calling one of these functions attaches core functions to a particular
@@ -358,7 +377,10 @@ boundary first.
 Examples still present in `camera.py` include:
 
 - Environment inspection
-- Stream and web-player helpers
+- `stream_camera` (opens a live stream in a local browser via
+  `webbrowser.open`) — `get_web_player_url`, the other half of the original
+  "stream and web-player helpers" pair, has since moved to
+  `packages/core/src/onvif_mcp_core/streaming.py`.
 - Snapshot encoding, downloading, and browser display
 - OpenClaw messaging and motion notification
 - File/grep helper tools

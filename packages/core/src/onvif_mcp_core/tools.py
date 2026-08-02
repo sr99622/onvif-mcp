@@ -10,6 +10,7 @@ from .camera_queries import get_cameras as query_cameras
 from .camera_queries import get_cameras_by_adapter
 from .device import change_camera_hostname, reboot_camera, sync_camera_time
 from .guidance import TOOL_GUIDANCE
+from .streaming import get_web_player_url
 from .video import (
     set_camera_video_bitrate,
     set_camera_video_frame_rate,
@@ -82,3 +83,8 @@ def register_camera_query_tools(mcp: FastMCP) -> None:
     _register_tool(mcp, query_camera)
     _register_tool(mcp, query_cameras)
     _register_tool(mcp, get_cameras_by_adapter)
+
+
+def register_streaming_tools(mcp: FastMCP) -> None:
+    """Register streaming tools shared by all MCP transports."""
+    _register_tool(mcp, get_web_player_url)

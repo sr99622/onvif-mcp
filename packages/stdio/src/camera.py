@@ -54,11 +54,13 @@ from onvif_mcp_core.device import (
 )
 from onvif_mcp_core.camera_queries import get_adapters as get_adapters_query
 from onvif_mcp_core.guidance import TOOL_GUIDANCE
+from onvif_mcp_core.streaming import get_web_player_url as get_web_player_url_core
 from onvif_mcp_core.tools import (
     register_audio_configuration_tools,
     register_camera_query_tools,
     register_device_management_tools,
     register_ptz_tools,
+    register_streaming_tools,
     register_video_configuration_tools,
 )
 
@@ -78,6 +80,7 @@ register_audio_configuration_tools(mcp)
 register_ptz_tools(mcp)
 register_device_management_tools(mcp)
 register_camera_query_tools(mcp)
+register_streaming_tools(mcp)
 
 @mcp.tool(description=TOOL_GUIDANCE["get_adapters"])
 async def get_adapters() -> str:
@@ -814,24 +817,14 @@ async def stream_camera(camera_device_information_serial_number: str, camera_med
     else:
         return f"Failed to open {url}."
 
-@mcp.tool()
+@mcp.tool(description=TOOL_GUIDANCE["get_web_player_url"])
 async def get_web_player_url(camera_device_information_serial_number: str, camera_media_profile_token: str) -> str:
-    """
-    Get the web-player URL for a camera live stream without opening a browser.
+    return await get_web_player_url_core(
+        camera_device_information_serial_number,
+        camera_media_profile_token,
+    )
 
-    Args:
-        camera_device_information_serial_number: The camera serial number found in the ONVIF data of the camera
-                                                 that is stored in the device_information topic group.
 
-        camera_media_profile_token: The media profile token found in the ONVIF data topic profiles. The default choice
-                                    should be the first profile.
-
-    Returns:
-        The web-player URL for the requested camera and media profile.
-    """
-    stream_server_ip = os.environ.get("STREAM_SERVER_IP")
-    return f"http://{stream_server_ip}:8889/{camera_device_information_serial_number}/{camera_media_profile_token}"
-    
 @mcp.tool()
 async def get_snapshot_image_base64_encoded(url: str) -> str:
     """

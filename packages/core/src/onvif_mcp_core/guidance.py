@@ -114,6 +114,31 @@ TOOL_GUIDANCE: dict[str, str] = {
         """
     ).rstrip("\n"),
 
+    "get_web_player_url": dedent(
+        """\
+        Get the web-player URL for a camera live stream without opening a
+        browser.
+
+        Builds the URL from the STREAM_SERVER_IP environment variable, the
+        camera's device_information serial number, and a media profile
+        token. It does not query the camera or validate that the server or
+        profile actually exist - it is pure string construction, so an
+        invalid serial number or profile token will still produce a URL,
+        just one that will not resolve to a working stream.
+
+        Args:
+            camera_device_information_serial_number: The camera serial
+                           number found in the ONVIF data of the camera,
+                           stored in the device_information topic group.
+            camera_media_profile_token: The media profile token found in the
+                           ONVIF data topic profiles. The default choice
+                           should be the first profile.
+
+        Returns:
+            The web-player URL for the requested camera and media profile.
+        """
+    ).rstrip("\n"),
+
     "goto_camera_preset": dedent(
         """\
         Move a PTZ camera to one of its stored presets.

@@ -17,17 +17,14 @@ from pydantic import BaseModel
 from mcp.server.fastmcp import FastMCP, Context
 from mcp.server.elicitation import AcceptedElicitation, DeclinedElicitation, CancelledElicitation
 from mcp.server.transport_security import TransportSecuritySettings
-from onvif_mcp_core.camera_queries import (
-    get_adapters as get_adapters_query,
-    get_camera as get_camera_query,
-    get_cameras as get_cameras_query,
-)
+from onvif_mcp_core.camera_queries import get_adapters as get_adapters_query
 from onvif_mcp_core.guidance import TOOL_GUIDANCE
 from onvif_mcp_core.tools import (
     register_audio_configuration_tools,
     register_camera_query_tools,
     register_device_management_tools,
     register_ptz_tools,
+    register_streaming_tools,
     register_video_configuration_tools,
 )
 
@@ -113,6 +110,7 @@ register_audio_configuration_tools(mcp)
 register_ptz_tools(mcp)
 register_device_management_tools(mcp)
 register_camera_query_tools(mcp)
+register_streaming_tools(mcp)
 
 @mcp.tool(description=TOOL_GUIDANCE["get_adapters"])
 async def get_adapters() -> str:
@@ -188,25 +186,6 @@ async def get_camera_mcp_version() -> str:
 
 
 
-
-@mcp.tool(description=TOOL_GUIDANCE["get_cameras"])
-async def get_cameras() -> str:
-    """
-    Discover cameras on the local network and return lightweight summaries.
-
-    Each summary contains only the fields an agent typically needs to reason
-    about — hostname, device info, profile tokens, encoder config (from the
-    first/primary profile), PTZ presets, tours, snapshot & stream URIs, and
-    time offset. All the noisy ONVIF boilerplate (codec resolution lists,
-    multicast settings, SOAP addresses, network interface details, imaging
-    options, etc.) is stripped away.
-
-    Returns:
-        A delimited string containing a summary dict for each camera found on
-        the local network. Each camera's summary is separated by "\n--\n".
-    """
-
-    return await get_cameras_query()
 
 class PrivateNetworkAccessMiddleware:
     """
