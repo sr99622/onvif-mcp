@@ -1,69 +1,69 @@
 {
-  "description": "Camera registry — live data refreshed from ONVIF discovery",
-  "last_updated": "2026-08-02T17:47:00-04:00",
+  "description": "Camera registry — generated from ONVIF camera discovery, streams via MediaMTX WebRTC",
+  "generated": "2026-08-02T20:40:00Z",
   "cameras": [
     {
       "hostname": "Blackjack",
       "ip_address": "10.2.2.101",
       "manufacturer": "TRENDnet",
       "model": "TV-IP319PI",
-      "media_player_url": "http://10.1.1.75:8889/TV-IP319PI20171111AAWR863739641/Profile_1"
+      "media_player_url": "https://camera.home.arpa/webrtc/TV-IP319PI20171111AAWR863739641/Profile_1/",
+      "substream_player_url": "https://camera.home.arpa/webrtc/TV-IP319PI20171111AAWR863739641/Profile_2/"
     },
     {
       "hostname": "Tester",
       "ip_address": "10.2.2.100",
       "manufacturer": "Dahua",
       "model": "IPC-HDW4631C-A",
-      "media_player_url": "http://10.1.1.75:8889/4B0013BPAABE264/MediaProfile000",
-      "substream_player_url": "http://10.1.1.75:8889/4B0013BPAABE264/MediaProfile001"
+      "media_player_url": "https://camera.home.arpa/webrtc/4B0013BPAABE264/MediaProfile000/",
+      "substream_player_url": "https://camera.home.arpa/webrtc/4B0013BPAABE264/MediaProfile001/"
     },
     {
       "hostname": "Sample",
       "ip_address": "10.1.1.70",
       "manufacturer": "HIKVISION",
       "model": "DS-2CD2142FWD-IS",
-      "media_player_url": "http://10.1.1.75:8889/DS-2CD2142FWD-IS20171118BBWR129028868/Profile_1",
-      "substream_player_url": "http://10.1.1.75:8889/DS-2CD2142FWD-IS20171118BBWR129028868/Profile_2"
+      "media_player_url": "https://camera.home.arpa/webrtc/DS-2CD2142FWD-IS20171118BBWR129028868/Profile_1/",
+      "substream_player_url": "https://camera.home.arpa/webrtc/DS-2CD2142FWD-IS20171118BBWR129028868/Profile_2/"
     },
     {
       "hostname": "Kitchen",
       "ip_address": "10.1.1.72",
       "manufacturer": "LOREX",
       "model": "LNB8973B",
-      "media_player_url": "http://10.1.1.75:8889/ND021810001394/MediaProfile000",
-      "substream_player_url": "http://10.1.1.75:8889/ND021810001394/MediaProfile001"
+      "media_player_url": "https://camera.home.arpa/webrtc/ND021810001394/MediaProfile000/",
+      "substream_player_url": "https://camera.home.arpa/webrtc/ND021810001394/MediaProfile001/"
     },
     {
       "hostname": "Driveway",
       "ip_address": "10.1.1.68",
       "manufacturer": "Amcrest",
       "model": "IP3M-HX2W",
-      "media_player_url": "http://10.1.1.75:8889/AMC015906KDB241289/MediaProfile000",
-      "substream_player_url": "http://10.1.1.75:8889/AMC015906KDB241289/MediaProfile001"
+      "media_player_url": "https://camera.home.arpa/webrtc/AMC015906KDB241289/MediaProfile000/",
+      "substream_player_url": "https://camera.home.arpa/webrtc/AMC015906KDB241289/MediaProfile001/"
     },
     {
       "hostname": "Monopoly",
       "ip_address": "10.1.1.71",
       "manufacturer": "Amcrest",
       "model": "IP2M-841EB",
-      "media_player_url": "http://10.1.1.75:8889/AMC014641NE6L35AT8/MediaProfile000",
-      "substream_player_url": "http://10.1.1.75:8889/AMC014641NE6L35AT8/MediaProfile001"
+      "media_player_url": "https://camera.home.arpa/webrtc/AMC014641NE6L35AT8/MediaProfile000/",
+      "substream_player_url": "https://camera.home.arpa/webrtc/AMC014641NE6L35AT8/MediaProfile001/"
     },
     {
       "hostname": "Office",
       "ip_address": "10.1.1.67",
       "manufacturer": "AXIS",
-      "model": "AXIS M1065-LW",
-      "media_player_url": "http://10.1.1.75:8889/ACCC8E99C915/profile_1_h264",
-      "substream_player_url": "http://10.1.1.75:8889/ACCC8E99C915/profile1"
+      "model": "M1065-LW",
+      "media_player_url": "https://camera.home.arpa/webrtc/ACCC8E99C915/profile_1_h264/"
     },
     {
       "hostname": "reolink",
       "ip_address": "192.168.68.252",
       "manufacturer": "REOLINK",
       "model": "E1 Zoom",
-      "media_player_url": "http://10.1.1.75:8889/19216868252/000",
-      "substream_player_url": "http://10.1.1.75:8889/19216868252/001"
+      "media_player_url": "https://camera.home.arpa/webrtc/19216868252/000/",
+      "substream_player_url": "https://camera.home.arpa/webrtc/19216868252/001/"
     }
   ]
 }
