@@ -51,10 +51,10 @@ systemctl --user enable mediamtx
 **Environment Variables:**
 - `CAMERA_USERNAME=admin`
 - `CAMERA_PASSWORD=***`
-- `STREAM_SERVER_IP=10.1.1.75`
+- `STREAM_SERVER_URL=https://camera.home.arpa/webrtc`
 - `UV_PROJECT_ENVIRONMENT=/home/stephen/Projects/onvif-mcp/.venv`
 
-**URL:** http://10.1.1.75:8000
+**URL:** http://10.1.1.3:8000
 
 **Dependencies:** Mediamtx (starts after mediamtx.service)
 
@@ -124,7 +124,7 @@ Systemd user services don't source `~/.bashrc`, so environment variables needed 
 For the ONVIF MCP server, the following variables are required:
 - `CAMERA_USERNAME` - Camera login username
 - `CAMERA_PASSWORD` - Camera login password  
-- `STREAM_SERVER_IP` - IP address of the streaming server
+- `STREAM_SERVER_URL` - Base URL of the camera web player
 
 ## Notes
 

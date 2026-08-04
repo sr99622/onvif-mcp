@@ -10,8 +10,11 @@ async def get_web_player_url(
     camera_media_profile_token: str,
 ) -> str:
     """Get the web-player URL for a camera live stream without opening a browser."""
-    stream_server_ip = os.environ.get("STREAM_SERVER_IP")
+    stream_server_url = os.environ.get("STREAM_SERVER_URL")
+    if not stream_server_url:
+        raise RuntimeError("STREAM_SERVER_URL is not configured")
+    stream_server_url = stream_server_url.rstrip("/")
     return (
-        f"https://{stream_server_ip}:8889/"
-        f"{camera_device_information_serial_number}/{camera_media_profile_token}"
+        f"{stream_server_url}/"
+        f"{camera_device_information_serial_number}/{camera_media_profile_token}/"
     )

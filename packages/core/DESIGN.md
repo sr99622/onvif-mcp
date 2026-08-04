@@ -199,7 +199,7 @@ not form a large feature family.
 
 - `get_web_player_url`
 
-This is pure string construction from the `STREAM_SERVER_IP` environment
+This is pure string construction from the `STREAM_SERVER_URL` environment
 variable plus the caller-supplied serial number and profile token. It does
 not query the camera via `libonvif` and has no camera-specific error
 handling, unlike the rest of core. It was migrated from stdio's `camera.py`

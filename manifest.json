@@ -17,7 +17,7 @@
       "env": {
         "CAMERA_USERNAME": "${user_config.camera_username}",
         "CAMERA_PASSWORD": "${user_config.camera_password}",
-        "STREAM_SERVER_IP": "${user_config.stream_server_ip}"
+        "STREAM_SERVER_URL": "${user_config.stream_server_url}"
       }    
     }
   },
@@ -43,10 +43,10 @@
       "sensitive": true,
       "required": true
     },
-    "stream_server_ip": {
+    "stream_server_url": {
       "type": "string",
-      "title": "Stream Server IP",
-      "description": "IP address of the local streaming relay server",
+      "title": "Stream Server URL",
+      "description": "Base URL of the camera web player, for example https://camera.home.arpa/webrtc",
       "required": false
     }
   }

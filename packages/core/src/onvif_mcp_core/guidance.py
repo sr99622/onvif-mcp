@@ -119,7 +119,7 @@ TOOL_GUIDANCE: dict[str, str] = {
         Get the web-player URL for a camera live stream without opening a
         browser.
 
-        Builds the URL from the STREAM_SERVER_IP environment variable, the
+        Builds the URL from the STREAM_SERVER_URL environment variable, the
         camera's device_information serial number, and a media profile
         token. It does not query the camera or validate that the server or
         profile actually exist - it is pure string construction, so an

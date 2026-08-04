@@ -10,13 +10,13 @@ Each of these platforms has different pros and cons. Claude Desktop has an integ
 
 This server uses the [uv](https://docs.astral.sh/uv/getting-started/installation/) runtime, so you will need that installed on your machine. If you are not familiar, uv is an advanced Python implementation that seamlessly handles package and project management for Python programs, and is widely used for AI projects.
 
-If you want to include live streaming abilities, you will need a stream server. This project is designed to work with [Cayenue](https://github.com/sr99622/Cayenue) for that service. This can be run on the localhost, which is convenient, or a seperate server, which is a more robust configuration and is recommended. The STREAM_SERVER_IP found in the configuration parameters is the the IP address of the Cayenue server. The ONVIF MCP server will work just fine without this, but will be restricted to snapshots, unable to live stream.
+If you want live streaming, you will need a stream server. This project is designed to work with [Cayenue](https://github.com/sr99622/Cayenue) for that service. Set `STREAM_SERVER_URL` to the client-facing web-player base URL, including the protocol and any path prefix, for example `https://camera.home.arpa/webrtc`. The ONVIF MCP server can operate without this setting, but live-stream URL tools will be unavailable.
 
 <h3>Claude Desktop Installation</h3>
 
 To install the server in Claude Destop, you can download the [installer](https://github.com/sr99622/onvif-mcp/releases/download/v0.0.70/onvif-mcp.mcpb) to your local hard drive. Open Claude Desktop and use the hamburger icon in the upper left corner to open the File -> Settings menu and select Extensions from the left side panel. Click the Advanced Settings then click the Install Extension button to open a file selection dialog. Navigate to the repository and select the simple-mcp-server.mcpb file and the MCP server installer will present a dialog to be filled out with site parameters.
 
-The installer will ask you for camera credentials and the STREAM_SERVER_IP. If you're not using the Cayenue server, you can leave that last one blank, but you will need camera credentials to log into the cameras. Enabled the MCP server and click Configure to view the settings and permissions for the server, the settings will be behind the current screen, so you might need to close that.
+The installer will ask for camera credentials and `STREAM_SERVER_URL`. If you are not using a stream server, you can leave the URL blank, but camera credentials are still required. Enable the MCP server and click Configure to review its settings and permissions.
 
 To create the installer, you need the CLI tool from Anthropic
 
@@ -57,7 +57,7 @@ The default location for the .openclaw folder is in the users home directory. Fo
         "env": {
           "CAMERA_USERNAME": "admin",
           "CAMERA_PASSWORD": "admin123",
-          "STREAM_SERVER_IP": "10.1.1.1",
+          "STREAM_SERVER_URL": "https://camera.home.arpa/webrtc",
           "OPENCLAW_HOOK_TOKEN": "shared-secret",
         }
       }
@@ -103,7 +103,7 @@ cwd = '/path/to/onvif-mcp/src'
 [mcp_servers.camera.env]
 CAMERA_USERNAME = "admin"
 CAMERA_PASSWORD = "admin123"
-STREAM_SERVER_IP = "10.1.1.13"
+STREAM_SERVER_URL = "https://camera.home.arpa/webrtc"
 ```
 
 You will need to re-start ChatGPT to get the server started.
