@@ -95,13 +95,13 @@ mcp = FastMCP(
     "sse-example",
     transport_security=TransportSecuritySettings(
         enable_dns_rebinding_protection=True,
-        allowed_hosts=["127.0.0.1:*", "localhost:*", "[::1]:*", "10.1.1.2:*", "10.1.1.75:*"],
+        allowed_hosts=["127.0.0.1:*", "localhost:*", "[::1]:*", "10.1.1.2:*", "10.1.1.3:*"],
         allowed_origins=[
             "http://127.0.0.1:*",
             "http://localhost:*",
             "http://[::1]:*",
             "http://10.1.1.2:*",
-            "http://10.1.1.75:*",
+            "http://10.1.1.3:*",
         ],
     ),
 )
