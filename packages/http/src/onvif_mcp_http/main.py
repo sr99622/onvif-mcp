@@ -255,7 +255,7 @@ def main():
     )
     # Defaults: host=127.0.0.1, port=8000, path=/mcp
     # -> server listens at http://127.0.0.1:8000/mcp
-    uvicorn.run(app, host="10.1.1.75", port=8000)
+    uvicorn.run(app, host="10.1.1.3", port=8000)
 
 if __name__ == "__main__":
     main()
