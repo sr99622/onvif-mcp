@@ -303,6 +303,36 @@ curl \
   http://camera.home.arpa/ca/README.txt
 ```
 
+## 7. (PRE) Install certificate on Mac OS Safari
+
+Step-by-Step Import InstructionsOpen Keychain Access: 
+
+* Press Command + Spacebar to use Spotlight, 
+
+* type Keychain Access, 
+
+* and press Return.
+
+Choose a Keychain: 
+
+* On the left sidebar, click login (for your user account) or System (for all users on the Mac).
+
+Import the File: 
+
+* Drag your certificate file directly into the Keychain Access window
+
+* Type your Mac administrator name and password when prompted to allow the change.
+
+Trusting the Certificate - Open Details: 
+
+* Double-click the newly imported certificate in the list.
+
+* Change Trust Settings: Click the arrow next to Trust to expand the menu.
+
+* Set to Always Trust: Change "When using this certificate" to Always Trust, 
+
+* close the window and enter your password again.
+
 ## 7. Test from a client computer
 
 Open:
