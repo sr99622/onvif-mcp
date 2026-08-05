@@ -113,7 +113,7 @@ Example paths:
 ```yaml
 paths:
   4B0013BPAABE264/MediaProfile000:
-    source: rtsp://admin:admin123@10.2.2.100:554/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif
+    source: rtsp://admin:***@10.2.2.100:554/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif
   # ... more cameras
 ```
 
