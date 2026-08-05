@@ -255,73 +255,112 @@ HTTP status: 401
 
 The `401` proves TLS verification succeeded; authentication was intentionally omitted.
 
-## Part 6: Add the private CA to the OpenClaw LaunchAgent
+## Part 6: Give the OpenClaw gateway durable private-CA trust
 
-OpenClaw runs as a macOS LaunchAgent:
+OpenClaw runs as a managed macOS LaunchAgent. Editing its generated plist by
+hand is not durable: `openclaw gateway restart`, reinstall, update, or doctor
+repair can regenerate the plist and remove custom environment entries.
+
+In this installation, manually adding `NODE_EXTRA_CA_CERTS` worked until an
+OpenClaw restart rewrote the LaunchAgent. The embedded MCP runtime then logged:
 
 ```text
-~/Library/LaunchAgents/ai.openclaw.gateway.plist
+bundle-mcp: failed to start server "camera": TypeError: fetch failed
 ```
 
-Back it up:
+The durable solution is OpenClaw's supported gateway wrapper mechanism. The
+wrapper sets `NODE_EXTRA_CA_CERTS` before Node starts and is persisted in the
+managed service layout.
+
+Check that the proposed path is unused:
 
 ```bash
-test ! -e "$HOME/Library/LaunchAgents/ai.openclaw.gateway.plist.before-camera-ca-2026-08-05" &&
-cp -p \
-  "$HOME/Library/LaunchAgents/ai.openclaw.gateway.plist" \
-  "$HOME/Library/LaunchAgents/ai.openclaw.gateway.plist.before-camera-ca-2026-08-05"
+ls -l "$HOME/.local/bin/openclaw-camera-ca" 2>&1
 ```
 
-Add the CA path:
+Create the wrapper:
+
+```bash
+install -d -m 700 "$HOME/.local/bin" &&
+printf '%s\n' \
+  '#!/bin/sh' \
+  'export NODE_EXTRA_CA_CERTS="/Users/stephen/Private-CA/camera-system-ca/certs/camera-system-root-ca.crt.pem"' \
+  'exec /opt/homebrew/bin/openclaw "$@"' \
+  > "$HOME/.local/bin/openclaw-camera-ca" &&
+chmod 700 "$HOME/.local/bin/openclaw-camera-ca"
+```
+
+Test the wrapper before installing it:
+
+```bash
+"$HOME/.local/bin/openclaw-camera-ca" mcp probe camera
+```
+
+Expected result:
+
+```text
+camera: 29 tools, resources, prompts
+```
+
+Install the wrapper through OpenClaw:
+
+```bash
+openclaw gateway install \
+  --wrapper "$HOME/.local/bin/openclaw-camera-ca" \
+  --force
+```
+
+Inspect the generated argument list:
 
 ```bash
 /usr/libexec/PlistBuddy \
-  -c "Add :EnvironmentVariables:NODE_EXTRA_CA_CERTS string $HOME/Private-CA/camera-system-ca/certs/camera-system-root-ca.crt.pem" \
+  -c 'Print :ProgramArguments' \
   "$HOME/Library/LaunchAgents/ai.openclaw.gateway.plist"
 ```
 
-Validate the plist:
+The arguments should contain:
 
-```bash
-plutil -lint \
-  "$HOME/Library/LaunchAgents/ai.openclaw.gateway.plist"
+```text
+/Users/stephen/.local/bin/openclaw-camera-ca
+gateway
+--port
+18789
 ```
 
-Reload the user LaunchAgent so launchd rereads the environment:
-
-```bash
-launchctl bootout \
-  "gui/$(id -u)" \
-  "$HOME/Library/LaunchAgents/ai.openclaw.gateway.plist" &&
-launchctl bootstrap \
-  "gui/$(id -u)" \
-  "$HOME/Library/LaunchAgents/ai.openclaw.gateway.plist"
-```
-
-Verify the setting without displaying unrelated environment values:
-
-```bash
-launchctl print "gui/$(id -u)/ai.openclaw.gateway" |
-grep 'NODE_EXTRA_CA_CERTS'
-```
-
-### LaunchAgent recovery
-
-During implementation, `openclaw gateway restart` unloaded the LaunchAgent but failed to bootstrap it with error 5. It was recovered without `sudo` by running:
-
-```bash
-launchctl bootstrap \
-  "gui/$(id -u)" \
-  "$HOME/Library/LaunchAgents/ai.openclaw.gateway.plist"
-```
-
-Then confirm:
+Confirm the running service uses the wrapper:
 
 ```bash
 openclaw gateway status
 ```
 
-Do not load a per-user LaunchAgent with `sudo`, since that can target the wrong launchd domain.
+Its `Command` line should begin with:
+
+```text
+/Users/stephen/.local/bin/openclaw-camera-ca gateway --port 18789
+```
+
+Dispose of any MCP runtime that cached the earlier TLS failure:
+
+```bash
+openclaw mcp reload
+```
+
+Start a new TUI session before testing. Existing sessions can retain the tool
+catalog built while the MCP connection was failing.
+
+### LaunchAgent recovery
+
+If a restart leaves the per-user LaunchAgent unloaded, recover it without
+`sudo`:
+
+```bash
+launchctl bootstrap \
+  "gui/$(id -u)" \
+  "$HOME/Library/LaunchAgents/ai.openclaw.gateway.plist"
+```
+
+Do not load a per-user LaunchAgent with `sudo`, since that can target the wrong
+launchd domain.
 
 ## Part 7: Store the OpenClaw Basic credential safely
 
@@ -416,7 +455,8 @@ Successful result from this installation:
 camera: 29 tools, resources, prompts
 ```
 
-The running gateway does not need the command prefix because its LaunchAgent already supplies `NODE_EXTRA_CA_CERTS`.
+The running gateway does not need the command prefix because the installed
+`openclaw-camera-ca` wrapper supplies `NODE_EXTRA_CA_CERTS` before Node starts.
 
 ## Part 10: Source control and machine-specific files
 
@@ -494,14 +534,41 @@ Also confirm `~/.openclaw/.env` exists with mode `600` and restart OpenClaw afte
 
 ### Node reports `UNABLE_TO_VERIFY_LEAF_SIGNATURE`
 
-Confirm:
+Confirm the gateway uses the CA wrapper:
 
 ```bash
-launchctl print "gui/$(id -u)/ai.openclaw.gateway" |
-grep 'NODE_EXTRA_CA_CERTS'
+openclaw gateway status
 ```
 
-For a standalone CLI invocation, prefix the command with `NODE_EXTRA_CA_CERTS=...` because the LaunchAgent environment applies only to the gateway process.
+The `Command` line should reference:
+
+```text
+/Users/stephen/.local/bin/openclaw-camera-ca
+```
+
+If it does not, reinstall the managed service with `openclaw gateway install
+--wrapper ... --force`. For a standalone CLI invocation, either run the wrapper
+or prefix the command with `NODE_EXTRA_CA_CERTS=...`.
+
+### `openclaw mcp probe` succeeds but TUI has no camera tools
+
+Check the gateway log for the embedded runtime rather than relying only on the
+standalone probe:
+
+```bash
+grep -Ei 'camera|bundle-mcp|fetch failed|certificate' \
+  /tmp/openclaw/openclaw-$(date +%Y-%m-%d).log |
+tail -n 100
+```
+
+If it reports `TypeError: fetch failed`, verify the gateway wrapper, then run:
+
+```bash
+openclaw mcp reload
+```
+
+Start a new TUI session afterward. Do not change a previously working tool
+profile until gateway TLS and runtime-cache failures have been ruled out.
 
 ### Nginx returns `502 Bad Gateway`
 
