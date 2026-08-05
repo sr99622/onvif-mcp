@@ -253,9 +253,9 @@ def main():
         # ID and every follow-up request gets rejected as missing one.
         expose_headers=["mcp-session-id"],
     )
-    # Defaults: host=127.0.0.1, port=8000, path=/mcp
-    # -> server listens at http://127.0.0.1:8000/mcp
-    uvicorn.run(app, host="10.1.1.3", port=8000)
+    # Bind only to loopback; Nginx provides HTTPS and authentication.
+    # Internal endpoint: http://127.0.0.1:8001/mcp
+    uvicorn.run(app, host="127.0.0.1", port=8001)
 
 if __name__ == "__main__":
     main()
