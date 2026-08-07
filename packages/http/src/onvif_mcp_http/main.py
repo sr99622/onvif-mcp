@@ -92,7 +92,7 @@ _camera_subscriptions: dict[str, dict] = {}
 # transport_security here means FastMCP's auto-default (localhost-only)
 # is skipped in favor of this one.
 mcp = FastMCP(
-    "sse-example",
+    "camera-mcp",
     transport_security=TransportSecuritySettings(
         enable_dns_rebinding_protection=True,
         allowed_hosts=["127.0.0.1:*", "localhost:*", "[::1]:*", "10.1.1.2:*", "10.1.1.3:*"],
@@ -124,11 +124,6 @@ async def get_adapters() -> str:
 
 class TripTypeResponse(BaseModel):
     value: str
-
-@mcp.tool()
-async def add(a: int, b: int) -> int:
-    """Add two numbers together."""
-    return a + b
 
 @mcp.tool()
 async def example_elicit_tool(context: Context) -> str:
@@ -216,6 +211,8 @@ class PrivateNetworkAccessMiddleware:
 
 async def event_stream(request: Request) -> StreamingResponse:
     """
+    ** PLEASE DO NOT USE THIS TOOL IT IS FOR REFERENCE ONLY **
+
     Plain Server-Sent Events endpoint, independent of the MCP protocol -
     just a raw text/event-stream that emits one tick every 5 seconds.
     Built to test/observe the SSE mechanism itself directly (e.g. via

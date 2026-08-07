@@ -62,7 +62,7 @@ TOOL_GUIDANCE: dict[str, str] = {
 
     "get_adapters": dedent(
         """\
-        Return a list of available active network adapters.
+        Return a list of available active network adapters on the server.
 
         Returns:
             A delimited string containing the IP address of each active adapter,
@@ -86,7 +86,10 @@ TOOL_GUIDANCE: dict[str, str] = {
 
     "get_camera": dedent(
         """\
-        Get information about a camera at the specified IP address.
+        Get full detailed ONVIF information about a camera at the specified IP address.
+        Please note that this tool is not needed for most tools in this server. Use
+        this tool only if the needed data is not included in the camera summary 
+        returned by get_cameras.
 
         Args:
             ip_address: The IP address of the camera to retrieve.
@@ -98,41 +101,45 @@ TOOL_GUIDANCE: dict[str, str] = {
 
     "get_cameras": dedent(
         """\
-        Discover cameras on the local network and return lightweight summaries.
+        Discover cameras on the local network and returns a delimited string
+        containing lightweight summaries of the cameras data. The summaries
+        returned by this tool should be kept in the session context for use
+        in calling other tools in the server.
 
-        Each summary contains only the fields an agent typically needs to reason
-        about — hostname, device info, profile tokens, encoder config (from the
-        first/primary profile), PTZ presets, tours, snapshot & stream URIs, and
-        time offset. All the noisy ONVIF boilerplate (codec resolution lists,
-        multicast settings, SOAP addresses, network interface details, imaging
-        options, etc.) is stripped away.
+        This tool iterates through each activate network interface adapter and
+        concatenates the summaries for all cameras found on all connected 
+        networks.
+
+        Each camera summary contains the most important fields an agent typically 
+        needs to manage cameras and streams — hostname, serial number, 
+        profiles, encoder config, PTZ presets, tours, snapshot & stream URIs, 
+        and time offset. If full ONVIF data is needed, the get_camera tool can
+        be used on a per camera basis.
 
         Returns:
-            A delimited string containing a summary dict for each camera found on
-            the local network. Each camera's summary is separated by a line
+            A delimited string containing summary dicts for each camera found on
+            the local network. Each camera summary is separated by a line
             containing `--`.
         """
     ).rstrip("\n"),
 
     "get_web_player_url": dedent(
         """\
-        Get the web-player URL for a camera live stream without opening a
-        browser.
+        Get the web player URL for a camera live stream. The url is suitable
+        for playing the camera live stream in a browser window.
 
-        Builds the URL from the STREAM_SERVER_URL environment variable, the
-        camera's device_information serial number, and a media profile
-        token. It does not query the camera or validate that the server or
-        profile actually exist - it is pure string construction, so an
-        invalid serial number or profile token will still produce a URL,
-        just one that will not resolve to a working stream.
+        Builds the URL using the camera's serial number and a media profile token. 
+        The values needed to call this tool are present in the camera sunmary 
+        returned by the get_camera tool.
 
         Args:
-            camera_device_information_serial_number: The camera serial
-                           number found in the ONVIF data of the camera,
-                           stored in the device_information topic group.
-            camera_media_profile_token: The media profile token found in the
-                           ONVIF data topic profiles. The default choice
-                           should be the first profile.
+            serial_number: The camera serial number found in the summary data of the 
+                           camera returned by the get_cameras tool.
+            profile_token: The media profile token found in the sunnary data of the 
+                           camera returned by the get_cameras tool. The camera 
+                           summary data includes a profile dict. The default choice
+                           should be the first profile. The token is a field in the
+                           profile dict.
 
         Returns:
             The web-player URL for the requested camera and media profile.

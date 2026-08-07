@@ -6,8 +6,8 @@ import os
 
 
 async def get_web_player_url(
-    camera_device_information_serial_number: str,
-    camera_media_profile_token: str,
+    serial_number: str,
+    profile_token: str,
 ) -> str:
     """Get the web-player URL for a camera live stream without opening a browser."""
     stream_server_url = os.environ.get("STREAM_SERVER_URL")
@@ -16,5 +16,5 @@ async def get_web_player_url(
     stream_server_url = stream_server_url.rstrip("/")
     return (
         f"{stream_server_url}/"
-        f"{camera_device_information_serial_number}/{camera_media_profile_token}/"
+        f"{serial_number}/{profile_token}/"
     )
