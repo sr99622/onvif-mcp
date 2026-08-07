@@ -13,10 +13,12 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 from starlette.responses import StreamingResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
-from pydantic import BaseModel
+from pydantic import AnyHttpUrl, BaseModel
 from mcp.server.fastmcp import FastMCP, Context
+from mcp.server.auth.settings import AuthSettings
 from mcp.server.elicitation import AcceptedElicitation, DeclinedElicitation, CancelledElicitation
 from mcp.server.transport_security import TransportSecuritySettings
+from onvif_mcp_http.auth import AutheliaJWTVerifier
 from onvif_mcp_core.camera_queries import get_adapters as get_adapters_query
 from onvif_mcp_core.guidance import TOOL_GUIDANCE
 from onvif_mcp_core.tools import (
@@ -86,6 +88,37 @@ _camera_subscriptions: dict[str, dict] = {}
 # deliberately separate from _event_server/_camera_subscriptions above:
 # those track live ONVIF subscription state (built lazily, in memory
 # only), while this needs to hold user preferences for potentially many
+MCP_OAUTH_ENABLED = os.environ.get("MCP_OAUTH_ENABLED", "").lower() in {
+    "1",
+    "true",
+    "yes",
+}
+MCP_OAUTH_ISSUER = "https://camera.home.arpa/authelia"
+MCP_RESOURCE_URL = os.environ.get(
+    "MCP_RESOURCE_URL",
+    "https://camera.home.arpa/mcp",
+)
+MCP_OAUTH_JWKS_URL = "http://127.0.0.1:9091/authelia/jwks.json"
+
+oauth_settings = (
+    AuthSettings(
+        issuer_url=AnyHttpUrl(MCP_OAUTH_ISSUER),
+        resource_server_url=AnyHttpUrl(MCP_RESOURCE_URL),
+        required_scopes=["openid"],
+    )
+    if MCP_OAUTH_ENABLED
+    else None
+)
+oauth_token_verifier = (
+    AutheliaJWTVerifier(
+        issuer=MCP_OAUTH_ISSUER,
+        audience=MCP_RESOURCE_URL,
+        jwks_url=MCP_OAUTH_JWKS_URL,
+    )
+    if MCP_OAUTH_ENABLED
+    else None
+)
+
 # DNS-rebinding protection stays enabled, but we explicitly allow the
 # llama.cpp web UI's origin (10.1.1.2) alongside the usual localhost
 # entries FastMCP would otherwise add automatically. Supplying our own
@@ -93,6 +126,8 @@ _camera_subscriptions: dict[str, dict] = {}
 # is skipped in favor of this one.
 mcp = FastMCP(
     "camera-mcp",
+    auth=oauth_settings,
+    token_verifier=oauth_token_verifier,
     transport_security=TransportSecuritySettings(
         enable_dns_rebinding_protection=True,
         allowed_hosts=["127.0.0.1:*", "localhost:*", "[::1]:*", "10.1.1.2:*", "10.1.1.3:*"],
@@ -252,7 +287,9 @@ def main():
     )
     # Bind only to loopback; Nginx provides HTTPS and authentication.
     # Internal endpoint: http://127.0.0.1:8001/mcp
-    uvicorn.run(app, host="127.0.0.1", port=8001)
+    host = os.environ.get("MCP_HTTP_HOST", "127.0.0.1")
+    port = int(os.environ.get("MCP_HTTP_PORT", "8001"))
+    uvicorn.run(app, host=host, port=port)
 
 if __name__ == "__main__":
     main()
