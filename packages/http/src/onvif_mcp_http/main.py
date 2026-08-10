@@ -130,13 +130,20 @@ mcp = FastMCP(
     token_verifier=oauth_token_verifier,
     transport_security=TransportSecuritySettings(
         enable_dns_rebinding_protection=True,
-        allowed_hosts=["127.0.0.1:*", "localhost:*", "[::1]:*", "10.1.1.2:*", "10.1.1.3:*"],
+        allowed_hosts=[
+            "127.0.0.1:*", "localhost:*", "[::1]:*",
+            "10.1.1.2:*", "10.1.1.3:*", "10.1.1.5:*",
+            "gmktec.home.arpa", "flexi.home.arpa",
+        ],
         allowed_origins=[
             "http://127.0.0.1:*",
             "http://localhost:*",
             "http://[::1]:*",
             "http://10.1.1.2:*",
             "http://10.1.1.3:*",
+            "http://10.1.1.5:*",
+            "https://gmktec.home.arpa",
+            "http://flexi.home.arpa:8080",
         ],
     ),
 )

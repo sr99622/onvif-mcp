@@ -15,6 +15,6 @@ async def get_web_player_url(
         raise RuntimeError("STREAM_SERVER_URL is not configured")
     stream_server_url = stream_server_url.rstrip("/")
     return (
-        f"{stream_server_url}/"
+        f"{stream_server_url}/webrtc/"
         f"{serial_number}/{profile_token}/"
     )
