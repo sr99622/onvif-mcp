@@ -18,7 +18,7 @@ from mcp.server.fastmcp import FastMCP, Context
 from mcp.server.auth.settings import AuthSettings
 from mcp.server.elicitation import AcceptedElicitation, DeclinedElicitation, CancelledElicitation
 from mcp.server.transport_security import TransportSecuritySettings
-from onvif_mcp_http.auth import AutheliaJWTVerifier
+from onvif_mcp_http.auth import JWTVerifier
 from onvif_mcp_core.camera_queries import get_adapters as get_adapters_query
 from onvif_mcp_core.guidance import TOOL_GUIDANCE
 from onvif_mcp_core.tools import (
@@ -93,24 +93,29 @@ MCP_OAUTH_ENABLED = os.environ.get("MCP_OAUTH_ENABLED", "").lower() in {
     "true",
     "yes",
 }
-MCP_OAUTH_ISSUER = "https://camera.home.arpa/authelia"
+MCP_OAUTH_ISSUER = os.environ.get(
+    "MCP_OAUTH_ISSUER",
+    "https://gmktec.home.arpa/auth/realms/mcp",
+)
 MCP_RESOURCE_URL = os.environ.get(
     "MCP_RESOURCE_URL",
-    "https://camera.home.arpa/mcp",
+    "https://gmktec.home.arpa/mcp",
 )
-MCP_OAUTH_JWKS_URL = "http://127.0.0.1:9091/authelia/jwks.json"
-
+MCP_OAUTH_JWKS_URL = os.environ.get(
+    "MCP_OAUTH_JWKS_URL",
+    "http://127.0.0.1:8080/auth/realms/mcp/protocol/openid-connect/certs",
+)
 oauth_settings = (
     AuthSettings(
         issuer_url=AnyHttpUrl(MCP_OAUTH_ISSUER),
         resource_server_url=AnyHttpUrl(MCP_RESOURCE_URL),
-        required_scopes=["openid"],
+        required_scopes=["mcp:tools"],
     )
     if MCP_OAUTH_ENABLED
     else None
 )
 oauth_token_verifier = (
-    AutheliaJWTVerifier(
+    JWTVerifier(
         issuer=MCP_OAUTH_ISSUER,
         audience=MCP_RESOURCE_URL,
         jwks_url=MCP_OAUTH_JWKS_URL,

@@ -7,11 +7,11 @@ from unittest import IsolatedAsyncioTestCase
 import jwt
 from cryptography.hazmat.primitives.asymmetric import rsa
 
-from onvif_mcp_http.auth import AutheliaJWTVerifier
+from onvif_mcp_http.auth import JWTVerifier
 
 
-ISSUER = "https://camera.home.arpa/authelia"
-AUDIENCE = "https://camera.home.arpa/mcp"
+ISSUER = "https://gmktec.home.arpa/auth/realms/mcp"
+AUDIENCE = "https://gmktec.home.arpa/mcp"
 
 
 class StaticJWKClient:
@@ -22,7 +22,7 @@ class StaticJWKClient:
         return SimpleNamespace(key=self.public_key)
 
 
-class AutheliaJWTVerifierTests(IsolatedAsyncioTestCase):
+class JWTVerifierTests(IsolatedAsyncioTestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.private_key = rsa.generate_private_key(
@@ -32,10 +32,10 @@ class AutheliaJWTVerifierTests(IsolatedAsyncioTestCase):
         cls.public_key = cls.private_key.public_key()
 
     def make_verifier(self) -> AutheliaJWTVerifier:
-        verifier = AutheliaJWTVerifier(
+        verifier = JWTVerifier(
             issuer=ISSUER,
             audience=AUDIENCE,
-            jwks_url="http://127.0.0.1:9091/authelia/jwks.json",
+            jwks_url="http://127.0.0.1:8080/auth/realms/mcp/protocol/openid-connect/certs",
         )
         verifier._jwk_client = StaticJWKClient(self.public_key)
         return verifier
@@ -49,7 +49,7 @@ class AutheliaJWTVerifierTests(IsolatedAsyncioTestCase):
             "client_id": "agent-camera-mcp",
             "iat": now,
             "exp": now + 300,
-            "scope": "openid profile",
+            "scope": "mcp:tools",
         }
         claims.update(overrides)
         return jwt.encode(claims, self.private_key, algorithm="RS256")
@@ -61,7 +61,7 @@ class AutheliaJWTVerifierTests(IsolatedAsyncioTestCase):
         assert result is not None
         self.assertEqual("agent-camera-mcp", result.client_id)
         self.assertEqual("stephen", result.subject)
-        self.assertEqual(["openid", "profile"], result.scopes)
+        self.assertEqual(["mcp:tools"], result.scopes)
         self.assertEqual(AUDIENCE, result.resource)
         self.assertEqual(ISSUER, result.claims["iss"])
 

@@ -9,7 +9,7 @@ class StreamingTests(IsolatedAsyncioTestCase):
     async def test_builds_url_from_stream_server_url(self):
         with patch.dict(
             os.environ,
-            {"STREAM_SERVER_URL": "https://camera.home.arpa/webrtc/"},
+            {"STREAM_SERVER_URL": "https://camera.home.arpa"},
             clear=True,
         ):
             result = await get_web_player_url("AMC014641NE6L35AT8", "MediaProfile000")

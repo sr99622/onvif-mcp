@@ -9,8 +9,8 @@ import jwt
 from mcp.server.auth.provider import AccessToken
 
 
-class AutheliaJWTVerifier:
-    """Validate Authelia RFC 9068 JWT access tokens against its JWKS."""
+class JWTVerifier:
+    """Validate RFC 9068 JWT access tokens against its JWKS."""
 
     def __init__(
         self,
@@ -23,16 +23,6 @@ class AutheliaJWTVerifier:
         self.audience = audience
         self._jwk_client = jwt.PyJWKClient(
             jwks_url,
-            headers={
-                "Host": "camera.home.arpa",
-                "X-Original-URL": "https://camera.home.arpa/authelia/jwks.json",
-                "X-Forwarded-Proto": "https",
-                "X-Forwarded-Host": "camera.home.arpa",
-                "X-Forwarded-URI": "/authelia/jwks.json",
-                "X-Forwarded-Ssl": "on",
-                "X-Forwarded-For": "127.0.0.1",
-                "X-Real-IP": "127.0.0.1",
-            },
             cache_keys=True,
             cache_jwk_set=True,
             lifespan=300,
