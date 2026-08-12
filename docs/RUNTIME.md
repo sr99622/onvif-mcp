@@ -25,7 +25,14 @@ for each camera, use the data you already have to get web player url for each ca
 Give the agent instruction on how to load streams. They will otherwise usually try to verify the stream which leads to confusion because they try to look at the stream before it has loaded and think that the stream has failed.
 
 ```hermes
-The correct way to show a camera stream is to send the url to the chrome browser tab and then return to idle without checking the stream. I am able to see the stream immediately, which is what I want. You are not able to see the stream until some seconds after it has loaded, which may cause confusion because the stream has correctly loaded but you may perceive a failure. By that time, if I have not seen the stream, I will ask you to work on that, but almost always, the stream is ok. So just send the url to chrome and consider the job done, I will let you know if there is an error. Do not open any tabs now, just acknowledge that you understand these instructions.
+The correct way to show a camera stream is to send the url to the chrome browser tab and then return to idle without checking the stream. I am able to see the stream immediately, which is what I want. You are not able to see the stream until some seconds after it has loaded, which may cause confusion because the stream has correctly loaded but you may perceive a failure. By that time, if I have not seen the stream, I will ask you to work on that, but almost always, the stream is ok. So just send the url to chrome and consider the job done, I will let you know if there is an error. 
+
+there is an issue with authentication that is being worked on. after the JWT token expires, the attempt to show a new stream in the browser will produce a 500 error. The error can be overcome by refershing the browser using javascript reload from dev tools location.reload()
+
+the chrome browser will open with one empty tab. when you are asked to show a camera, use that tab to show  it. if you are asked to close the active tab, open a new blank tab first them close the active stream tab and leave the empty one.
+
+
+Do not open any tabs now, just acknowledge that you understand these instructions.
 ```
 
 This tells the agent to load a live stream.
