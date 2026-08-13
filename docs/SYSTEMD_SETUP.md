@@ -1,52 +1,58 @@
-# SystemD Service Setup
+# Systemd Service Setup
 
-This document describes the systemd user services configured for automatic startup.
+This document describes the systemd services configured on `gmktec.home.arpa` for automatic startup of ONVIF MCP infrastructure components.
 
 ## Services
 
-### 1. MediaMTX Streaming Server
+### 1. MediaMTX RTSP Streaming Server
 
-**Service File:** `~/.config/systemd/user/mediamtx.service`
+**Service File:** `/etc/systemd/system/mediamtx.service`
 
-**Executable:** `/home/stephen/.local/bin/mediamtx /home/stephen/.local/bin/mediamtx.yml`
+**Executable:** `/usr/local/bin/mediamtx`
 
-**Config File:** `/home/stephen/.local/bin/mediamtx.yml`
+**Config File:** `/etc/mediamtx/mediamtx.yml`
 
-**Status:** Running (PID 3428)
+**Working Directory:** `/var/log/mediamtx`
+
+**User/Group:** `mediamtx:mediamtx` (dedicated system user)
+
+**Status:** Running as a **system service** (not user service). Runs under `multi-user.target` so it starts at boot before any user login — essential for headless operation.
 
 **Configuration:**
-- Automatically starts on user login/boot
+- Automatically starts at boot via `multi-user.target`
 - Restarts on failure with 5-second delay
-- Logs available via: `journalctl --user -u mediamtx -f`
-
-**Note:** The config file path is explicitly specified in the service file because MediaMTX doesn't automatically find config files outside its working directory. The config contains RTSP URLs with camera credentials.
+- Logs available via: `sudo journalctl -u mediamtx -f`
+- Log file: `/var/log/mediamtx/mediamtx.log` (written by the process itself)
 
 **Commands:**
 ```bash
 # Check status
-systemctl --user status mediamtx
+systemctl status mediamtx --no-pager
 
 # Restart
-systemctl --user restart mediamtx
+sudo systemctl restart mediamtx
 
 # Disable auto-start
-systemctl --user disable mediamtx
+sudo systemctl disable mediamtx
 
 # Enable auto-start
-systemctl --user enable mediamtx
+sudo systemctl enable mediamtx
+
+# View logs in real time
+sudo journalctl -u mediamtx -f
 ```
 
 ---
 
 ### 2. ONVIF MCP HTTP Server
 
-**Service File:** `~/.config/systemd/user/onvif-mcp.service`
+**Service File:** `/etc/systemd/user/onvif-mcp.service` (user service)
 
 **Executable:** `/home/stephen/.local/bin/uv run /home/stephen/Projects/onvif-mcp/packages/http/src/onvif_mcp_http/main.py`
 
 **Working Directory:** `/home/stephen/Projects/onvif-mcp`
 
-**Status:** Running (PID 2532)
+**Status:** Running as a user service.
 
 **Environment Variables:**
 - `CAMERA_USERNAME=admin`
@@ -54,81 +60,96 @@ systemctl --user enable mediamtx
 - `STREAM_SERVER_URL=https://camera.home.arpa/webrtc`
 - `UV_PROJECT_ENVIRONMENT=/home/stephen/Projects/onvif-mcp/.venv`
 
-**URL:** http://10.1.1.3:8000
+**URL:** http://10.1.1.3:8000 (or the gmktec IP on port 8000)
 
-**Dependencies:** Mediamtx (starts after mediamtx.service)
+**Dependencies:** MediaMTX (starts after mediamtx.service via `After=`)
 
 **Configuration:**
 - Automatically starts on user login/boot
-- Waits for MediaMTX to start first (`Wants=mediamtx.service`)
+- Waits for MediaMTX to start first
 - Restarts on failure with 5-second delay
-- Logs available via: `journalctl --user -u onvif-mcp -f`
+- Logs available via: `journalctl --user -u onvif-mcp-http -f` (note the full service name — check `systemctl --user list-units` for the exact name)
 
 **Commands:**
 ```bash
 # Check status
-systemctl --user status onvif-mcp
+systemctl --user status onvif-mcp-http  # or whatever the unit name is
 
 # Restart
-systemctl --user restart onvif-mcp
+systemctl --user restart onvif-mcp-http
 
 # Disable auto-start
-systemctl --user disable onvif-mcp
+systemctl --user disable onvif-mcp-http
 
 # Enable auto-start
-systemctl --user enable onvif-mcp
+systemctl --user enable onvif-mcp-http
 ```
 
 ---
 
 ## Restarting Services After Config Changes
 
-If you modify the service file (e.g., to add environment variables):
+### MediaMTX (system service)
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart mediamtx
+```
 
+### ONVIF MCP HTTP Server (user service)
 ```bash
 systemctl --user daemon-reload
-systemctl --user restart mediamtx
-systemctl --user restart onvif-mcp
+systemctl --user restart onvif-mcp-http  # or whatever the unit name is
 ```
 
-To check service logs in real-time:
-
-```bash
-# MediaMTX logs
-journalctl --user -u mediamtx -f
-
-# ONVIF MCP logs
-journalctl --user -u onvif-mcp -f
-```
+---
 
 ## Configuration File Locations
 
-**MediaMTX config:** `/home/stephen/.local/bin/mediamtx.yml`
+| Component | Config Path | Description |
+|-----------|-------------|-------------|
+| MediaMTX | `/etc/mediamtx/mediamtx.yml` | Camera RTSP source URLs, server settings (ports, protocols), path definitions |
+| Nginx | `/etc/nginx/sites-enabled/camera-apps-https` | Reverse proxy config for camera web apps and MediaMTX WebRTC proxy |
 
-This file contains:
-- Path definitions for each camera with full RTSP URLs including credentials
-- Server settings (ports, protocols, etc.)
+### Key details in `/etc/mediamtx/mediamtx.yml`:
+- **paths:** Maps each camera + profile combination to an RTSP pull source URL (with embedded credentials)
+- **rtsp:** Enabled on port 8554 (TCP), with UDP RTP ports at 8000/8001
+- **webrtc:** Enabled on port 8889 (TCP) and ICE listener on 8189 (UDP)
+- **hls, rtmp, srt, moq:** Disabled
 
-Example paths:
-```yaml
-paths:
-  4B0013BPAABE264/MediaProfile000:
-    source: rtsp://admin:***@10.2.2.100:554/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif
-  # ... more cameras
+### Key details in `/etc/nginx/sites-enabled/camera-apps-https`:
+- Proxies `/webrtc/` to MediaMTX port 8889 with WebSocket upgrade headers
+- Protects `/cameras/`, `/multiview/`, `/outputs/`, `/webrtc/` with oauth2-proxy auth
+- Serves static camera app content from document root
+
+---
+
+## Troubleshooting
+
+### Service won't start after config change
+```bash
+# Verify systemd can parse the service file
+systemd-analyze verify /etc/systemd/system/mediamtx.service 2>&1 | head -20
+
+# Check what's going on
+sudo journalctl -u mediamtx --since "5 minutes ago"
 ```
 
-## Environment Variables
+### MediaMTX logs show authentication errors on camera
+```bash
+# Watch live logs
+sudo journalctl -u mediamtx -f
+```
 
-Systemd user services don't source `~/.bashrc`, so environment variables needed by the application must be explicitly defined in the service file using `Environment=` directives.
+Common issue: an HIKVISION camera (e.g., DS-2CD2142FWD-IS) returns 401 Unauthorized on one profile while the other works. This is a known intermittent auth failure with some camera firmware — restart MediaMTX or reconnect the camera.
 
-For the ONVIF MCP server, the following variables are required:
-- `CAMERA_USERNAME` - Camera login username
-- `CAMERA_PASSWORD` - Camera login password  
-- `STREAM_SERVER_URL` - Base URL of the camera web player
+### Nginx config validation
+```bash
+sudo nginx -t
+```
 
-## Notes
-
-- User systemd services require the user session to be active
-- Services are stored in `~/.config/systemd/user/`
-- After editing service files, run `systemctl --user daemon-reload`
-- Service files are located at the workspace root for easy reference
+### Service not at boot
+Verify it's enabled:
+```bash
+systemctl is-enabled mediamtx       # should say "enabled"
+systemctl list-unit-files | grep mediamtx
+```
