@@ -1,0 +1,60 @@
+logLevel: info
+logDestinations: [stdout]
+
+rtsp: true
+rtspTransports: [tcp]
+rtspAddress: 127.0.0.1:8554
+
+rtmp: false
+hls: false
+webrtc: true
+webrtcAddress: 127.0.0.1:8889
+webrtcLocalUDPAddress: 127.0.0.1:8189
+srt: false
+moq: false
+api: false
+metrics: false
+pprof: false
+
+authMethod: internal
+authInternalUsers:
+  - user: any
+    pass: ""
+    ips: []
+    permissions:
+      - action: publish
+        path: ""
+      - action: read
+        path: ""
+      - action: playback
+        path: ""
+
+paths:
+  DS-2CD2142022579764/Profile_1:
+    source: rtsp://admin:admin123@10.1.1.70:554/Streaming/Channels/101?transportmode=unicast&profile=Profile_1
+  DS-2CD2142022579764/Profile_2:
+    source: rtsp://admin:admin123@10.1.1.70:554/Streaming/Channels/102?transportmode=unicast&profile=Profile_2
+
+  ND021810001394/MediaProfile000:
+    source: rtsp://admin:admin123@10.1.1.72:554/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif
+  ND021810001394/MediaProfile001:
+    source: rtsp://admin:admin123@10.1.1.72:554/cam/realmonitor?channel=1&subtype=1&unicast=true&proto=Onvif
+
+  AMC015906KDB241289/MediaProfile000:
+    source: rtsp://admin:admin123@10.1.1.68:554/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif
+  AMC015906KDB241289/MediaProfile001:
+    source: rtsp://admin:admin123@10.1.1.68:554/cam/realmonitor?channel=1&subtype=1&unicast=true&proto=Onvif
+
+  AMC014641NE6L35AT8/MediaProfile000:
+    source: rtsp://admin:admin123@10.1.1.71:554/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif
+  AMC014641NE6L35AT8/MediaProfile001:
+    source: rtsp://admin:admin123@10.1.1.71:554/cam/realmonitor?channel=1&subtype=1&unicast=true&proto=Onvif
+
+  ACCC8E99C915/profile_1_h264:
+    source: rtsp://admin:admin123@10.1.1.67/onvif-media/media.amp?profile=profile_1_h264&sessiontimeout=60&streamtype=unicast
+  ACCC8E99C915/profile_1_jpeg:
+    source: rtsp://admin:admin123@10.1.1.67/onvif-media/media.amp?profile=profile_1_jpeg&sessiontimeout=60&streamtype=unicast
+  ACCC8E99C915/profile0:
+    source: rtsp://admin:admin123@10.1.1.67/onvif-media/media.amp?profile=profile0&sessiontimeout=60&streamtype=unicast
+  ACCC8E99C915/profile1:
+    source: rtsp://admin:admin123@10.1.1.67/onvif-media/media.amp?profile=profile1&sessiontimeout=60&streamtype=unicast
