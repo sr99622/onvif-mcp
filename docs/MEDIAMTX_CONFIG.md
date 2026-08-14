@@ -70,7 +70,14 @@ UDP 8189 carries encrypted WebRTC media, not the original unencrypted RTSP feed.
 
 Each camera exposes two (or more) named paths in the YAML config. The streams are declared in the paths: section of the mediamtx.yml. The path consists of a name and a source: field. The name is a combination of the camera serial number and profile token delimited by a slash character. The source is the camera RTSP endpoint, known as the stream_uri. The stream_uri is modified to include the username and password credentials for authorization. Note that cameras have multiple profiles.
 
-### Camera Stream Path Construction
+### Exmaple Camera Stream Path Construction
+
+The camera path is constructed using the formula
+
+  {serial_number}/{profile token}
+    source: {stream_uri[:7]}{username}:{password}@{stream_uri[7:]}
+
+Using concrete exmaple values
 
 * Serial Number: DS-2CD2142022579764
 * Profile Token: Profile_1
