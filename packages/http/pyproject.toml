@@ -1,6 +1,6 @@
 [project]
 name = "onvif-mcp-http"
-version = "0.1.5"
+version = "0.1.6"
 description = "ONVIF MCP server using the streamable-http transport"
 requires-python = ">=3.10"
 dependencies = [
@@ -8,7 +8,7 @@ dependencies = [
     "onvif-mcp-core",
     "starlette>=0.27.0",
     "uvicorn>=0.23.0",
-    "libonvif==4.0.23",
+    "libonvif==4.0.24",
     "pydantic>=2.0.0",
     "niquests",
     "pyjwt[crypto]>=2.10.0",

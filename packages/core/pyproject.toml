@@ -1,10 +1,10 @@
 [project]
 name = "onvif-mcp-core"
-version = "0.2.4"
+version = "0.2.5"
 description = "Shared camera operations for the ONVIF MCP servers"
 requires-python = ">=3.10"
 dependencies = [
-    "libonvif==4.0.23",
+    "libonvif==4.0.24",
     "mcp>=1.0.0",
 ]
 

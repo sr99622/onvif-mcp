@@ -30,9 +30,9 @@ authInternalUsers:
         path: ""
 
 paths:
-  DS-2CD2142022579764/Profile_1:
+  DS-2CD2142FWD-IS20171118BBWR129028868/Profile_1:
     source: rtsp://admin:admin123@10.1.1.70:554/Streaming/Channels/101?transportmode=unicast&profile=Profile_1
-  DS-2CD2142022579764/Profile_2:
+  DS-2CD2142FWD-IS20171118BBWR129028868/Profile_2:
     source: rtsp://admin:admin123@10.1.1.70:554/Streaming/Channels/102?transportmode=unicast&profile=Profile_2
 
   ND021810001394/MediaProfile000:

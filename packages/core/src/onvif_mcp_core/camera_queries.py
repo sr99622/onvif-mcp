@@ -147,20 +147,13 @@ async def get_cameras() -> str:
 
     for adapter_ip in adapter_ips:
         logger.debug("Discovering cameras on adapter %s", adapter_ip)
-        with open(os.devnull, "w") as devnull:
-            import sys
-            old_stdout = sys.stdout
-            try:
-                sys.stdout = devnull
-                cameras = discover(
-                    adapter_ip,
-                    _get_camera_credentials,
-                    on_error=_on_error,
-                    camera_filled=_camera_filled,
-                    use_threads=True,
-                )
-            finally:
-                sys.stdout = old_stdout
+        cameras = discover(
+            adapter_ip,
+            _get_camera_credentials,
+            on_error=_on_error,
+            camera_filled=_camera_filled,
+            use_threads=True,
+        )
 
         for camera in cameras:
             # Get camera IP for deduplication
@@ -203,20 +196,13 @@ async def get_cameras_by_adapter(adapter_ip: str) -> str:
         containing `--`.
     """
     logger.debug("Discovering cameras on adapter %s", adapter_ip)
-    with open(os.devnull, "w") as devnull:
-        import sys
-        old_stdout = sys.stdout
-        try:
-            sys.stdout = devnull
-            cameras = discover(
-                adapter_ip,
-                _get_camera_credentials,
-                on_error=_on_error,
-                camera_filled=_camera_filled,
-                use_threads=True,
-            )
-        finally:
-            sys.stdout = old_stdout
+    cameras = discover(
+        adapter_ip,
+        _get_camera_credentials,
+        on_error=_on_error,
+        camera_filled=_camera_filled,
+        use_threads=True,
+    )
 
     summaries = []
     for camera in cameras:

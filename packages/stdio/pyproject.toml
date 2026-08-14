@@ -1,12 +1,12 @@
 [project]
 name = "onvif-mcp-stdio"
-version = "0.1.4"
+version = "0.1.5"
 description = "MCP server for ONVIF camera using stdio transport"
 requires-python = ">=3.10"
 dependencies = [
     "mcp>=1.0.0",
     "onvif-mcp-core",
-    "libonvif==4.0.23",
+    "libonvif==4.0.24",
     "niquests==3.20.1",
 ]
 

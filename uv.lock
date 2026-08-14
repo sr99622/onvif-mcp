@@ -508,7 +508,7 @@ wheels = [
 
 [[package]]
 name = "libonvif"
-version = "4.0.23"
+version = "4.0.24"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "lxml" },
@@ -516,9 +516,9 @@ dependencies = [
     { name = "psutil" },
     { name = "textual" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d3/a8/24d5e421b8208988060e9c4244a6e15b421efbe67c4a8a065012b2c6e985/libonvif-4.0.23.tar.gz", hash = "sha256:97b275568868455b71aa5d2868e67eaaad0992c7faafa3c9f4d60674f8701c2c", size = 313006, upload-time = "2026-07-24T17:21:09.889Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/38/e9/b5df4522ed2b9b6f0703c74fa15978bd7041e7d6ca03ec85999224eaa00b/libonvif-4.0.24.tar.gz", hash = "sha256:d7fb9e837caadf7c21fb6f3e6fe707ebf55224bd66d25317d5d4beea998cd93e", size = 29665, upload-time = "2026-08-14T20:39:54.123Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/aa/37/88a681ffce63520bf3d39f101a56ec2e86b2679d36e7dd028ac69d2951c7/libonvif-4.0.23-py3-none-any.whl", hash = "sha256:8a1e4f6b60387c761ae89450a9650d17b152f4c577b351aa906948c9623da29f", size = 319206, upload-time = "2026-07-24T17:21:08.539Z" },
+    { url = "https://files.pythonhosted.org/packages/47/6c/26b398ef7c5a05bffd7590f32f0a5c622e6994cea4f91c85a4fe405cf93e/libonvif-4.0.24-py3-none-any.whl", hash = "sha256:59c909eac1b69cbc2bc2458f319f5fa5d35e06d9e31c9046592a9b5b57141aa6", size = 37474, upload-time = "2026-08-14T20:39:53.16Z" },
 ]
 
 [[package]]
@@ -730,7 +730,7 @@ wheels = [
 
 [[package]]
 name = "onvif-mcp-core"
-version = "0.2.4"
+version = "0.2.5"
 source = { editable = "packages/core" }
 dependencies = [
     { name = "libonvif" },
@@ -739,13 +739,13 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "libonvif", specifier = "==4.0.23" },
+    { name = "libonvif", specifier = "==4.0.24" },
     { name = "mcp", specifier = ">=1.0.0" },
 ]
 
 [[package]]
 name = "onvif-mcp-http"
-version = "0.1.5"
+version = "0.1.6"
 source = { editable = "packages/http" }
 dependencies = [
     { name = "libonvif" },
@@ -760,7 +760,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "libonvif", specifier = "==4.0.23" },
+    { name = "libonvif", specifier = "==4.0.24" },
     { name = "mcp", specifier = ">=1.0.0" },
     { name = "niquests" },
     { name = "onvif-mcp-core", editable = "packages/core" },
@@ -772,7 +772,7 @@ requires-dist = [
 
 [[package]]
 name = "onvif-mcp-stdio"
-version = "0.1.4"
+version = "0.1.5"
 source = { virtual = "packages/stdio" }
 dependencies = [
     { name = "libonvif" },
@@ -783,7 +783,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "libonvif", specifier = "==4.0.23" },
+    { name = "libonvif", specifier = "==4.0.24" },
     { name = "mcp", specifier = ">=1.0.0" },
     { name = "niquests", specifier = "==3.20.1" },
     { name = "onvif-mcp-core", editable = "packages/core" },
