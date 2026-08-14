@@ -110,7 +110,7 @@ rtspAddress: 127.0.0.1:8554
 
 # WebRTC server
 webrtc: true
-webrtcAddress: :8889
+webrtcAddress: 127.0.0.1:8889
 webrtcLocalUDPAddress: :8189
 
 # Disable unused protocols to reduce attack surface
