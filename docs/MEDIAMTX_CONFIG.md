@@ -1,6 +1,6 @@
 # MediaMTX Server Configuration
 
-This document describes the MediaMTX RTSP-to-WebRTC/HLS streaming server deployed on `nuc.home.arpa`. It pulls live video from IP cameras and makes them available via WebRTC for browser playback.
+This document describes the MediaMTX RTSP-to-WebRTC/HLS streaming server. The server pulls live video from IP cameras and makes them available via WebRTC for browser playback. In this document, the server name is represented symbolically surrounded by curly braces as `{hostname}`, which should be relaced by the actual server name, e.g. `camera.home.arpa`, in production. The curly braces convention for representing symbolic values is followed throughout this document.
 
 ## Binary Executable
 
@@ -8,16 +8,16 @@ location: https://github.com/bluenviron/mediamtx/releases
 
 look for the latest amd64 binary, it will look something like
 
-mediamtx_v1.20.0_linux_amd64.tar.gz
+`mediamtx_v1.20.0_linux_amd64.tar.gz`
 
-In this example, the most recent version is 1.20.0, which can change. The generic representation of this name would be
+In this example, the most recent version is 1.20.0, which can change. The generic representation of this name with the version represented symbolically and surrounded by curly braces would be:
 
-mediamtx_v{version}_linux_amd64.tar.gz
+`mediamtx_v{version}_linux_amd64.tar.gz`
 
-Example Deployment steps:
+Example Deployment steps (the symbolic version in curly braces should be replaced with the actual version):
 ```bash
 # Download latest version
-curl -sL "https://github.com/bluenviron/mediamtx/releases/download/v1.20.0/mediamtx_v1.20.0_linux_amd64.tar.gz" | tar xz
+curl -sL "https://github.com/bluenviron/mediamtx/releases/download/v{version}mediamtx_v{version}_linux_amd64.tar.gz" | tar xz
 
 # Install binary
 sudo cp mediamtx /usr/local/bin/mediamtx && sudo chmod 755 /usr/local/bin/mediamtx
@@ -27,7 +27,7 @@ sudo cp mediamtx /usr/local/bin/mediamtx && sudo chmod 755 /usr/local/bin/mediam
 
 | Item | Value |
 |------|-------|
-| Server URL | http://{server_hostname}.home.arpa/webrtc/ |
+| Server URL | `http://{hostname}/webrtc/` |
 | Binary | `/usr/local/bin/mediamtx` |
 | Config | `/etc/mediamtx/mediamtx.yml` |
 | Service | `sudo systemctl status mediamtx` (system service, multi-user.target) |
@@ -72,11 +72,11 @@ UDP 8189 carries encrypted WebRTC media, not the original unencrypted RTSP feed.
 
 ## Camera Streams
 
-Each camera exposes two or more named paths in the YAML config. The streams are declared in the `paths:` section of the `mediamtx.yml`. The path consists of a name and a `source:` field. The name is a combination of the camera serial number and profile token delimited by a slash character. The source is the camera RTSP endpoint, known as the stream_uri, modified to include the username and password credentials for authorization. Agents can collect the necessary camera data from the camera MCP server tool get_cameras. The username and password can be found from the environment variables CAMERA_USERNAME and CAMERA_PASSWORD.
+Each camera exposes two or more named paths in the YAML config. The streams are declared in the `paths:` section of the `mediamtx.yml`. The camera stream path consists of a name and a `source:` field. The name is a combination of the camera serial number and profile token delimited by a slash character. The source is the camera RTSP endpoint, known as the stream_uri, modified to include the username and password credentials for authorization. Agents can collect the necessary camera data from the camera MCP server tool `get_cameras`. The username and password can be found from the environment variables CAMERA_USERNAME and CAMERA_PASSWORD.
 
 ### Exmaple Camera Stream Path Construction
 
-The camera path is constructed using the formula
+The camera path is constructed using the formula shown below. Values inside the curly braces are symbolic and should be replaced by concrete system values in production.
 
 ```py
   {serial_number}/{profile.token}
@@ -102,6 +102,8 @@ paths:
 MediaMTX uses **internal database mode** with permissive access rules — no password is required for any user (`pass:` is empty). The config grants full permissions (publish, read, playback) to all cameras. Access control is managed by the nginx proxy front end.
 
 ## MediaMTX Configuration File (`/etc/mediamtx/mediamtx.yml`)
+
+* Camera credentials are embedded in RTSP URLs in the config file (`/etc/mediamtx/mediamtx.yml`). Keep this file protected (mode 640, owned by mediamtx:mediamtx).
 
 ```yaml
 logLevel: info
@@ -192,12 +194,12 @@ sudo systemctl status mediamtx  # verify active (running)
 
 Without these, MediaMTX returns a redirect like `302 Location: /camera/path/`, which nginx then tries to serve as a static file (causing 405 errors or broken behavior).
 
-Full nginx config at `/etc/nginx/sites-available/mediamtx`:
+Full nginx config at `/etc/nginx/sites-available/mediamtx`, replace the symbolic value in the curly braces `{hostname}` with the actual server name e.g. `camera.home.arpa`:
 
 ```nginx
 server {
     listen 80;
-    server_name nuc.home.arpa;
+    server_name {hostname};
 
     location /webrtc/ {
         proxy_pass http://127.0.0.1:8889/;   # trailing slash REQUIRED
@@ -218,7 +220,7 @@ server {
     }
 
     location = / {
-        return 200 "MediaMTX server at nuc.home.arpa\n";
+        return 200 "MediaMTX server at {hostname}\n";
         add_header Content-Type text/plain;
     }
 }
@@ -235,10 +237,10 @@ sudo systemctl reload nginx                # apply changes
 
 ### URL Format (Trailing Slash Required)
 
-MediaMTX requires a **trailing slash** at the end of camera paths. Both work:
+MediaMTX requires a **trailing slash** at the end of camera paths. Note that the symbolic value in the curly braces {hostname} should be replaced with the actual server host name, e.g. `camera.home.arpa`. Both work:
 
-- ✅ `http://nuc.home.arpa/webrtc/DS-2CD2142022579764/Profile_1/`
-- ❌ `http://nuc.home.arpa/webrtc/DS-2CD2142022579764/Profile_1` (redirects but browser may not follow)
+- ✅ `http://{hostname}/webrtc/DS-2CD2142022579764/Profile_1/`
+- ❌ `http://{hostname}/webrtc/DS-2CD2142022579764/Profile_1` (redirects but browser may not follow)
 
 The `proxy_redirect / /webrtc/;` directive ensures that MediaMTX's internal redirects preserve the `/webrtc/` prefix.
 
@@ -258,30 +260,25 @@ sudo systemctl restart mediamtx
 
 ### View running cameras (from status output)
 MediaMTX prints a startup line showing which paths have online streams. Look for:
-- `INF [path <name>] stream is available and online, N track(s)` = healthy
-- `ERR [path <name>] bad status code: 401` = camera auth failure (occurs on HIKVISION Profile_2)
+- `INF [path {name}] stream is available and online, N track(s)` = healthy
+- `ERR [path {name}] bad status code: 401` = camera auth failure (occurs on HIKVISION Profile_2)
 
 ### Adding a new camera
-1. Add a new path entry in `/etc/mediamtx/mediamtx.yml`:
-```yaml
-paths:
-  NewCameraName/Profile_1:
-    source: rtsp://admin:<password>@<camera_ip>:554/path_to_stream
-```
+1. Add a new path entry in the `paths:` section of /etc/mediamtx/mediamtx.yml` as described above in **Camera Streams**.
+
 2. Restart the service:
 ```bash
 sudo systemctl restart mediamtx
 ```
 
 ### Removing a camera
-Delete the path entry from `/etc/mediamtx/mediamtx.yml` and restart.
+Delete the path entry from the `paths:` section of `/etc/mediamtx/mediamtx.yml` and restart.
 
 ## Security Notes
 
-- Camera credentials are embedded in RTSP URLs in the config file (`/etc/mediamtx/mediamtx.yml`). Keep this file protected (mode 640, owned by mediamtx:mediamtx).
-- MediaMTX listens on `0.0.0.0` for WebRTC ports, but access flows through Nginx at `/webrtc/`.
+- MediaMTX listens on `127.0.0.1` for WebRTC TCP ports, but access flows through Nginx at `/webrtc/`.
 - Without authentication layers, anyone on the network who can reach port 8889 (or port 80 via nginx) gets a live stream.
-- All cameras use default credentials (`admin` / `admin123`). Changing them should be scheduled for a maintenance window if possible.
+- All cameras use the same default credentials (`{username}` / `{password}`).
 
 ## Known Issues
 
@@ -293,11 +290,3 @@ WAR [path DS-2CD2142022579764/Profile_1] 23 processing errors, last was: invalid
 ```
 
 These are common with Hikvision cameras and do not prevent streaming. The streams remain available despite the warnings. Amcrest cameras on certain substreams may show similar behavior.
-
-## Related Documents
-
-- **SYSTEMD_SETUP.md** — service startup and management
-- **STREAM_AUTH.md** — browser authentication (Keycloak/oauth2-proxy)
-- **HTTPS.md** — TLS certificate setup for nuc.home.arpa
-- **DESIGN.md** — overall ONVIF MCP architecture
-- **KEYCLOAK.md** — Keycloak realm and client configuration
