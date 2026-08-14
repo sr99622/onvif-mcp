@@ -68,7 +68,7 @@ UDP 8189 carries encrypted WebRTC media, not the original unencrypted RTSP feed.
 
 ## Camera Streams
 
-Each camera exposes two (or more) named paths in the YAML config. The streams are declared in the paths: section of the mediamtx.yml. The path consists of a name and a source: field. The name is a combination of the camera serial number and profile token delimited by a slash character. The source is the camera RTSP endpoint, known as the stream_uri. The stream_uri is modified to include the username and password credentials for authorization.
+Each camera exposes two or more named paths in the YAML config. The streams are declared in the `paths:` section of the `mediamtx.yml`. The path consists of a name and a `source:` field. The name is a combination of the camera serial number and profile token delimited by a slash character. The source is the camera RTSP endpoint, known as the stream_uri, modified to include the username and password credentials for authorization. Agents can collect the necessary camera data from the camera MCP server tool get_cameras. The username and password can be found from the environment variables CAMERA_USERNAME and CAMERA_PASSWORD.
 
 ### Exmaple Camera Stream Path Construction
 
@@ -79,7 +79,7 @@ The camera path is constructed using the formula
     source: {stream_uri[:7]}{username}:{password}@{stream_uri[7:]}
 ```
 
-Using concrete exmaple values
+Using concrete example values
 
 * Serial Number: DS-2CD2142022579764
 * Profile Token: Profile_1
@@ -95,7 +95,7 @@ paths:
 
 ## Authentication
 
-MediaMTX uses **internal database mode** with permissive access rules — no password is required for any user (`pass:` is empty). The config grants full permissions (publish, read, playback) to all cameras:
+MediaMTX uses **internal database mode** with permissive access rules — no password is required for any user (`pass:` is empty). The config grants full permissions (publish, read, playback) to all cameras. Access control is managed by the nginx proxy front end.
 
 ## MediaMTX Configuration File (`/etc/mediamtx/mediamtx.yml`)
 
