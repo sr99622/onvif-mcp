@@ -14,7 +14,7 @@ In this example, the most recent version is 1.20.0, which can change. The generi
 
 mediamtx_v{version}_linux_amd64.tar.gz
 
-Exampple Deployment steps:
+Example Deployment steps:
 ```bash
 # Download latest version
 curl -sL "https://github.com/bluenviron/mediamtx/releases/download/v1.20.0/mediamtx_v1.20.0_linux_amd64.tar.gz" | tar xz
