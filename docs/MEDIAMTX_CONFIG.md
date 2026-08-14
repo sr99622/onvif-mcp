@@ -1,16 +1,41 @@
 # MediaMTX Server Configuration
 
-This document describes the MediaMTX RTSP-to-WebRTC/HLS streaming server deployed on `gmktec.home.arpa`. It pulls live video from IP cameras and makes them available via WebRTC for browser playback.
+This document describes the MediaMTX RTSP-to-WebRTC/HLS streaming server deployed on `nuc.home.arpa`. It pulls live video from IP cameras and makes them available via WebRTC for browser playback.
+
+## Binary Executable
+
+location: https://github.com/bluenviron/mediamtx/releases
+
+look for the latest amd64 binary, it will look something like
+
+mediamtx_v{X.YY.Z}_linux_amd64.tar.gz
+
+Deployment steps:
+```bash
+# Download latest version
+curl -sL "https://github.com/bluenviron/mediamtx/releases/download/v1.20.0/mediamtx_v1.20.0_linux_amd64.tar.gz" | tar xz
+
+# Install binary
+sudo cp mediamtx /usr/local/bin/mediamtx && sudo chmod 755 /usr/local/bin/mediamtx
+```
 
 ## Deployment Details
 
 | Item | Value |
 |------|-------|
-| Server URL | https://gmktec.home.arpa/webrtc/ |
+| Server URL | http://{this_server_name}.home.arpa/webrtc/ |
 | Binary | `/usr/local/bin/mediamtx` |
 | Config | `/etc/mediamtx/mediamtx.yml` |
 | Service | `sudo systemctl status mediamtx` (system service, multi-user.target) |
 | User | `mediamtx:mediamtx` (dedicated system user) |
+
+### Prerequisites: Create System User
+
+```bash
+sudo groupadd --system mediamtx
+sudo useradd --system --no-create-home --shell /usr/sbin/nologin -g mediamtx mediamtx
+sudo mkdir -p /etc/mediamtx /var/log/mediamtx
+```
 
 ## Protocols & Ports
 
@@ -49,12 +74,12 @@ Note: There are 7 physical cameras but 12 named paths in the config, since some 
 
 ### RTSP Source URLs (credentials redacted)
 
-All cameras use the same credentials (`admin` / `<redacted>`). Source URIs follow these patterns:
+All cameras use the same credentials (`admin` / `admin123`). Source URIs follow these patterns:
 
-- **HIKVISION DS-2CD:** `rtsp://admin:***@10.1.1.70:554/Streaming/Channels/101?transportmode=unicast&profile=Profile_1`
-- **Dahua:** `rtsp://admin:***@10.1.1.72:554/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif`
-- **Amcrest:** `rtsp://admin:***@10.1.1.68:554/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif`
-- **HIKVISION ONVIF:** `rtsp://admin:***@10.1.1.67/onvif-media/media.amp?profile=profile_1_h264&sessiontimeout=60&streamtype=unicast`
+- **HIKVISION DS-2CD:** `rtsp://admin:admin123@10.1.1.70:554/Streaming/Channels/101?transportmode=unicast&profile=Profile_1`
+- **Dahua:** `rtsp://admin:admin123@10.1.1.72:554/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif`
+- **Amcrest:** `rtsp://admin:admin123@10.1.1.68:554/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif`
+- **HIKVISION ONVIF:** `rtsp://admin:admin123@10.1.1.67/onvif-media/media.amp?profile=profile_1_h264&sessiontimeout=60&streamtype=unicast`
 
 ## Authentication
 
@@ -72,18 +97,153 @@ authInternalUsers:
       - action: playback
 ```
 
-The localhost address (`127.0.0.1`, `::1`) also gets API, metrics, and PPROF access for local tooling.
+## MediaMTX Configuration File (`/etc/mediamtx/mediamtx.yml`)
 
-## Nginx Integration
+Key settings for v1.20.0:
 
-MediaMTX is accessed through Nginx at `/webrtc/` with these key settings:
+```yaml
+logLevel: info
+logDestinations: [stdout]
 
-- **Proxy target:** `http://127.0.0.1:8889/` (MediaMTX WebRTC listener)
-- **Protocol rewrite:** `proxy_redirect / /webrtc/` so relative URLs get the correct path prefix
-- **WebSocket upgrade:** Required for WebRTC data channels and ICE candidates
-- **Auth protection:** `/webrtc/` is protected by oauth2-proxy (Keycloak) via Nginx `auth_request`
+# RTSP server (loopback only)
+rtsp: true
+rtspTransports: [tcp]
+rtspAddress: 127.0.0.1:8554
 
-The proxy also forwards `X-Forwarded-*` headers so MediaMTX can log the real client IP.
+# WebRTC server
+webrtc: true
+webrtcAddress: :8889
+webrtcLocalUDPAddress: :8189
+
+# Disable unused protocols to reduce attack surface
+rtmp: false
+hls: false
+srt: false
+moq: false
+api: false  # Not needed for basic operation
+
+# Authentication - internal mode, no password required
+authMethod: internal
+authInternalUsers:
+  - user: any
+    pass: ""
+    ips: []
+    permissions:
+      - action: publish
+        path: ""
+      - action: read
+        path: ""
+      - action: playback
+        path: ""
+
+# Camera paths (pull from RTSP sources)
+paths:
+  DS-2CD2142022579764/Profile_1:
+    source: rtsp://admin:admin123@10.1.1.70:554/Streaming/Channels/101?transportmode=unicast&profile=Profile_1
+  # ... additional paths follow same pattern
+```
+
+**Important:** MediaMTX v1.x uses different configuration field names than older versions:
+- `protocols: [tcp]` → `rtspTransports: [tcp]` (deprecated warning)
+- Disable protocols with individual flags (`hls: false`, not `hlsEnable: false`)
+- No `webRTCHTTPAddress` or `webRTCICEListenAddresses` — use the default addresses
+
+## Systemd Service Setup
+
+Service file at `/etc/systemd/system/mediamtx.service`:
+
+```ini
+[Unit]
+Description=MediaMTX RTSP-to-WebRTC streaming server
+Documentation=https://github.com/bluenviron/mediamtx
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mediamtx
+Group=mediamtx
+WorkingDirectory=/var/lib/mediamtx
+ExecStart=/usr/local/bin/mediamtx /etc/mediamtx/mediamtx.yml
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mediamtx
+
+ReadWritePaths=/var/log/mediamtx /var/lib/mediamtx
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Installation steps:
+```bash
+sudo cp mediamtx.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable mediamtx
+sudo systemctl start mediamtx
+sudo systemctl status mediamtx  # verify active (running)
+```
+
+## Nginx Reverse Proxy Configuration
+
+**Critical:** The nginx reverse proxy requires TWO specific directives that are often missing:
+
+1. **Trailing slash in `proxy_pass`**: `http://127.0.0.1:8889/` (note the trailing slash)
+2. **`proxy_redirect / /webrtc/;`** — this ensures MediaMTX's redirects preserve the `/webrtc/` prefix
+
+Without these, MediaMTX returns a redirect like `302 Location: /camera/path/`, which nginx then tries to serve as a static file (causing 405 errors or broken behavior).
+
+Full nginx config at `/etc/nginx/sites-available/mediamtx`:
+
+```nginx
+server {
+    listen 80;
+    server_name nuc.home.arpa;
+
+    location /webrtc/ {
+        proxy_pass http://127.0.0.1:8889/;   # trailing slash REQUIRED
+        proxy_redirect / /webrtc/;            # preserve /webrtc/ in redirects
+
+        # WebSocket support for WebRTC signaling
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Long timeouts for WebRTC sessions
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+    }
+
+    location = / {
+        return 200 "MediaMTX server at nuc.home.arpa\n";
+        add_header Content-Type text/plain;
+    }
+}
+```
+
+Installation:
+```bash
+sudo cp mediamtx /etc/nginx/sites-available/mediamtx
+sudo ln -sf /etc/nginx/sites-available/mediamtx /etc/nginx/sites-enabled/mediamtx
+sudo rm -f /etc/nginx/sites-enabled/default  # if needed
+sudo nginx -t                              # test configuration
+sudo systemctl reload nginx                # apply changes
+```
+
+### URL Format (Trailing Slash Required)
+
+MediaMTX requires a **trailing slash** at the end of camera paths. Both work:
+
+- ✅ `http://nuc.home.arpa/webrtc/DS-2CD2142022579764/Profile_1/`
+- ❌ `http://nuc.home.arpa/webrtc/DS-2CD2142022579764/Profile_1` (redirects but browser may not follow)
+
+The `proxy_redirect / /webrtc/;` directive ensures that MediaMTX's internal redirects preserve the `/webrtc/` prefix.
 
 ## Operations
 
@@ -91,7 +251,7 @@ The proxy also forwards `X-Forwarded-*` headers so MediaMTX can log the real cli
 ```bash
 sudo systemctl status mediamtx --no-pager
 sudo journalctl -u mediamtx -f                    # live logs
-sudo tail -n 50 /var/log/mediamtx/mediamtx.log     # file log
+sudo tail -n 50 /var/log/mediamtx/mediamtx.log     # file log (if configured)
 ```
 
 ### Restart
@@ -111,9 +271,8 @@ paths:
   NewCameraName/Profile_1:
     source: rtsp://admin:<password>@<camera_ip>:554/path_to_stream
 ```
-2. Reload and restart:
+2. Restart the service:
 ```bash
-sudo systemctl daemon-reload   # not needed for config changes, only service file changes
 sudo systemctl restart mediamtx
 ```
 
@@ -122,15 +281,26 @@ Delete the path entry from `/etc/mediamtx/mediamtx.yml` and restart.
 
 ## Security Notes
 
-- Camera credentials are embedded in RTSP URLs in the config file (`/etc/mediamtx/mediamtx.yml`). Keep this file protected.
-- MediaMTX listens on `0.0.0.0` (all interfaces) for its native ports, but these should never be reached directly from the LAN — access flows through Nginx at `/webrtc/`.
-- The oauth2-proxy + Keycloak authentication at the Nginx layer is what actually protects the streams in production. Without it, anyone on the network who can reach port 8889 would get a live stream.
+- Camera credentials are embedded in RTSP URLs in the config file (`/etc/mediamtx/mediamtx.yml`). Keep this file protected (mode 640, owned by mediamtx:mediamtx).
+- MediaMTX listens on `0.0.0.0` for WebRTC ports, but access flows through Nginx at `/webrtc/`.
+- Without authentication layers, anyone on the network who can reach port 8889 (or port 80 via nginx) gets a live stream.
 - All cameras use default credentials (`admin` / `admin123`). Changing them should be scheduled for a maintenance window if possible.
+
+## Known Issues
+
+### RTP Packet Loss
+Some camera streams show warnings in logs:
+```
+WAR [path DS-2CD2142022579764/Profile_1] [RTSP source] 14 RTP packets lost
+WAR [path DS-2CD2142022579764/Profile_1] 23 processing errors, last was: invalid FU-A packet (non-starting)
+```
+
+These are common with Hikvision cameras and do not prevent streaming. The streams remain available despite the warnings. Amcrest cameras on certain substreams may show similar behavior.
 
 ## Related Documents
 
 - **SYSTEMD_SETUP.md** — service startup and management
 - **STREAM_AUTH.md** — browser authentication (Keycloak/oauth2-proxy)
-- **HTTPS.md** — TLS certificate setup for gmktec.home.arpa
+- **HTTPS.md** — TLS certificate setup for nuc.home.arpa
 - **DESIGN.md** — overall ONVIF MCP architecture
 - **KEYCLOAK.md** — Keycloak realm and client configuration
