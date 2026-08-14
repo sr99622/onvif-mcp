@@ -8,7 +8,11 @@ location: https://github.com/bluenviron/mediamtx/releases
 
 look for the latest amd64 binary, it will look something like
 
-mediamtx_v{X.YY.Z}_linux_amd64.tar.gz
+mediamtx_v1.20.0_linux_amd64.tar.gz
+
+In this example, the most recent version is 1.20.0, which can change. The generic representation of this name would be
+
+mediamtx_v{version}_linux_amd64.tar.gz
 
 Exampple Deployment steps:
 ```bash
@@ -23,7 +27,7 @@ sudo cp mediamtx /usr/local/bin/mediamtx && sudo chmod 755 /usr/local/bin/mediam
 
 | Item | Value |
 |------|-------|
-| Server URL | http://{this_server_name}.home.arpa/webrtc/ |
+| Server URL | http://{server_hostname}.home.arpa/webrtc/ |
 | Binary | `/usr/local/bin/mediamtx` |
 | Config | `/etc/mediamtx/mediamtx.yml` |
 | Service | `sudo systemctl status mediamtx` (system service, multi-user.target) |
@@ -57,7 +61,7 @@ The connection works in two stages:
 
 2. The browser then connects directly to MediaMTX on UDP 8189 using ICE/DTLS/SRTP. The encrypted camera stream travels over this connection.
 
-So nginx does not normally proxy UDP 8189. If it is bound to 127.0.0.1, remote browsers can load the player but cannot receive video—exactly the reported symptom.
+So nginx does not normally proxy UDP 8189. If it is bound to 127.0.0.1, remote browsers can load the player but cannot receive video.
 
 The appropriate arrangement is:
 ```
