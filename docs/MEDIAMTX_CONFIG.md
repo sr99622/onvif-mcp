@@ -10,7 +10,7 @@ look for the latest amd64 binary, it will look something like
 
 mediamtx_v{X.YY.Z}_linux_amd64.tar.gz
 
-Deployment steps:
+Exampple Deployment steps:
 ```bash
 # Download latest version
 curl -sL "https://github.com/bluenviron/mediamtx/releases/download/v1.20.0/mediamtx_v1.20.0_linux_amd64.tar.gz" | tar xz
@@ -49,57 +49,44 @@ sudo mkdir -p /etc/mediamtx /var/log/mediamtx
 
 Note: UDP RTP (ports 8000, 8001) and multicast ports (8002, 8003) are **disabled**. Camera streams are pulled over TCP interleaved within the RTSP connection. This reduces exposed attack surface while WebRTC clients continue working normally through port 8889.
 
+UDP port 8189 carries the actual WebRTC audio/video media between MediaMTX and the browser.
+
+The connection works in two stages:
+
+1. nginx proxies HTTP signaling to MediaMTX on TCP 8889. This loads the player and negotiates the WebRTC session.
+
+2. The browser then connects directly to MediaMTX on UDP 8189 using ICE/DTLS/SRTP. The encrypted camera stream travels over this connection.
+
+So nginx does not normally proxy UDP 8189. If it is bound to 127.0.0.1, remote browsers can load the player but cannot receive video—exactly the reported symptom.
+
+The appropriate arrangement is:
+```
+webrtcAddress: 127.0.0.1:8889      # signaling through nginx
+webrtcLocalUDPAddress: :8189        # media reachable by browsers
+```
+UDP 8189 carries encrypted WebRTC media, not the original unencrypted RTSP feed. A firewall can restrict it to trusted LAN/VPN client networks.
+
 ## Camera Streams
 
-MediaMTX pulls from 7 physical cameras across multiple profiles. Each camera exposes two (or more) named paths in the YAML config:
+Each camera exposes two (or more) named paths in the YAML config. The streams are declared in the paths: section of the mediamtx.yml. The path consists of a name and a source: field. The name is a combination of the camera serial number and profile token delimited by a slash character. The source is the camera RTSP endpoint, known as the stream_uri. The stream_uri is modified to include the username and password credentials for authorization. Note that cameras have multiple profiles.
 
-### Summary Table
+### Camera Stream Path Construction
 
-| Camera Name / Serial | IP Address | Profile/Path | Description |
-|----------------------|------------|--------------|-------------|
-| DS-2CD2142FWD-IS (`DS-2CD2142022579764`) | 10.1.1.70 | `Profile_1` (Channel 101) | Main stream - H264 |
-| DS-2CD2142FWD-IS (`DS-2CD2142022579764`) | 10.1.1.70 | `Profile_2` (Channel 102) | Sub stream - occasional auth failures |
-| ND021810001394 (Dahua) | 10.1.1.72 | `MediaProfile000` | Main stream - H264 + Audio |
-| ND021810001394 (Dahua) | 10.1.1.72 | `MediaProfile001` | Sub stream - H264 + Audio |
-| AMC015906KDB241289 (Amcrest) | 10.1.1.68 | `MediaProfile000` | Main stream - H264 + G711 + Generic |
-| AMC015906KDB241289 (Amcrest) | 10.1.1.68 | `MediaProfile001` | Sub stream - H264 + G711 + Generic |
-| AMC014641NE6L35AT8 (Amcrest) | 10.1.1.71 | `MediaProfile000` | Main stream - H264 + MPEG-4 Audio + Generic |
-| AMC014641NE6L35AT8 (Amcrest) | 10.1.1.71 | `MediaProfile001` | Sub stream - H264 + MPEG-4 Audio + Generic |
-| ACCC8E99C915 (HIKVISION) | 10.1.1.67 | `profile_1_h264` | Main profile 1 H264 |
-| ACCC8E99C915 (HIKVISION) | 10.1.1.67 | `profile_1_jpeg` | MJPEG substream |
-| ACCC8E99C915 (HIKVISION) | 10.1.1.67 | `profile0` | Alternate profile 0 |
-| ACCC8E99C915 (HIKVISION) | 10.1.1.67 | `profile1` | Alternate profile 1 |
+Serial Number: DS-2CD2142022579764
+Profile Token: Profile_1
+Stream URI: rtsp://10.1.1.70:554/Streaming/Channels/101?transportmode=unicast&profile=Profile_1
+Username: admin
+Password: admin123
 
-Note: There are 7 physical cameras but 12 named paths in the config, since some cameras have multiple profile streams configured.
-
-### RTSP Source URLs (credentials redacted)
-
-All cameras use the same credentials (`admin` / `admin123`). Source URIs follow these patterns:
-
-- **HIKVISION DS-2CD:** `rtsp://admin:admin123@10.1.1.70:554/Streaming/Channels/101?transportmode=unicast&profile=Profile_1`
-- **Dahua:** `rtsp://admin:admin123@10.1.1.72:554/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif`
-- **Amcrest:** `rtsp://admin:admin123@10.1.1.68:554/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif`
-- **HIKVISION ONVIF:** `rtsp://admin:admin123@10.1.1.67/onvif-media/media.amp?profile=profile_1_h264&sessiontimeout=60&streamtype=unicast`
+paths:
+  DS-2CD2142022579764/Profile_1:
+    source: rtsp://admin:admin123@10.1.1.70:554/Streaming/Channels/101?transportmode=unicast&profile=Profile_1
 
 ## Authentication
 
 MediaMTX uses **internal database mode** with permissive access rules — no password is required for any user (`pass:` is empty). The config grants full permissions (publish, read, playback) to all cameras:
 
-```yaml
-authMethod: internal
-authInternalUsers:
-  - user: any         # anonymous/unauthenticated users
-    pass:             # no password required
-    ips: []           # allow from any IP
-    permissions:
-      - action: publish
-      - action: read
-      - action: playback
-```
-
 ## MediaMTX Configuration File (`/etc/mediamtx/mediamtx.yml`)
-
-Key settings for v1.20.0:
 
 ```yaml
 logLevel: info
@@ -142,11 +129,6 @@ paths:
     source: rtsp://admin:admin123@10.1.1.70:554/Streaming/Channels/101?transportmode=unicast&profile=Profile_1
   # ... additional paths follow same pattern
 ```
-
-**Important:** MediaMTX v1.x uses different configuration field names than older versions:
-- `protocols: [tcp]` → `rtspTransports: [tcp]` (deprecated warning)
-- Disable protocols with individual flags (`hls: false`, not `hlsEnable: false`)
-- No `webRTCHTTPAddress` or `webRTCICEListenAddresses` — use the default addresses
 
 ## Systemd Service Setup
 
