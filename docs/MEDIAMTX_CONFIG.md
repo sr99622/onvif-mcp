@@ -45,7 +45,7 @@ sudo mkdir -p /etc/mediamtx /var/log/mediamtx
 
 | Protocol | Port(s) | Status | Use |
 |----------|---------|--------|-----|
-| RTSP | **127.0.0.1:8554** (TCP only) | **Enabled** | Camera pulls (loopback only — not accessible from LAN) |
+| RTSP | 127.0.0.1:8554 (TCP only) | **Enabled** | Camera pulls (loopback only — not accessible from LAN) |
 | WebRTC | :8889 (TCP HTTP), :8189 (UDP ICE) | **Enabled** | Browser live streams |
 | HLS | :8888 | Disabled | Low-latency HLS segments |
 | RTMP | :1935 | Disabled | RTMP ingest |
@@ -53,7 +53,7 @@ sudo mkdir -p /etc/mediamtx /var/log/mediamtx
 
 Note: UDP RTP (ports 8000, 8001) and multicast ports (8002, 8003) are **disabled**. Camera streams are pulled over TCP interleaved within the RTSP connection. This reduces exposed attack surface while WebRTC clients continue working normally through port 8889.
 
-UDP port 8189 carries the actual WebRTC audio/video media between MediaMTX and the browser.
+UDP port 8189 carries the actual encrypted WebRTC audio/video media between MediaMTX and the browser.
 
 The connection works in two stages:
 
@@ -66,7 +66,7 @@ So nginx does not normally proxy UDP 8189. If it is bound to 127.0.0.1, remote b
 The appropriate arrangement is:
 ```
 webrtcAddress: 127.0.0.1:8889      # signaling through nginx
-webrtcLocalUDPAddress: :8189        # media reachable by browsers
+webrtcLocalUDPAddress: :8189       # media reachable by browsers
 ```
 UDP 8189 carries encrypted WebRTC media, not the original unencrypted RTSP feed. A firewall can restrict it to trusted LAN/VPN client networks.
 
@@ -74,7 +74,7 @@ UDP 8189 carries encrypted WebRTC media, not the original unencrypted RTSP feed.
 
 Each camera exposes two or more named paths in the YAML config. The streams are declared in the `paths:` section of the `mediamtx.yml`. The camera stream path consists of a name and a `source:` field. The name is a combination of the camera serial number and profile token delimited by a slash character. The source is the camera RTSP endpoint, known as the stream_uri, modified to include the username and password credentials for authorization. Agents can collect the necessary camera data from the camera MCP server tool `get_cameras`. The username and password can be found from the environment variables CAMERA_USERNAME and CAMERA_PASSWORD.
 
-### Exmaple Camera Stream Path Construction
+### Example Camera Stream Path Construction
 
 The camera path is constructed using the formula shown below. Values inside the curly braces are symbolic and should be replaced by concrete system values in production.
 
@@ -237,7 +237,7 @@ sudo systemctl reload nginx                # apply changes
 
 ### URL Format (Trailing Slash Required)
 
-MediaMTX requires a **trailing slash** at the end of camera paths. Note that the symbolic value in the curly braces {hostname} should be replaced with the actual server host name, e.g. `camera.home.arpa`. Both work:
+MediaMTX requires a **trailing slash** at the end of camera paths. Note that the symbolic value in the curly braces {hostname} should be replaced with the actual server host name, e.g. `camera.home.arpa`.
 
 - ✅ `http://{hostname}/webrtc/DS-2CD2142022579764/Profile_1/`
 - ❌ `http://{hostname}/webrtc/DS-2CD2142022579764/Profile_1` (redirects but browser may not follow)
