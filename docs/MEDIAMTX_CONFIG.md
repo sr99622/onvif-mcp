@@ -72,11 +72,11 @@ Each camera exposes two (or more) named paths in the YAML config. The streams ar
 
 ### Camera Stream Path Construction
 
-Serial Number: DS-2CD2142022579764
-Profile Token: Profile_1
-Stream URI: rtsp://10.1.1.70:554/Streaming/Channels/101?transportmode=unicast&profile=Profile_1
-Username: admin
-Password: admin123
+* Serial Number: DS-2CD2142022579764
+* Profile Token: Profile_1
+* Stream URI: rtsp://10.1.1.70:554/Streaming/Channels/101?transportmode=unicast&profile=Profile_1
+* Username: admin
+* Password: admin123
 
 paths:
   DS-2CD2142022579764/Profile_1:
