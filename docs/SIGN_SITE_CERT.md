@@ -1,13 +1,15 @@
 
-## 1. Get Site Key
+## 1a. Get Site Key
 
-On the Mac:
+On the Mac, the user will need this command to get the key from the target:
 
 ```bash
 scp \
   {{SERVER_USER}}@{{SERVER_IP}}:/home/{{SERVER_USER}}/{{SERVER_FQDN}}.csr.pem \
   "$HOME/Private-CA/camera-system-ca/csr/"
 ```
+
+## 1b. Verify Key
 
 Verify the transferred CSR again:
 
