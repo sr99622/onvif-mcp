@@ -1,3 +1,4 @@
+## 1. Verify Certificate
 
 Verify on `trigkey`:
 
@@ -41,7 +42,7 @@ The final TLS directory should have:
 - Site certificate: root-owned, mode `644`
 - Public CA certificate: root-owned, mode `644`
 
-## 16. Configure Nginx HTTPS
+## 2. Configure Nginx HTTPS
 
 Back up the site configuration first:
 
@@ -121,7 +122,7 @@ Expected listener:
 10.1.1.3:443
 ```
 
-## 17. Validate HTTPS from trigkey
+## 3. Validate HTTPS from trigkey
 
 Because `trigkey` was not yet using its own dnsmasq service for host resolution, the initial test used an explicit mapping and CA file:
 
@@ -139,7 +140,7 @@ Expected:
 HTTP/1.1 200 OK
 ```
 
-## 18. Trust the CA in macOS
+## 4. Trust the CA in macOS
 
 Check whether it is already installed:
 
@@ -180,7 +181,7 @@ Expected:
 HTTP/1.1 200 OK
 ```
 
-## 19. Trust the CA in Firefox
+## 5. Trust the CA in Firefox
 
 Firefox did not automatically trust the CA installed in the macOS System keychain. Its warning correctly stated:
 
@@ -230,7 +231,7 @@ These had two problems:
 - `10.1.1.75` was the obsolete DHCP address.
 - An HTTPS page cannot embed active content from an insecure HTTP endpoint.
 
-## 21. Verify MediaMTX behavior
+## 6. Verify MediaMTX behavior
 
 Confirm its listener:
 
@@ -257,7 +258,7 @@ whep
 
 Therefore, the external proxied URLs were intentionally written with trailing slashes.
 
-## 22. Proxy MediaMTX through Nginx
+## 7. Proxy MediaMTX through Nginx
 
 Add this inside the HTTPS server block:
 
@@ -297,7 +298,7 @@ HTTP 200
 Content-Type: text/html
 ```
 
-## 23. Update the camera registry
+## 8. Update the camera registry
 
 Back it up:
 

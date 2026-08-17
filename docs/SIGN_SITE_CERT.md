@@ -1,4 +1,6 @@
 
+## 1. Get Site Key
+
 On the Mac:
 
 ```bash
@@ -15,7 +17,7 @@ openssl req \
   -noout -verify -subject
 ```
 
-## 12. Define reviewed site-certificate extensions
+## 2. Define reviewed site-certificate extensions
 
 Create `camera.home.arpa.ext.cnf` in the CA's `csr` directory:
 
@@ -31,7 +33,7 @@ subjectAltName         = DNS:camera.home.arpa
 
 The SAN must contain every hostname clients will use. This deployment intentionally uses only the canonical DNS name, not an IP SAN.
 
-## 13. Sign the Nginx certificate
+## 3. Sign the Nginx certificate
 
 ```bash
 openssl ca \
@@ -68,7 +70,7 @@ openssl verify \
 
 Expected result ends with `OK`.
 
-## 14. Back up updated CA state after issuance
+## 4. Back up updated CA state after issuance
 
 Issuance changes `index.txt`, `serial`, and related prior-state files. Create a new archive immediately:
 
@@ -92,7 +94,7 @@ The verified archive contained:
 - `serial` and `serial.old`
 - `newcerts/1000.pem`
 
-## 15. Transfer public certificates to trigkey
+## 5. Transfer public certificates to trigkey
 
 From the Mac:
 

@@ -1,5 +1,5 @@
 
-## 9. Generate the Nginx site key on trigkey
+## 1. Generate the Nginx site key on trigkey
 
 Verify OpenSSL:
 
@@ -38,7 +38,7 @@ Expected mode is `600`, owner `root`, with header:
 -----BEGIN PRIVATE KEY-----
 ```
 
-## 10. Generate the CSR on trigkey
+## 2. Generate the CSR on trigkey
 
 ```bash
 sudo openssl req \
@@ -71,7 +71,7 @@ Required SAN:
 DNS:camera.home.arpa
 ```
 
-## 11. Transfer only the CSR to the CA workstation
+## 3. Transfer only the CSR to the CA workstation
 
 Because `/etc/nginx/tls` is mode `700`, create a temporary user-owned transfer copy:
 
