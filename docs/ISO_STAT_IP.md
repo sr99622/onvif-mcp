@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This configuration creates an isolated IPv4 network on ${IF_NAME}, where ${IF_NAME} represents the target ethernet interface adapter name. There will be another ethernet interface on the machine that is not part of this configuration.
+This configuration creates an isolated IPv4 network on {{IF_NAME}}, where {{IF_NAME}} represents the target ethernet interface adapter name. There will be another ethernet interface on the machine that is not part of this configuration.
 
 - Static IP address: `10.2.2.1/24`
 - No default gateway
@@ -11,7 +11,7 @@ This configuration creates an isolated IPv4 network on ${IF_NAME}, where ${IF_NA
 
 The server's other interfaces and existing LAN/Internet configurations are not changed.
 
-## 1. Configure ${IF_NAME} with NetworkManager
+## 1. Configure {{IF_NAME}} with NetworkManager
 
 Review current connections first:
 
@@ -25,7 +25,7 @@ Create the isolated connection profile:
 ```bash
 sudo nmcli connection add \
   type ethernet \
-  ifname ${IF_NAME} \
+  ifname {{IF_NAME}} \
   con-name isolated \
   ipv4.method manual \
   ipv4.addresses 10.2.2.1/24 \
@@ -50,7 +50,7 @@ Activate the profile:
 sudo nmcli connection up isolated
 ```
 
-If another NetworkManager profile is already active on ${IF_NAME}, deactivate that profile before activating `isolated`:
+If another NetworkManager profile is already active on {{IF_NAME}}, deactivate that profile before activating `isolated`:
 
 ```bash
 sudo nmcli connection down "OLD-CONNECTION-NAME"
@@ -60,9 +60,9 @@ sudo nmcli connection up isolated
 Verify the result:
 
 ```bash
-nmcli device show ${IF_NAME}
-ip address show dev ${IF_NAME}
-ip route show dev ${IF_NAME}
+nmcli device show {{IF_NAME}}
+ip address show dev {{IF_NAME}}
+ip route show dev {{IF_NAME}}
 ```
 
 The interface should have `10.2.2.1/24`. Its route table should contain only the directly connected subnet, similar to:
@@ -71,4 +71,4 @@ The interface should have `10.2.2.1/24`. Its route table should contain only the
 10.2.2.0/24 proto kernel scope link src 10.2.2.1
 ```
 
-There must be no default route through ${IF_NAME}.
+There must be no default route through {{IF_NAME}}.
