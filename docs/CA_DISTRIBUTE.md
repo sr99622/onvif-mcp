@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This runbook documents the tested procedure for distributing the public `Camera System Root CA` certificate from `trigkey` to client computers on the private LAN.
+This runbook documents the tested procedure for distributing the public `Camera System Root CA` certificate from `{{SERVER_FQDN}}` to client computers on the private LAN.
 
 The distribution endpoint is intentionally HTTP because a new client cannot trust the camera server's HTTPS certificate until it first obtains and installs the private root CA.
 
@@ -19,13 +19,13 @@ Authoritative CA workstation (Mac)
     ├── index.txt                        CA database
     └── serial                           Issuance state
 
-trigkey operational TLS files
+{{SERVER_FQDN}} operational TLS files
 └── /etc/nginx/tls/
-    ├── camera.home.arpa.key.pem         Nginx private key
-    ├── camera.home.arpa.crt.pem         Nginx site certificate
+    ├── {{SERVER_FQDN}}.key.pem         Nginx private key
+    ├── {{SERVER_FQDN}}.crt.pem         Nginx site certificate
     └── camera-system-root-ca.crt.pem    Public CA verification copy
 
-trigkey client distribution files
+{{SERVER_FQDN}} client distribution files
 └── /srv/camera-pki/public/
     ├── camera-system-root-ca.crt.pem
     ├── camera-system-root-ca.crt.pem.sha256
@@ -38,17 +38,25 @@ The copy under `/srv/camera-pki/public` is the deliberately managed client-distr
 
 | Purpose | Value |
 |---|---|
-| Distribution server | `trigkey` |
-| Distribution server address | `10.1.1.3` |
-| DNS name | `camera.home.arpa` |
+| Distribution server | `{{SERVER_FQDN}}` |
+| Distribution server address | `{{SERVER_IP}}` |
+| DNS name | `{{SERVER_FQDN}}` |
 | Wired client network | `10.1.1.0/24` |
 | Wireless client network | `192.168.68.0/22` |
 | Distribution directory | `/srv/camera-pki/public` |
-| Certificate URL | `http://camera.home.arpa/ca/camera-system-root-ca.crt.pem` |
-| Checksum URL | `http://camera.home.arpa/ca/camera-system-root-ca.crt.pem.sha256` |
-| Instructions URL | `http://camera.home.arpa/ca/README.txt` |
+| Certificate URL | `http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt.pem` |
+| Checksum URL | `http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt.pem.sha256` |
+| Instructions URL | `http://{{SERVER_FQDN}}/ca/README.txt` |
 
-Replace these values deliberately when adapting the procedure to another network.
+Replace every symbolic value before using this runbook:
+
+| Symbol | Required value |
+|---|---|
+| `{{SERVER_FQDN}}` | Canonical DNS name used by clients and the TLS certificate |
+| `{{SERVER_IP}}` | Server IP address hosting the distribution endpoint |
+| `{{SERVER_USER}}` | Login account used for server-side files under `/home` |
+
+Generated documents must not contain any unresolved `{{...}}` symbols.
 
 ## 1. Create the distribution directory
 
@@ -162,10 +170,10 @@ Camera System Root CA
 =====================
 
 Certificate download:
-http://camera.home.arpa/ca/camera-system-root-ca.crt.pem
+http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt.pem
 
 PEM checksum file:
-http://camera.home.arpa/ca/camera-system-root-ca.crt.pem.sha256
+http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt.pem.sha256
 
 PEM file SHA-256:
 136f1293417e8a2b9399cfd07519e88d651adc0e8913266714c3d1dec80f25b0
@@ -213,14 +221,14 @@ root root 644
 
 ## 5. Configure the restricted Nginx HTTP endpoint
 
-The existing `camera.home.arpa` HTTP server originally redirected every request to HTTPS:
+The existing `{{SERVER_FQDN}}` HTTP server originally redirected every request to HTTPS:
 
 ```nginx
 server {
     listen 80;
-    server_name camera.home.arpa;
+    server_name {{SERVER_FQDN}};
 
-    return 301 https://camera.home.arpa$request_uri;
+    return 301 https://{{SERVER_FQDN}}$request_uri;
 }
 ```
 
@@ -229,7 +237,7 @@ It was changed to allow `/ca/` over HTTP while redirecting all other paths:
 ```nginx
 server {
     listen 80;
-    server_name camera.home.arpa;
+    server_name {{SERVER_FQDN}};
 
     location /ca/ {
         alias /srv/camera-pki/public/;
@@ -241,7 +249,7 @@ server {
     }
 
     location / {
-        return 301 https://camera.home.arpa$request_uri;
+        return 301 https://{{SERVER_FQDN}}$request_uri;
     }
 }
 ```
@@ -265,15 +273,15 @@ Then reload:
 sudo systemctl reload nginx.service
 ```
 
-## 6. Test locally on trigkey
+## 6. Test locally on {{SERVER_FQDN}}
 
 Test the certificate endpoint:
 
 ```bash
 curl \
-  --resolve camera.home.arpa:80:10.1.1.3 \
+  --resolve {{SERVER_FQDN}}:80:{{SERVER_IP}} \
   --head \
-  http://camera.home.arpa/ca/camera-system-root-ca.crt.pem
+  http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt.pem
 ```
 
 Expected:
@@ -287,20 +295,20 @@ Test the checksum endpoint:
 
 ```bash
 curl \
-  --resolve camera.home.arpa:80:10.1.1.3 \
+  --resolve {{SERVER_FQDN}}:80:{{SERVER_IP}} \
   --silent \
   --show-error \
-  http://camera.home.arpa/ca/camera-system-root-ca.crt.pem.sha256
+  http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt.pem.sha256
 ```
 
 Test the instructions endpoint:
 
 ```bash
 curl \
-  --resolve camera.home.arpa:80:10.1.1.3 \
+  --resolve {{SERVER_FQDN}}:80:{{SERVER_IP}} \
   --silent \
   --show-error \
-  http://camera.home.arpa/ca/README.txt
+  http://{{SERVER_FQDN}}/ca/README.txt
 ```
 
 ## 7. (PRE) Install certificate on Mac OS Safari
@@ -338,7 +346,7 @@ Trusting the Certificate - Open Details:
 Open:
 
 ```text
-http://camera.home.arpa/ca/README.txt
+http://{{SERVER_FQDN}}/ca/README.txt
 ```
 
 Confirm that it displays without redirecting to HTTPS.
@@ -346,7 +354,7 @@ Confirm that it displays without redirecting to HTTPS.
 Then open:
 
 ```text
-http://camera.home.arpa/ca/camera-system-root-ca.crt.pem
+http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt.pem
 ```
 
 The tested Windows client downloaded the certificate successfully.
@@ -381,29 +389,29 @@ Never bypass certificate warnings with **Accept the Risk and Continue**.
 
 ## 8. Remove incidental transfer files
 
-The original certificate workflow temporarily staged these public files in `/home/stephen` on `trigkey`:
+The original certificate workflow temporarily staged these public files in `/home/{{SERVER_USER}}` on `{{SERVER_FQDN}}`:
 
 ```text
-/home/stephen/camera.home.arpa.csr.pem
-/home/stephen/camera.home.arpa.crt.pem
-/home/stephen/camera-system-root-ca.crt.pem
+/home/{{SERVER_USER}}/{{SERVER_FQDN}}.csr.pem
+/home/{{SERVER_USER}}/{{SERVER_FQDN}}.crt.pem
+/home/{{SERVER_USER}}/camera-system-root-ca.crt.pem
 ```
 
 After verifying the installed Nginx copies, CA workspace, encrypted backups, and `/srv` distribution copy, move only those staging files to recoverable trash:
 
 ```bash
 gio trash \
-  /home/stephen/camera.home.arpa.csr.pem \
-  /home/stephen/camera.home.arpa.crt.pem \
-  /home/stephen/camera-system-root-ca.crt.pem
+  /home/{{SERVER_USER}}/{{SERVER_FQDN}}.csr.pem \
+  /home/{{SERVER_USER}}/{{SERVER_FQDN}}.crt.pem \
+  /home/{{SERVER_USER}}/camera-system-root-ca.crt.pem
 ```
 
 Verify that no matching files remain:
 
 ```bash
-find /home/stephen -maxdepth 1 -type f \
-  \( -name 'camera.home.arpa.csr.pem' \
-     -o -name 'camera.home.arpa.crt.pem' \
+find /home/{{SERVER_USER}} -maxdepth 1 -type f \
+  \( -name '{{SERVER_FQDN}}.csr.pem' \
+     -o -name '{{SERVER_FQDN}}.crt.pem' \
      -o -name 'camera-system-root-ca.crt.pem' \) \
   -print
 ```
