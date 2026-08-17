@@ -1,5 +1,5 @@
 
-## 1. Generate the Nginx site key on trigkey
+## 1. Generate the Nginx site key on {{SERVER_FQDN}}
 
 Verify OpenSSL:
 
@@ -19,16 +19,16 @@ Generate a 3072-bit RSA server key:
 sudo openssl genpkey \
   -algorithm RSA \
   -pkeyopt rsa_keygen_bits:3072 \
-  -out /etc/nginx/tls/camera.home.arpa.key.pem
+  -out /etc/nginx/tls/{{SERVER_FQDN}}.key.pem
 ```
 
 Verify mode, format, and integrity:
 
 ```bash
-sudo ls -l /etc/nginx/tls/camera.home.arpa.key.pem
-sudo sed -n '1p' /etc/nginx/tls/camera.home.arpa.key.pem
+sudo ls -l /etc/nginx/tls/{{SERVER_FQDN}}.key.pem
+sudo sed -n '1p' /etc/nginx/tls/{{SERVER_FQDN}}.key.pem
 sudo openssl pkey \
-  -in /etc/nginx/tls/camera.home.arpa.key.pem \
+  -in /etc/nginx/tls/{{SERVER_FQDN}}.key.pem \
   -check -noout
 ```
 
@@ -38,16 +38,16 @@ Expected mode is `600`, owner `root`, with header:
 -----BEGIN PRIVATE KEY-----
 ```
 
-## 2. Generate the CSR on trigkey
+## 2. Generate the CSR on {{SERVER_FQDN}}
 
 ```bash
 sudo openssl req \
   -new \
   -sha256 \
-  -key /etc/nginx/tls/camera.home.arpa.key.pem \
-  -out /etc/nginx/tls/camera.home.arpa.csr.pem \
-  -subj "/CN=camera.home.arpa" \
-  -addext "subjectAltName=DNS:camera.home.arpa" \
+  -key /etc/nginx/tls/{{SERVER_FQDN}}.key.pem \
+  -out /etc/nginx/tls/{{SERVER_FQDN}}.csr.pem \
+  -subj "/CN={{SERVER_FQDN}}" \
+  -addext "subjectAltName=DNS:{{SERVER_FQDN}}" \
   -addext "keyUsage=critical,digitalSignature,keyEncipherment" \
   -addext "extendedKeyUsage=serverAuth"
 ```
@@ -56,11 +56,11 @@ Verify the signature and requested extensions:
 
 ```bash
 sudo openssl req \
-  -in /etc/nginx/tls/camera.home.arpa.csr.pem \
+  -in /etc/nginx/tls/{{SERVER_FQDN}}.csr.pem \
   -noout -verify -subject
 
 sudo openssl req \
-  -in /etc/nginx/tls/camera.home.arpa.csr.pem \
+  -in /etc/nginx/tls/{{SERVER_FQDN}}.csr.pem \
   -noout -text |
 sed -n '/Requested Extensions:/,/Signature Algorithm/p'
 ```
@@ -68,7 +68,7 @@ sed -n '/Requested Extensions:/,/Signature Algorithm/p'
 Required SAN:
 
 ```text
-DNS:camera.home.arpa
+DNS:{{SERVER_FQDN}}
 ```
 
 ## 3. Transfer only the CSR to the CA workstation
@@ -77,9 +77,9 @@ Because `/etc/nginx/tls` is mode `700`, create a temporary user-owned transfer c
 
 ```bash
 sudo install \
-  -o stephen \
-  -g stephen \
+  -o {{SERVER_USER}} \
+  -g {{SERVER_USER}} \
   -m 600 \
-  /etc/nginx/tls/camera.home.arpa.csr.pem \
-  /home/stephen/camera.home.arpa.csr.pem
+  /etc/nginx/tls/{{SERVER_FQDN}}.csr.pem \
+  /home/{{SERVER_USER}}/{{SERVER_FQDN}}.csr.pem
 ```

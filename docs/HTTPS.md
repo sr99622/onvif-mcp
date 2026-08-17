@@ -1,22 +1,22 @@
 ## 1. Verify Certificate
 
-Verify on `trigkey`:
+Verify on `{{SERVER_FQDN}}`:
 
 ```bash
 openssl verify \
-  -CAfile /home/stephen/camera-system-root-ca.crt.pem \
+  -CAfile /home/{{SERVER_USER}}/camera-system-root-ca.crt.pem \
   -purpose sslserver \
-  -verify_hostname camera.home.arpa \
-  /home/stephen/camera.home.arpa.crt.pem
+  -verify_hostname {{SERVER_FQDN}} \
+  /home/{{SERVER_USER}}/{{SERVER_FQDN}}.crt.pem
 ```
 
 Confirm the certificate matches the server key:
 
 ```bash
 sudo sh -c '
-openssl pkey -in /etc/nginx/tls/camera.home.arpa.key.pem -pubout |
+openssl pkey -in /etc/nginx/tls/{{SERVER_FQDN}}.key.pem -pubout |
   openssl sha256
-openssl x509 -in /home/stephen/camera.home.arpa.crt.pem -pubkey -noout |
+openssl x509 -in /home/{{SERVER_USER}}/{{SERVER_FQDN}}.crt.pem -pubkey -noout |
   openssl sha256
 '
 ```
@@ -27,11 +27,11 @@ Install the certificates:
 
 ```bash
 sudo install -o root -g root -m 644 \
-  /home/stephen/camera.home.arpa.crt.pem \
-  /etc/nginx/tls/camera.home.arpa.crt.pem
+  /home/{{SERVER_USER}}/{{SERVER_FQDN}}.crt.pem \
+  /etc/nginx/tls/{{SERVER_FQDN}}.crt.pem
 
 sudo install -o root -g root -m 644 \
-  /home/stephen/camera-system-root-ca.crt.pem \
+  /home/{{SERVER_USER}}/camera-system-root-ca.crt.pem \
   /etc/nginx/tls/camera-system-root-ca.crt.pem
 ```
 
@@ -56,16 +56,16 @@ The tested HTTPS server block was:
 
 ```nginx
 server {
-    listen 10.1.1.3:443 ssl;
-    server_name camera.home.arpa;
+    listen {{SERVER_IP}}:443 ssl;
+    server_name {{SERVER_FQDN}};
 
-    ssl_certificate     /etc/nginx/tls/camera.home.arpa.crt.pem;
-    ssl_certificate_key /etc/nginx/tls/camera.home.arpa.key.pem;
+    ssl_certificate     /etc/nginx/tls/{{SERVER_FQDN}}.crt.pem;
+    ssl_certificate_key /etc/nginx/tls/{{SERVER_FQDN}}.key.pem;
     ssl_protocols       TLSv1.2 TLSv1.3;
     ssl_session_cache   shared:camera_tls:10m;
     ssl_session_timeout 1d;
 
-    root /home/stephen/Projects/onvif-mcp/packages/stdio/apps;
+    root /home/{{SERVER_USER}}/Projects/onvif-mcp/packages/stdio/apps;
     index index.html;
 
     location /cameras/ {
@@ -87,16 +87,16 @@ server {
 }
 ```
 
-The explicit `10.1.1.3:443` listener avoids exposing HTTPS directly on the camera or Wi-Fi interfaces.
+The explicit `{{SERVER_IP}}:443` listener avoids exposing HTTPS directly on the camera or Wi-Fi interfaces.
 
 Add a hostname-specific port-80 redirect while retaining the Ubuntu default site:
 
 ```nginx
 server {
     listen 80;
-    server_name camera.home.arpa;
+    server_name {{SERVER_FQDN}};
 
-    return 301 https://camera.home.arpa$request_uri;
+    return 301 https://{{SERVER_FQDN}}$request_uri;
 }
 ```
 
@@ -119,19 +119,19 @@ sudo ss -lntp 'sport = :443'
 Expected listener:
 
 ```text
-10.1.1.3:443
+{{SERVER_IP}}:443
 ```
 
-## 3. Validate HTTPS from trigkey
+## 3. Validate HTTPS from {{SERVER_FQDN}}
 
-Because `trigkey` was not yet using its own dnsmasq service for host resolution, the initial test used an explicit mapping and CA file:
+Because `{{SERVER_FQDN}}` was not yet using its own dnsmasq service for host resolution, the initial test used an explicit mapping and CA file:
 
 ```bash
 sudo curl \
-  --resolve camera.home.arpa:443:10.1.1.3 \
+  --resolve {{SERVER_FQDN}}:443:{{SERVER_IP}} \
   --cacert /etc/nginx/tls/camera-system-root-ca.crt.pem \
   --head \
-  https://camera.home.arpa/cameras/
+  https://{{SERVER_FQDN}}/cameras/
 ```
 
 Expected:
@@ -172,7 +172,7 @@ openssl x509 -noout -subject -issuer -fingerprint -sha256
 Test using normal DNS and macOS trust:
 
 ```bash
-/usr/bin/curl --head https://camera.home.arpa/cameras/
+/usr/bin/curl --head https://{{SERVER_FQDN}}/cameras/
 ```
 
 Expected:
@@ -208,7 +208,7 @@ The root then appeared as:
 Camera System Root CA — Software Security Device
 ```
 
-After import, `https://camera.home.arpa/cameras/` loaded without a certificate warning.
+After import, `https://{{SERVER_FQDN}}/cameras/` loaded without a certificate warning.
 
 ## 20. Diagnose missing streams after enabling HTTPS
 
@@ -217,18 +217,18 @@ The page loaded securely, but streams were absent. Search the static application
 ```bash
 sudo rg -n \
   'http://|ws://|whep|webrtc|mediamtx|8889' \
-  /home/stephen/Projects/onvif-mcp/packages/stdio/apps
+  /home/{{SERVER_USER}}/Projects/onvif-mcp/packages/stdio/apps
 ```
 
 The registry still contained URLs such as:
 
 ```text
-http://10.1.1.75:8889/stream-path
+http://{{SERVER_IP}}:8889/stream-path
 ```
 
 These had two problems:
 
-- `10.1.1.75` was the obsolete DHCP address.
+- The URL used the server IP address directly instead of its canonical DNS name.
 - An HTTPS page cannot embed active content from an insecure HTTP endpoint.
 
 ## 6. Verify MediaMTX behavior
@@ -286,9 +286,9 @@ sudo curl \
   --show-error \
   --output /dev/null \
   --write-out 'HTTP %{http_code}\nContent-Type: %{content_type}\n' \
-  --resolve camera.home.arpa:443:10.1.1.3 \
+  --resolve {{SERVER_FQDN}}:443:{{SERVER_IP}} \
   --cacert /etc/nginx/tls/camera-system-root-ca.crt.pem \
-  https://camera.home.arpa/webrtc/STREAM/PATH/
+  https://{{SERVER_FQDN}}/webrtc/STREAM/PATH/
 ```
 
 Expected:
@@ -304,45 +304,45 @@ Back it up:
 
 ```bash
 sudo cp --update=none \
-  /home/stephen/Projects/onvif-mcp/packages/stdio/apps/outputs/camera_registry.json \
-  /home/stephen/Projects/onvif-mcp/packages/stdio/apps/outputs/camera_registry.json.backup-2026-08-03
+  /home/{{SERVER_USER}}/Projects/onvif-mcp/packages/stdio/apps/outputs/camera_registry.json \
+  /home/{{SERVER_USER}}/Projects/onvif-mcp/packages/stdio/apps/outputs/camera_registry.json.backup-2026-08-03
 ```
 
-Transform the obsolete player URLs:
+Transform the direct-IP player URLs:
 
 ```bash
 sudo perl -pi -e \
-  's#http://10\.1\.1\.75:8889/([^\"]+)#https://camera.home.arpa/webrtc/$1/#g' \
-  /home/stephen/Projects/onvif-mcp/packages/stdio/apps/outputs/camera_registry.json
+  's#http://\Q{{SERVER_IP}}\E:8889/([^\"]+)#https://{{SERVER_FQDN}}/webrtc/$1/#g' \
+  /home/{{SERVER_USER}}/Projects/onvif-mcp/packages/stdio/apps/outputs/camera_registry.json
 ```
 
 Validate JSON and inspect all transformed URLs:
 
 ```bash
 python3 -m json.tool \
-  /home/stephen/Projects/onvif-mcp/packages/stdio/apps/outputs/camera_registry.json \
+  /home/{{SERVER_USER}}/Projects/onvif-mcp/packages/stdio/apps/outputs/camera_registry.json \
   >/dev/null
 
 rg -n 'player_url' \
-  /home/stephen/Projects/onvif-mcp/packages/stdio/apps/outputs/camera_registry.json
+  /home/{{SERVER_USER}}/Projects/onvif-mcp/packages/stdio/apps/outputs/camera_registry.json
 ```
 
 Final URL pattern:
 
 ```text
-https://camera.home.arpa/webrtc/STREAM/PATH/
+https://{{SERVER_FQDN}}/webrtc/STREAM/PATH/
 ```
 
 After a Firefox hard refresh with Command-Shift-R, all camera streams appeared.
 
 ## Temporary files to clean up after final verification
 
-The tested workflow created public transfer copies in `/home/stephen` on `trigkey`:
+The tested workflow created public transfer copies in `/home/{{SERVER_USER}}` on `{{SERVER_FQDN}}`:
 
 ```text
-/home/stephen/camera.home.arpa.csr.pem
-/home/stephen/camera.home.arpa.crt.pem
-/home/stephen/camera-system-root-ca.crt.pem
+/home/{{SERVER_USER}}/{{SERVER_FQDN}}.csr.pem
+/home/{{SERVER_USER}}/{{SERVER_FQDN}}.crt.pem
+/home/{{SERVER_USER}}/camera-system-root-ca.crt.pem
 ```
 
 These contain no private CA key, but should be removed after confirming their installed copies and backups. Use a recoverable deletion method where available.
@@ -385,11 +385,11 @@ openssl x509 -in certificate.pem -noout -text
 openssl verify \
   -CAfile camera-system-root-ca.crt.pem \
   -purpose sslserver \
-  -verify_hostname camera.home.arpa \
-  camera.home.arpa.crt.pem
+  -verify_hostname {{SERVER_FQDN}} \
+  {{SERVER_FQDN}}.crt.pem
 
 # HTTPS test
-/usr/bin/curl --head https://camera.home.arpa/cameras/
+/usr/bin/curl --head https://{{SERVER_FQDN}}/cameras/
 
 # MediaMTX signaling listener
 sudo ss -lntup 'sport = :8889'
@@ -408,13 +408,13 @@ notepad C:\Windows\System32\drivers\etc\hosts
 Add the ip address and name of the server e.g.
 
 ```
-10.1.1.3 camera.home.arpa
+{{SERVER_IP}} {{SERVER_FQDN}}
 ```
 
 Download the public key certificate from the server using ssh
 
 ```
-scp stephen@camera.home.arpa:/~/camera-system-root-ca.crt.pem "$env:USERPROFILE\Downloads\camera-system-root-ca.crt.pem"
+scp {{SERVER_USER}}@{{SERVER_FQDN}}:/~/camera-system-root-ca.crt.pem "$env:USERPROFILE\Downloads\camera-system-root-ca.crt.pem"
 ```
 
 Import the certificate 
@@ -426,7 +426,7 @@ certutil -addstore Root "$env:USERPROFILE\Downloads\camera-system-root-ca.crt.pe
 The browser should be able to load the camera livestreams at
 
 ```
-https://camera.home.arpa/cameras
+https://{{SERVER_FQDN}}/cameras
 ```
 
 ## Remaining hardening work

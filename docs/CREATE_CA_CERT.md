@@ -7,7 +7,7 @@ This runbook documents the tested process used to:
 - Create a private root Certificate Authority on a trusted Mac.
 - Protect and back up the complete CA state.
 - Generate the Nginx site key directly on the server.
-- Issue a certificate for `camera.home.arpa`.
+- Issue a certificate for `{{SERVER_FQDN}}`.
 - Configure Nginx HTTPS.
 - Trust the private CA in macOS and Firefox.
 - Proxy MediaMTX WebRTC signaling through Nginx HTTPS.
@@ -18,9 +18,9 @@ The final browser-facing architecture is:
 ```text
 Browser
    |
-   | https://camera.home.arpa
+   | https://{{SERVER_FQDN}}
    v
-Nginx at 10.1.1.3:443
+Nginx at {{SERVER_IP}}:443
    |-- /cameras/   -> static camera application
    |-- /multiview/ -> static multiview application
    |-- /outputs/   -> generated application data
@@ -33,25 +33,33 @@ Nginx at 10.1.1.3:443
 
 | Purpose | Value |
 |---|---|
-| Nginx/MediaMTX server | `trigkey` |
-| Server address | `10.1.1.3` |
-| Canonical DNS name | `camera.home.arpa` |
+| Nginx/MediaMTX server | `{{SERVER_FQDN}}` |
+| Server address | `{{SERVER_IP}}` |
+| Canonical DNS name | `{{SERVER_FQDN}}` |
 | Root CA name | `Camera System Root CA` |
 | CA workstation | Mac at `10.1.1.1` |
 | CA working directory | `/Users/stephen/Private-CA/camera-system-ca` |
 | Local encrypted backups | `/Users/stephen/Private-CA/backups` |
 | SMB encrypted backups | `/Volumes/Users/sr996/Camera-CA-Backups` |
 | Nginx TLS directory | `/etc/nginx/tls` |
-| Static application root | `/home/stephen/Projects/onvif-mcp/packages/stdio/apps` |
+| Static application root | `/home/{{SERVER_USER}}/Projects/onvif-mcp/packages/stdio/apps` |
 | MediaMTX WebRTC HTTP port | `8889` |
 
-Replace these values when adapting this runbook to another installation.
+Replace every symbolic value before using this runbook:
+
+| Symbol | Required value |
+|---|---|
+| `{{SERVER_FQDN}}` | Canonical DNS name used by clients and the TLS certificate |
+| `{{SERVER_IP}}` | Server IP address on which Nginx accepts HTTPS connections |
+| `{{SERVER_USER}}` | Login account used for SSH and server-side files under `/home` |
+
+Use `{{SERVER_FQDN}}` consistently for the certificate common name, DNS subject alternative name, Nginx `server_name`, URLs, and certificate filenames. Generated documents must not contain any unresolved `{{...}}` symbols.
 
 ## Security model
 
-- The CA private key remains on the trusted Mac and is never transferred to `trigkey`.
+- The CA private key remains on the trusted Mac and is never transferred to `{{SERVER_FQDN}}`.
 - The CA private key is encrypted with AES-256 and protected by a strong passphrase.
-- The Nginx site key is generated directly on `trigkey` and never leaves it.
+- The Nginx site key is generated directly on `{{SERVER_FQDN}}` and never leaves it.
 - The Nginx site key is not passphrase-protected so Nginx can start unattended; root-only filesystem permissions protect it.
 - The root CA certificate and signed site certificate are public and may be distributed.
 - The complete CA state is archived using authenticated `age` encryption.
