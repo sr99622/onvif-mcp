@@ -2,18 +2,18 @@
 
 ## Purpose
 
-This configuration creates an isolated IPv4 network on `enp1s0`:
+This configuration creates an isolated IPv4 network on ${EN_NAME}:
 
 - Server address: `10.2.2.1/24`
 - DHCP pool: `10.2.2.100` through `10.2.2.200`
-- DHCP interface: `enp1s0`
+- DHCP interface: ${EN_NAME}
 - No default gateway supplied to clients
 - No DNS server supplied to clients
 - No routing between this subnet and the server's other network interface
 
 The server's other interface and its existing LAN/Internet configuration are not changed.
 
-## 1. Configure `enp1s0` with NetworkManager
+## 1. Configure Private Network Interface with NetworkManager
 
 Review current connections first:
 
@@ -27,8 +27,8 @@ Create the isolated connection profile:
 ```bash
 sudo nmcli connection add \
   type ethernet \
-  ifname enp1s0 \
-  con-name isolated-dhcp \
+  ifname ${EN_NAME} \
+  con-name isolated \
   ipv4.method manual \
   ipv4.addresses 10.2.2.1/24 \
   ipv4.never-default yes \
@@ -40,7 +40,7 @@ sudo nmcli connection add \
 Explicitly remove gateway, DNS, and static route settings:
 
 ```bash
-sudo nmcli connection modify isolated-dhcp \
+sudo nmcli connection modify isolated \
   ipv4.gateway "" \
   ipv4.dns "" \
   ipv4.routes ""
@@ -49,22 +49,22 @@ sudo nmcli connection modify isolated-dhcp \
 Activate the profile:
 
 ```bash
-sudo nmcli connection up isolated-dhcp
+sudo nmcli connection up isolated
 ```
 
-If another NetworkManager profile is already active on `enp1s0`, deactivate that profile before activating `isolated-dhcp`:
+If another NetworkManager profile is already active on ${EN_NAME}, deactivate that profile before activating `isolated`:
 
 ```bash
 sudo nmcli connection down "OLD-CONNECTION-NAME"
-sudo nmcli connection up isolated-dhcp
+sudo nmcli connection up isolated
 ```
 
 Verify the result:
 
 ```bash
-nmcli device show enp1s0
-ip address show dev enp1s0
-ip route show dev enp1s0
+nmcli device show ${EN_NAME}
+ip address show dev ${EN_NAME}
+ip route show dev ${EN_NAME}
 ```
 
 The interface should have `10.2.2.1/24`. Its route table should contain only the directly connected subnet, similar to:
@@ -73,7 +73,7 @@ The interface should have `10.2.2.1/24`. Its route table should contain only the
 10.2.2.0/24 proto kernel scope link src 10.2.2.1
 ```
 
-There must be no default route through `enp1s0`.
+There must be no default route through ${EN_NAME}.
 
 ## 2. Install Kea DHCPv4
 
@@ -105,7 +105,7 @@ Use this configuration:
 {
   "Dhcp4": {
     "interfaces-config": {
-      "interfaces": [ "enp1s0" ]
+      "interfaces": [ "${EN_NAME}" ]
     },
 
     "lease-database": {
@@ -163,7 +163,7 @@ sudo sysctl -w net.ipv4.ip_forward=0
 sudo sysctl -w net.ipv6.conf.all.forwarding=0
 ```
 
-To make this persistent, create `/etc/sysctl.d/90-isolated-dhcp.conf`:
+To make this persistent, create `/etc/sysctl.d/90-isolated.conf`:
 
 ```ini
 net.ipv4.ip_forward=0
@@ -227,25 +227,4 @@ Inspect issued leases on the server with:
 
 ```bash
 sudo cat /var/lib/kea/kea-leases4.csv
-```
-
-## Rollback
-
-Stop Kea and disable the isolated NetworkManager profile:
-
-```bash
-sudo systemctl disable --now kea-dhcp4-server
-sudo nmcli connection down isolated-dhcp
-```
-
-Restore the original Kea configuration if needed:
-
-```bash
-sudo cp /etc/kea/kea-dhcp4.conf.backup /etc/kea/kea-dhcp4.conf
-```
-
-The `isolated-dhcp` profile can remain inactive for later reuse. Deleting it is optional:
-
-```bash
-sudo nmcli connection delete isolated-dhcp
 ```
