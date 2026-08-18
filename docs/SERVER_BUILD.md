@@ -152,12 +152,12 @@ onvif-tui -u admin -p admin123
 curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
 ```
 
-Use the minimal configuration and add the LLM model of your choice.
+Use the minimal configuration and add the LLM model of your choice. You may see the following error, which is benign `error: The lockfile at uv.lock needs to be updated, but --locked was provided`, it can be safely ignored.
 
 <h2>Give Hermes sudo privilege</h2>
 
 ```
-sudo env USER="$USER" ./enable-nopasswd.sh
+sudo env USER="$USER" ./docs/scripts/enable-nopasswd.sh
 ```
 
 <h2>Set a static IP</h2>
