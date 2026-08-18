@@ -293,6 +293,10 @@ The second test must also succeed without browser authorization.
 
 ## Troubleshooting
 
+### Get password from client terminal
+
+ssh -t stephen@nuc.home.arpa 'sudo cat /opt/keycloak/.mcp-user-password'
+
 ### `403 insufficient_scope` and `Host not trusted`
 
 ```json

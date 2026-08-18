@@ -9,6 +9,7 @@ The following template placeholders are used throughout this document. Replace t
 | {{SERVER_FQDN}}      | Server fully qualified domain name           | gmktec.home.arpa        |
 | {{SERVER_IP}}        | Server IP address                            | 10.239.44.25            |
 | {{SERVER_USER}}      | Server user account                          | stephen                 |
+| {{APPS_PATH}}        | Project repository location                  | Projects/onvif-mcp/apps |
 
 ## 1. Verify Certificate
 
@@ -77,7 +78,7 @@ server {
     ssl_session_cache   shared:camera_tls:10m;
     ssl_session_timeout 1d;
 
-    root /home/{{SERVER_USER}}/Projects/onvif-mcp/packages/stdio/apps;
+    root /home/{{SERVER_USER}}/{{APPS_PATH}};
     index index.html;
 
     location /cameras/ {
@@ -229,7 +230,7 @@ The page loaded securely, but streams were absent. Search the static application
 ```bash
 sudo rg -n \
   'http://|ws://|whep|webrtc|mediamtx|8889' \
-  /home/{{SERVER_USER}}/Projects/onvif-mcp/packages/stdio/apps
+  /home/{{SERVER_USER}}/{{APPS_PATH}}
 ```
 
 The registry still contained URLs such as:
@@ -316,8 +317,8 @@ Back it up:
 
 ```bash
 sudo cp --update=none \
-  /home/{{SERVER_USER}}/Projects/onvif-mcp/packages/stdio/apps/outputs/camera_registry.json \
-  /home/{{SERVER_USER}}/Projects/onvif-mcp/packages/stdio/apps/outputs/camera_registry.json.backup-2026-08-03
+  /home/{{SERVER_USER}}/{{APPS_PATH}}/outputs/camera_registry.json \
+  /home/{{SERVER_USER}}/{{APPS_PATH}}/outputs/camera_registry.json.backup-2026-08-03
 ```
 
 Transform the direct-IP player URLs:
@@ -325,18 +326,18 @@ Transform the direct-IP player URLs:
 ```bash
 sudo perl -pi -e \
   's#http://\Q{{SERVER_IP}}\E:8889/([^\"]+)#https://{{SERVER_FQDN}}/webrtc/$1/#g' \
-  /home/{{SERVER_USER}}/Projects/onvif-mcp/packages/stdio/apps/outputs/camera_registry.json
+  /home/{{SERVER_USER}}/{{APPS_PATH}}/outputs/camera_registry.json
 ```
 
 Validate JSON and inspect all transformed URLs:
 
 ```bash
 python3 -m json.tool \
-  /home/{{SERVER_USER}}/Projects/onvif-mcp/packages/stdio/apps/outputs/camera_registry.json \
+  /home/{{SERVER_USER}}/{{APPS_PATH}}/outputs/camera_registry.json \
   >/dev/null
 
 rg -n 'player_url' \
-  /home/{{SERVER_USER}}/Projects/onvif-mcp/packages/stdio/apps/outputs/camera_registry.json
+  /home/{{SERVER_USER}}/{{APPS_PATH}}/outputs/camera_registry.json
 ```
 
 Final URL pattern:

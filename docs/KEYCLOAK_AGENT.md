@@ -371,6 +371,10 @@ SSH emitted several `channel ... connect failed: Connection refused` messages
 after success. These were harmless browser follow-up requests after Hermes had
 closed its one-time callback listener.
 
+### Get password from client terminal
+
+ssh -t stephen@nuc.home.arpa 'sudo cat /opt/keycloak/.mcp-user-password'
+
 ### Failed approaches and recovery
 
 Two earlier approaches failed:
