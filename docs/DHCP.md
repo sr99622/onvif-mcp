@@ -2,11 +2,11 @@
 
 ## Purpose
 
-This configuration creates an isolated IPv4 network on ${EN_NAME}:
+This configuration creates an isolated IPv4 network on {{EN_NAME}}:
 
 - Server address: `10.2.2.1/24`
 - DHCP pool: `10.2.2.100` through `10.2.2.200`
-- DHCP interface: ${EN_NAME}
+- DHCP interface: {{EN_NAME}}
 - No default gateway supplied to clients
 - No DNS server supplied to clients
 - No routing between this subnet and the server's other network interface
@@ -27,7 +27,7 @@ Create the isolated connection profile:
 ```bash
 sudo nmcli connection add \
   type ethernet \
-  ifname ${EN_NAME} \
+  ifname {{EN_NAME}} \
   con-name isolated \
   ipv4.method manual \
   ipv4.addresses 10.2.2.1/24 \
@@ -52,7 +52,7 @@ Activate the profile:
 sudo nmcli connection up isolated
 ```
 
-If another NetworkManager profile is already active on ${EN_NAME}, deactivate that profile before activating `isolated`:
+If another NetworkManager profile is already active on {{EN_NAME}}, deactivate that profile before activating `isolated`:
 
 ```bash
 sudo nmcli connection down "OLD-CONNECTION-NAME"
@@ -62,9 +62,9 @@ sudo nmcli connection up isolated
 Verify the result:
 
 ```bash
-nmcli device show ${EN_NAME}
-ip address show dev ${EN_NAME}
-ip route show dev ${EN_NAME}
+nmcli device show {{EN_NAME}}
+ip address show dev {{EN_NAME}}
+ip route show dev {{EN_NAME}}
 ```
 
 The interface should have `10.2.2.1/24`. Its route table should contain only the directly connected subnet, similar to:
@@ -73,7 +73,7 @@ The interface should have `10.2.2.1/24`. Its route table should contain only the
 10.2.2.0/24 proto kernel scope link src 10.2.2.1
 ```
 
-There must be no default route through ${EN_NAME}.
+There must be no default route through {{EN_NAME}}.
 
 ## 2. Install Kea DHCPv4
 
@@ -105,7 +105,7 @@ Use this configuration:
 {
   "Dhcp4": {
     "interfaces-config": {
-      "interfaces": [ "${EN_NAME}" ]
+      "interfaces": [ "{{EN_NAME}}" ]
     },
 
     "lease-database": {

@@ -146,6 +146,27 @@ pipx install onvif-tui
 onvif-tui -u admin -p admin123
 ```
 
+<h2>Github CLI</h2>
+
+Integrate github to the desktop, first set up archive 
+
+```
+sudo mkdir -p -m 755 /etc/apt/keyrings && wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null && sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
+```
+
+create installation artifacts
+
+```
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+```
+
+install and login 
+
+```
+sudo apt update && sudo apt install gh -y
+gh auth login
+```
+
 <h2>Install Hermes</h2>
 
 ```

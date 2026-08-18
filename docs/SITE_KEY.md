@@ -1,3 +1,9 @@
+## 0. Variables supplied by agent
+
+{{SERVER_FQDN}} - Server Fully Qualified Domain Name
+
+{{SERVER_USER}} - $USER account name for agent
+
 
 ## 1. Generate the Nginx site key on {{SERVER_FQDN}}
 

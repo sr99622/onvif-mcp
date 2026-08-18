@@ -2,6 +2,14 @@
 
 This document describes the MediaMTX RTSP-to-WebRTC/HLS streaming server. The server pulls live video from IP cameras and makes them available via WebRTC for browser playback. In this document, the server name is represented symbolically surrounded by curly braces as `{hostname}`, which should be relaced by the actual server name, e.g. `camera.home.arpa`, in production. The curly braces convention for representing symbolic values is followed throughout this document.
 
+Symbolic names provided by agent
+
+{hostname}
+
+{username}
+
+{password}
+
 ## Binary Executable
 
 location: https://github.com/bluenviron/mediamtx/releases
@@ -194,7 +202,7 @@ sudo systemctl status mediamtx  # verify active (running)
 
 Without these, MediaMTX returns a redirect like `302 Location: /camera/path/`, which nginx then tries to serve as a static file (causing 405 errors or broken behavior).
 
-Full nginx config at `/etc/nginx/sites-available/mediamtx`, replace the symbolic value in the curly braces `{hostname}` with the actual server name e.g. `camera.home.arpa`:
+Full nginx config at `/etc/nginx/sites-available/mediamtx`:
 
 ```nginx
 server {
