@@ -1,3 +1,15 @@
+# HTTPS Camera System Setup and Maintenance
+
+## Symbolic Placeholders
+
+The following template placeholders are used throughout this document. Replace them with your actual values before executing any commands.
+
+| Placeholder          | Description                                  | Your Value              |
+| -------------------- | -------------------------------------------- | ----------------------- |
+| {{SERVER_FQDN}}      | Server fully qualified domain name           | gmktec.home.arpa        |
+| {{SERVER_IP}}        | Server IP address                            | 10.239.44.25            |
+| {{SERVER_USER}}      | Server user account                          | stephen                 |
+
 ## 1. Verify Certificate
 
 Verify on `{{SERVER_FQDN}}`:
