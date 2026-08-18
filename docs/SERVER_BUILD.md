@@ -157,13 +157,7 @@ Use the minimal configuration and add the LLM model of your choice.
 <h2>Give Hermes sudo privilege</h2>
 
 ```
-nvim $HOME/.hermes/.env
-```
-
-Add this line to the file
-
-```
-SUDO_PASSWORD=<your_sudo_password>
+sudo env USER="$USER" ./enable-nopasswd.sh
 ```
 
 <h2>Set a static IP</h2>
