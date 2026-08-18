@@ -1,0 +1,17 @@
+#!/usr/bin/expect -f
+set timeout 30
+
+spawn age -d \
+    /Users/stephen/Private-CA/backups/camera-system-ca-after-gmktec-cert-2026-08-18.tar.gz.age | tar tzf -
+
+expect "Enter passphrase (leave empty to autogenerate a secure one):"
+send "kimba123\r"
+
+expect {
+    "Confirm passphrase:" {
+        send "kimba123\r"
+        exp_continue
+    }
+}
+
+expect eof

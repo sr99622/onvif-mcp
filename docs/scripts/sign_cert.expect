@@ -1,0 +1,24 @@
+#!/usr/bin/expect -f
+set timeout 30
+set ca_pass [lindex $argv 0]
+
+spawn openssl ca \
+  -config "$env(HOME)/Private-CA/camera-system-ca/openssl.cnf" \
+  -extfile "$env(HOME)/Private-CA/camera-system-ca/csr/gmktec.home.arpa.ext.cnf" \
+  -extensions server_cert \
+  -days 397 \
+  -md sha256 \
+  -notext \
+  -in "$env(HOME)/Private-CA/camera-system-ca/csr/gmktec.home.arpa.csr.pem" \
+  -out "$env(HOME)/Private-CA/camera-system-ca/issued/gmktec.home.arpa.crt.pem"
+
+expect "Enter pass phrase for"
+send "$ca_pass\r"
+
+expect "Sign the certificate?"
+send "y\r"
+
+expect "update database?"
+send "y\r"
+
+expect eof

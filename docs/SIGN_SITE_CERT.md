@@ -1,3 +1,16 @@
+## 0. Variables supplied by agent
+
+{{SERVER_FQDN}} - Server Fully Qualified Domain Name
+
+{{SERVER_IP}} - Server IP Address
+
+{{SERVER_USER}} - User Account Name
+
+{{SERVER_PASSWORD}} - Server user account password
+
+{{CA_CERTIFICATE_PASSPHRASE}} - Passphrase for the CA certificate needed to sign
+
+{{AGE_PASSPHRASE}} - Passphrase needed for encrypted backup
 
 ## 1a. Get Site Key
 
