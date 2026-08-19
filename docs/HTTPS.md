@@ -1,15 +1,13 @@
 # HTTPS Camera System Setup and Maintenance
 
-## Symbolic Placeholders
+## 0. Variables supplied by the agent
 
-The following template placeholders are used throughout this document. Replace them with your actual values before executing any commands.
-
-| Placeholder          | Description                                  | Your Value              |
-| -------------------- | -------------------------------------------- | ----------------------- |
-| {{SERVER_FQDN}}      | Server fully qualified domain name           | gmktec.home.arpa        |
-| {{SERVER_IP}}        | Server IP address                            | 10.239.44.25            |
-| {{SERVER_USER}}      | Server user account                          | stephen                 |
-| {{APPS_PATH}}        | Project repository location                  | Projects/onvif-mcp/apps |
+| Variable             | Description                         
+| -------------------- | ------------------------------------
+| {{SERVER_FQDN}}      | Server fully qualified domain name  
+| {{SERVER_IP}}        | Server IP address                   
+| {{SERVER_USER}}      | Server user account                 
+| {{APPS_PATH}}        | Project repository location         
 
 ## 1. Verify Certificate
 

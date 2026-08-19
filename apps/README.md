@@ -35,8 +35,8 @@ models, and media-player URLs. Update the registry once and both applications
 will use the change after a page refresh.
 
 Camera entries may provide both `media_player_url` (main stream) and
-`substream_player_url` (lower-bandwidth stream). The multiview falls back to
-the main stream when a substream URL is absent.
+`substream_player_url` (lower-bandwidth stream). The multiview uses substream URL
+and the camera switchboard uses the mainstream URL.
 
 ## Start the local server
 

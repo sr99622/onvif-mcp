@@ -5,7 +5,7 @@
 This runbook creates a Keycloak OAuth 2.1/OpenID Connect deployment for an
 ONVIF MCP server without using the Keycloak Admin Console. It is designed for
 an agent or administrator starting with the same baseline used during the
-verified `nuc.home.arpa` deployment:
+verified `gmktec.home.arpa` deployment:
 
 - Ubuntu Server with sudo access.
 - Nginx already serving the MCP application over HTTPS.
@@ -71,7 +71,7 @@ Set these for the target installation. Re-export them after opening a new SSH
 session.
 
 ```bash
-export PUBLIC_HOST="nuc.home.arpa"
+export PUBLIC_HOST="gmktec.home.arpa"
 export MCP_REALM="mcp"
 export MCP_SCOPE="mcp:tools"
 export MCP_LOGIN_USER="mcp-user"

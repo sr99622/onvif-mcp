@@ -3,7 +3,7 @@
 ## Status and intent
 
 This document records the supervised agent deployment performed on
-`nuc.home.arpa` on 2026-08-17. It complements `KEYCLOAK_CLI.md` rather than
+`gmktec.home.arpa` on 2026-08-17. It complements `KEYCLOAK_CLI.md` rather than
 replacing it.
 
 The immediate goal is repeatability: an operator should be able to give an
@@ -16,9 +16,9 @@ and guarded cleanup of OAuth state.
 The experiment ultimately succeeded:
 
 - Keycloak 26.7.0 and PostgreSQL 17 run in Docker Compose.
-- Nginx publishes Keycloak beneath `https://nuc.home.arpa/auth/`.
-- The MCP resource is `https://nuc.home.arpa/mcp`.
-- The issuer is `https://nuc.home.arpa/auth/realms/mcp`.
+- Nginx publishes Keycloak beneath `https://gmktec.home.arpa/auth/`.
+- The MCP resource is `https://gmktec.home.arpa/mcp`.
+- The issuer is `https://gmktec.home.arpa/auth/realms/mcp`.
 - Anonymous DCR, Authorization Code with PKCE, and rotating refresh tokens
   are configured.
 - Hermes Agent 0.20.1 reconnects with saved OAuth state and discovers 28
@@ -46,7 +46,7 @@ The successful experiment used:
 | Component | Version or value |
 |---|---|
 | Host | Ubuntu Server 26.04 LTS |
-| Public host | `nuc.home.arpa` (`10.1.1.6`) |
+| Public host | `gmktec.home.arpa` (`10.1.1.5`) |
 | Docker | 29.1.3 |
 | Docker Compose | 2.40.3 |
 | Keycloak | 26.7.0 |
@@ -56,7 +56,7 @@ The successful experiment used:
 | MCP HTTP service | `127.0.0.1:8001` |
 | Keycloak listener | `127.0.0.1:8080` |
 
-The system hostname was `nuc`, not `nuc.home.arpa`. This was acceptable
+The system hostname was `gmktec`, not `gmktec.home.arpa`. This was acceptable
 because the public name resolved to a local address and matched the HTTPS
 certificate.
 
@@ -167,14 +167,14 @@ The successful phase order was:
 ## Values used in the verified deployment
 
 ```text
-PUBLIC_HOST=nuc.home.arpa
+PUBLIC_HOST=gmktec.home.arpa
 MCP_REALM=mcp
 MCP_SCOPE=mcp:tools
 MCP_LOGIN_USER=mcp-user
 KEYCLOAK_ADMIN_USER=keycloak-admin
-MCP_RESOURCE_URL=https://nuc.home.arpa/mcp
-KEYCLOAK_PUBLIC_URL=https://nuc.home.arpa/auth
-MCP_ISSUER=https://nuc.home.arpa/auth/realms/mcp
+MCP_RESOURCE_URL=https://gmktec.home.arpa/mcp
+KEYCLOAK_PUBLIC_URL=https://gmktec.home.arpa/auth
+MCP_ISSUER=https://gmktec.home.arpa/auth/realms/mcp
 ```
 
 Passwords were generated as 32-byte hexadecimal values and stored in
@@ -226,7 +226,7 @@ The verified anonymous configuration was:
 
 - Allowed Client Scopes: `mcp:tools`
 - Allow default scopes: `true`
-- Trusted Hosts: `10.1.1.6`, `localhost`, `127.0.0.1`
+- Trusted Hosts: `10.1.1.5`, `localhost`, `127.0.0.1`
 - Source-host matching: `true`
 - Client-URI matching: `true`
 - Max clients: `20`
@@ -250,7 +250,7 @@ The `mcp:tools` client scope must include all three attributes:
 ```
 
 The audience mapper must set the custom audience to
-`https://nuc.home.arpa/mcp`, include it in access and introspection tokens,
+`https://gmktec.home.arpa/mcp`, include it in access and introspection tokens,
 and exclude it from ID tokens. Omitting `include.in.token.scope=true` can
 produce a correct audience with an empty scope claim, resulting in `403` from
 the MCP server.
@@ -273,7 +273,7 @@ The active Nginx site was
 `/etc/nginx/sites-available/camera-apps`, reached through the sole
 `sites-enabled` symlink. The agent first performed a full read-only inspection
 because an earlier report contained a `home.arapa` transcription error. The
-live configuration correctly used `nuc.home.arpa`.
+live configuration correctly used `gmktec.home.arpa`.
 
 The edit added only:
 
@@ -303,8 +303,8 @@ OAuth was enabled for the MCP service with:
 ```ini
 [Service]
 Environment=MCP_OAUTH_ENABLED=true
-Environment=MCP_OAUTH_ISSUER=https://nuc.home.arpa/auth/realms/mcp
-Environment=MCP_RESOURCE_URL=https://nuc.home.arpa/mcp
+Environment=MCP_OAUTH_ISSUER=https://gmktec.home.arpa/auth/realms/mcp
+Environment=MCP_RESOURCE_URL=https://gmktec.home.arpa/mcp
 Environment=MCP_OAUTH_JWKS_URL=http://127.0.0.1:8080/auth/realms/mcp/protocol/openid-connect/certs
 ```
 
@@ -323,7 +323,7 @@ The final safe configuration fields were equivalent to:
 ```yaml
 mcp_servers:
   camera-new:
-    url: https://nuc.home.arpa/mcp
+    url: https://gmktec.home.arpa/mcp
     auth: oauth
     enabled: true
     ssl_verify: /home/stephen/.hermes/certs/camera-system-root-ca.crt.pem
@@ -345,7 +345,7 @@ OAuth flows during configuration reloads.
 The successful login used one local terminal and one SSH command:
 
 ```bash
-ssh -tt -L 8765:127.0.0.1:8765 stephen@nuc.home.arpa \
+ssh -tt -L 8765:127.0.0.1:8765 stephen@gmktec.home.arpa \
   '/home/stephen/.local/bin/hermes mcp login camera-new'
 ```
 
@@ -373,7 +373,7 @@ closed its one-time callback listener.
 
 ### Get password from client terminal
 
-ssh -t stephen@nuc.home.arpa 'sudo cat /opt/keycloak/.mcp-user-password'
+ssh -t stephen@gmktec.home.arpa 'sudo cat /opt/keycloak/.mcp-user-password'
 
 ### Failed approaches and recovery
 
@@ -441,9 +441,9 @@ A deployment is complete only when all of these pass:
 - PostgreSQL is healthy and Keycloak is running.
 - Nginx and `onvif-mcp-http.service` are active.
 - Public discovery returns `200`.
-- Issuer is exactly `https://nuc.home.arpa/auth/realms/mcp`.
+- Issuer is exactly `https://gmktec.home.arpa/auth/realms/mcp`.
 - Registration endpoint is exactly
-  `https://nuc.home.arpa/auth/realms/mcp/clients-registrations/openid-connect`.
+  `https://gmktec.home.arpa/auth/realms/mcp/clients-registrations/openid-connect`.
 - `S256` is supported.
 - `mcp:tools` is published.
 - Unauthenticated `/mcp` returns `401`.
