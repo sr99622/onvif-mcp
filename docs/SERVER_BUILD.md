@@ -21,6 +21,14 @@ git config --global user.email "sr99622@gmail.com"
 git config --global user.name "Stephen Rhodes"
 ```
 
+<h2>Install ghostty</h2>
+
+LazyVIM works best with ghostty terminal
+
+```
+sudo apt install ghostty
+```
+
 <h2>Install LazyVim Editing Tool</h2>
 
 You can run the rest of the configuration from remote. We want to install an editor that will work from the remote terminal. We will be installing LazyVim. The first step is to install the latest version of neovim.
@@ -62,6 +70,7 @@ LazyVim needs a font package, JetBrains is widely used.
 
 ```
 wget -P ~/.local/share/fonts https://github.com/ryanoasis/nerd-fonts/releases/download/v3.0.2/JetBrainsMono.zip && cd ~/.local/share/fonts && unzip JetBrainsMono.zip && rm JetBrainsMono.zip && fc-cache -fv
+cd
 ```
 
 Here we install the LazyVim package. The git configuration is removed in case you want to archive your own conifguration on git somewhere.
@@ -82,7 +91,13 @@ sudo apt install wl-clipboard xclip xsel
 
 Auto Refresh
 
-If you are using agents to modify code, it helps to have nvim auto refresh to stay in sync. Add this to the init.lua in the nvim configuration
+If you are using agents to modify code, it helps to have nvim auto refresh to stay in sync. Add this to the init.lua in the nvim configuration. First open the configuration file
+
+```
+nvim .config/nvim/init.lua
+```
+
+Insert the following text into the file.
 
 ```
 vim.opt.autoread = true
@@ -128,7 +143,17 @@ This will be needed for the camera MCP server.
 
 ```
 curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Exit the terminal
+
+```
 exit
+```
+
+Then restart the terminal and run uv to verify
+
+```
 uv
 ```
 

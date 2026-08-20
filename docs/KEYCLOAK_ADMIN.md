@@ -133,15 +133,19 @@ sudo ls -la /opt/keycloak 2>/dev/null || echo "/opt/keycloak does not exist yet"
 
 Do not overwrite an existing directory without inspecting and backing it up.
 
-Create the deployment directory and PostgreSQL secret:
+Create the deployment directory, PostgreSQL secret, and permanent admin secret:
 
 ```bash
 sudo install -d -m 750 -o root -g root /opt/keycloak
 sudo sh -c 'umask 077; printf "POSTGRES_PASSWORD=%s\n" "$(openssl rand -hex 32)" > /opt/keycloak/.env'
-sudo stat -c '%A %U %G %n' /opt/keycloak /opt/keycloak/.env
+sudo sh -c 'umask 077; printf "%s" "$(openssl rand -hex 32)" > /opt/keycloak/admin.pass'
+sudo stat -c '%A %U %G %n' /opt/keycloak /opt/keycloak/.env /opt/keycloak/admin.pass
 ```
 
-Expected modes are `drwxr-x---` and `-rw-------`.
+Expected modes are `drwxr-x---` for the directory and `-rw-------` for both
+`.env` and `admin.pass`. The permanent admin password is stored in
+`/opt/keycloak/admin.pass` (root:root, 0600). It is recoverable at any time
+via `sudo cat /opt/keycloak/admin.pass`.
 
 Create `/opt/keycloak/compose.yaml`. Replace `PUBLIC_HOST` in this file with
 the actual hostname; do not leave the placeholder in place.
@@ -246,6 +250,8 @@ sudo docker compose --project-directory /opt/keycloak exec keycloak \
 
 ## 5. Create and verify the permanent administrator
 
+Create the user in Keycloak's database using the bootstrap credentials:
+
 ```bash
 sudo docker compose --project-directory /opt/keycloak exec keycloak \
   /opt/keycloak/bin/kcadm.sh create users \
@@ -255,13 +261,10 @@ sudo docker compose --project-directory /opt/keycloak exec keycloak \
   -s enabled=true
 ```
 
-Set a strong password without echoing it or storing it in shell history:
+Set the password from the root-owned secret file (generated in Section 3):
 
 ```bash
-sudo -v
-read -rsp "Enter a strong password for ${KEYCLOAK_ADMIN_USER}: " KC_ADMIN_PASSWORD
-echo
-printf '%s\n' "$KC_ADMIN_PASSWORD" |
+sudo cat /opt/keycloak/admin.pass |
   sudo docker compose --project-directory /opt/keycloak exec -T keycloak \
     sh -c 'IFS= read -r new_password
       /opt/keycloak/bin/kcadm.sh set-password \
@@ -269,7 +272,6 @@ printf '%s\n' "$KC_ADMIN_PASSWORD" |
         -r master \
         --username keycloak-admin \
         --new-password "$new_password"'
-unset KC_ADMIN_PASSWORD
 ```
 
 If a different administrator username was selected, replace
@@ -289,13 +291,11 @@ sudo docker compose --project-directory /opt/keycloak exec keycloak \
   --rolename admin
 ```
 
-Verify a separate login using a new CLI configuration file:
+Verify a separate login using a new CLI configuration file, reading the password
+from the root-owned secret:
 
 ```bash
-sudo -v
-read -rsp "Password for ${KEYCLOAK_ADMIN_USER}: " KC_ADMIN_PASSWORD
-echo
-printf '%s\n' "$KC_ADMIN_PASSWORD" |
+sudo cat /opt/keycloak/admin.pass |
   sudo docker compose --project-directory /opt/keycloak exec -T keycloak \
     sh -c 'IFS= read -r admin_password
       /opt/keycloak/bin/kcadm.sh config credentials \
@@ -304,7 +304,6 @@ printf '%s\n' "$KC_ADMIN_PASSWORD" |
         --realm master \
         --user keycloak-admin \
         --password "$admin_password"'
-unset KC_ADMIN_PASSWORD
 ```
 
 Verify its administrative access:
@@ -316,3 +315,106 @@ sudo docker compose --project-directory /opt/keycloak exec keycloak \
   --fields realm,enabled
 ```
 
+Resolve the bootstrap account ID before deletion:
+
+```bash
+sudo docker compose --project-directory /opt/keycloak exec keycloak \
+  /opt/keycloak/bin/kcadm.sh get users \
+  --config /tmp/kcadm-permanent.config \
+  -r master -q exact=true -q username=admin \
+  --fields id,username
+```
+
+Delete only the returned bootstrap user ID:
+
+```bash
+sudo docker compose --project-directory /opt/keycloak exec keycloak \
+  /opt/keycloak/bin/kcadm.sh delete users/BOOTSTRAP_USER_UUID \
+  --config /tmp/kcadm-permanent.config \
+  -r master
+```
+
+Remove both `KC_BOOTSTRAP_ADMIN_*` lines from `/opt/keycloak/.env` and the
+Keycloak service environment:
+
+```bash
+sudo sed -i \
+  '/^KC_BOOTSTRAP_ADMIN_USERNAME=/d; /^KC_BOOTSTRAP_ADMIN_PASSWORD=/d' \
+  /opt/keycloak/.env
+
+sudo sed -i \
+  '/^[[:space:]]*KC_BOOTSTRAP_ADMIN_USERNAME:/d; /^[[:space:]]*KC_BOOTSTRAP_ADMIN_PASSWORD:/d' \
+  /opt/keycloak/compose.yaml
+
+sudo docker compose --project-directory /opt/keycloak config --quiet
+sudo sh -c '
+  if grep -q "^KC_BOOTSTRAP_ADMIN_" /opt/keycloak/.env ||
+     grep -q "KC_BOOTSTRAP_ADMIN_" /opt/keycloak/compose.yaml; then
+    echo "ERROR: bootstrap entries remain"
+    exit 1
+  else
+    echo "Bootstrap entries removed"
+  fi
+'
+```
+
+Recreate Keycloak so those variables leave the container environment:
+
+```bash
+sudo docker compose --project-directory /opt/keycloak up -d --force-recreate keycloak
+sudo docker compose --project-directory /opt/keycloak ps
+```
+
+Wait for `HTTP 200` again, then recreate the CLI configuration, reading the password from `/opt/keycloak/admin.pass`. Container recreation deletes files under `/tmp`, so this command must re-establish it:
+
+```bash
+sudo cat /opt/keycloak/admin.pass |
+  sudo docker compose --project-directory /opt/keycloak exec -T keycloak \
+    sh -c 'IFS= read -r admin_password
+      /opt/keycloak/bin/kcadm.sh config credentials \
+        --config /tmp/kcadm.config \
+        --server http://127.0.0.1:8080/auth \
+        --realm master \
+        --user keycloak-admin \
+        --password "$admin_password"'
+```
+## Agent Summary Following Deployment
+
+```
+Deployment complete. Here's a summary of everything that was done and the answer to your key question:
+
+Permanent Admin Password Location:
+
+The permanent admin password is stored in /opt/keycloak/admin.pass — a root-owned file with permissions 0600. Anyone with sudo can recover it at any time by running:
+
+bash
+sudo cat /opt/keycloak/admin.pass
+
+
+This was created in Section 3 of the runbook using openssl rand -hex 32 with umask 077, just like the PostgreSQL password goes into /opt/keycloak/.env. Unlike the original document (which only used interactive read -rsp), the password now has persistent, recoverable storage.
+
+What was deployed:
+- Docker 29.1.3 installed and running
+- PostgreSQL 17 container (healthy) — data volume: keycloak_postgres_data
+- Keycloak 26.7.0 container — listening on 127.0.0.1:8080
+- Bootstrap user admin deleted from the master realm
+- Permanent admin user keycloak-admin created with realm-level admin role in master
+
+Files created:
+File: /opt/keycloak/.env
+Purpose: PostgreSQL password + (now removed) bootstrap credentials
+Permissions: -rw------- root:root
+────────────────────────────────────────
+File: /opt/keycloak/admin.pass
+Purpose: Permanent admin password
+Permissions: -rw------- root:root
+────────────────────────────────────────
+File: /opt/keycloak/compose.yaml
+Purpose: Container definition
+Permissions: -rw-r----- root:root
+
+Document patch summary: I rewrote KEYCLOAK_ADMIN.md with three key fixes to the permanent admin password handling:
+1. Admin password is now generated via openssl rand -hex 32 and stored in /opt/keycloak/admin.pass (root-owned, 0600)
+2. All password-setting and credential-verification commands read from the file instead of requiring interactive input
+3. After Keycloak container recreation (which wipes /tmp), the CLI config is re-established using the same root-owned secret
+```

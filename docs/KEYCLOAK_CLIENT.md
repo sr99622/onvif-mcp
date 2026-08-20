@@ -1,5 +1,5 @@
 
-## 6. Create the MCP realm and login user
+## 1. Create the MCP realm and login user
 
 ```bash
 sudo docker compose --project-directory /opt/keycloak exec keycloak \
@@ -39,26 +39,31 @@ sudo docker compose --project-directory /opt/keycloak exec keycloak \
   -s enabled=true
 ```
 
-Set its password using the same secure pipe pattern used for the administrator:
+Generate the login user password and store it in a root-owned secret file:
 
 ```bash
-sudo -v
-read -rsp "Enter a strong password for ${MCP_LOGIN_USER}: " MCP_USER_PASSWORD
-echo
-printf '%s\n' "$MCP_USER_PASSWORD" |
+sudo sh -c 'umask 077; printf "%s" "$(openssl rand -hex 32)" > /opt/keycloak/mcp-user.pass'
+sudo stat -c '%A %U %G %n' /opt/keycloak/mcp-user.pass
+```
+
+Expected mode is `-rw-------`. The password is recoverable via `sudo cat /opt/keycloak/mcp-user.pass`.
+
+Set its password from the root-owned secret file:
+
+```bash
+sudo cat /opt/keycloak/mcp-user.pass |
   sudo docker compose --project-directory /opt/keycloak exec -T keycloak \
     sh -c 'IFS= read -r user_password
       /opt/keycloak/bin/kcadm.sh set-password \
         --config /tmp/kcadm.config \
-        -r mcp \
-        --username mcp-user \
+        -r ${MCP_REALM} \
+        --username ${MCP_LOGIN_USER} \
         --new-password "$user_password"'
-unset MCP_USER_PASSWORD
 ```
 
-Replace the literal realm or username in the inner command if customized.
+The secret file `/opt/keycloak/mcp-user.pass` (root:root, 0600) was created in Section 1 and contains the login user password. It is recoverable via `sudo cat /opt/keycloak/mcp-user.pass`.
 
-## 7. Create the MCP client scope and audience mapper
+## 2. Create the MCP client scope and audience mapper
 
 Create the optional OpenID Connect client scope:
 
@@ -111,7 +116,7 @@ Confirm all three scope attributes are `true` and the audience is exactly
 audience mapper can run while the token's `scope` claim remains empty, causing
 the MCP server to return `403 Forbidden`.
 
-## 8. Configure anonymous Dynamic Client Registration
+## 3. Configure anonymous Dynamic Client Registration
 
 Keycloak 26.7 exposes only provider metadata at
 `client-registration-policy/providers`. Configured policies are realm
@@ -217,7 +222,7 @@ Expected DCR policy state:
 - Full Scope Disabled present
 - Max Clients Limit: `20`
 
-## 9. Configure Nginx
+## 4. Configure Nginx
 
 Identify the active HTTPS virtual host rather than assuming its filename:
 
@@ -285,7 +290,7 @@ sudo systemctl reload nginx
 sudo systemctl is-active nginx
 ```
 
-## 10. Trust the private CA
+## 5. Trust the private CA
 
 Locate the CA certificate and inspect the server certificate issuer:
 
@@ -340,7 +345,7 @@ print("mcp:tools published:", "mcp:tools" in d.get("scopes_supported", []))
 Confirm the issuer is exact, a registration endpoint is present, `S256` is
 supported, and `mcp:tools` is published.
 
-## 11. Enable OAuth in the MCP systemd service
+## 6. Enable OAuth in the MCP systemd service
 
 Inspect only drop-in paths so an existing unit's potentially sensitive
 environment is not printed:
@@ -414,7 +419,7 @@ Expected values:
 }
 ```
 
-## 12. Test DCR without exposing registration credentials
+## 7. Test DCR without exposing registration credentials
 
 Run this test from a host allowed by the Trusted Hosts policy. A test executed
 on the Keycloak server itself originates from loopback, which is allowed in
@@ -483,7 +488,7 @@ test ! -e /tmp/keycloak-dcr-test.json && echo "DCR test artifacts removed"
 If Keycloak returns an internal UUID different from `clientId`, use the exact
 returned internal `id` in the delete path.
 
-## 13. Configure and verify Hermes Agent
+## 8. Configure and verify Hermes Agent
 
 On the Hermes host, verify Hermes and the CA file:
 
@@ -537,7 +542,7 @@ hermes mcp test camera-new
 Success means Hermes reconnects without another browser login and discovers
 the expected MCP tools.
 
-## 14. Configure manual PostgreSQL backups
+## 9. Configure manual PostgreSQL backups
 
 Create the protected backup directory:
 
@@ -643,7 +648,7 @@ sudo sh -c \
 
 The file must be non-empty and mode `-rw-------`.
 
-## 15. Perform an isolated restore test
+## 10. Perform an isolated restore test
 
 Choose a unique database name and confirm it is absent:
 
@@ -705,7 +710,7 @@ fi
 After the real OAuth client completes DCR and login, create another manual
 backup so the active client registration is included.
 
-## 16. Final verification checklist
+## 11. Final verification checklist
 
 Run or confirm all of the following:
 
@@ -738,7 +743,7 @@ Required outcomes:
 - A post-login database backup exists, its catalog is readable, and an
   isolated restore test has succeeded.
 
-## 17. Routine operations
+## 12. Routine operations
 
 Deployment status:
 
@@ -780,7 +785,7 @@ Review DCR clients periodically and remove obsolete registrations only after
 matching their client IDs to the active ID stored by the OAuth client. Never
 display the associated token file.
 
-## 18. Known pitfalls
+## 13. Known pitfalls
 
 - `client-registration-policy/anonymous` returns 404 on Keycloak 26.7. Use
   realm components and select policies with `subType: anonymous`.
