@@ -1,14 +1,37 @@
 #!/usr/bin/expect -f
-set timeout 60
+# usage: expect backup_ca.expect [output-age-archive]
+#        (defaults to the dated archive below when no argument is given)
+set timeout 120
+# NOTE: in this Expect build $argv is a Tcl list, not an array — use lindex.
+if {$argc > 0} {
+    set out [lindex $argv 0]
+} else {
+    set out "/Users/stephen/Private-CA/backups/camera-system-ca-after-gmktec-cert-2026-08-18.tar.gz.age"
+}
+# NOTE: expect's `spawn` does not go through a shell, so the pipeline must be
+# wrapped in `sh -c`. Also: this age build rejects one-shot `--passphrase <value>`;
+# `age -p` prompts on the pty and expect feeds both passphrase prompts below.
+spawn sh -c "tar -C /Users/stephen/Private-CA -czf - camera-system-ca | age -p -o '$out'"
+# Single compound so the prompt(s) and a fast exit can never race: encryption
+# prompts twice (Enter + Confirm); the eof branch handles age exiting between sends.
+expect {
+    "Confirm passphrase:" {
+        send -- "kimba123\r"
+        exp_continue
+    }
+    -re "(?i)Enter passphrase.*:" {
+        send -- "kimba123\r"
+        exp_continue
+    }
+    eof {}
+}
 
-spawn age --passphrase \
-    -o "/Users/stephen/Private-CA/backups/camera-system-ca-after-gmktec-cert-2026-08-18.tar.gz.age" \
-    "/tmp/camera-system-ca-backup.tar.gz"
-
-expect "Enter passphrase (leave empty to autogenerate a secure one):"
-send "kimba123\r"
-
-expect "Confirm passphrase:"
-send "kimba123\r"
-
-expect eof
+wait
+# This Expect build does not set $status from wait; `expect eof` already confirmed
+# the child exited, so verify the artifact itself.
+if {![file exists $out]} {
+    puts "ERROR: backup pipeline produced no output archive"
+    file delete -force $out
+    exit 1
+}
+file attributes $out -permissions 0600

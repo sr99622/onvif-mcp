@@ -1,3 +1,12 @@
 #!/bin/bash
-set -o pipefail
-tar -C "/Users/stephen/Private-CA" -czf - camera-system-ca | age --passphrase -o "/Users/stephen/Private-CA/backups/camera-system-ca-after-gmktec-cert-2026-08-18.tar.gz.age"
+# usage: run_backup.sh [output-age-archive]
+#
+# Encrypts the camera-system-ca CA state into an age archive, non-interactively.
+#
+# Delegates to backup_ca.expect because this age build demands a tty for its
+# passphrase even when reading it from stdin ("standard input is not a
+# terminal, and /dev/tty is not available") — a plain shell cannot supply that.
+set -euo pipefail
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec expect "$script_dir/backup_ca.expect" "$@"

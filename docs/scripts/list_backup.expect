@@ -1,17 +1,28 @@
 #!/usr/bin/expect -f
-set timeout 30
-
-spawn age -d \
-    /Users/stephen/Private-CA/backups/camera-system-ca-after-gmktec-cert-2026-08-18.tar.gz.age | tar tzf -
-
-expect "Enter passphrase (leave empty to autogenerate a secure one):"
-send "kimba123\r"
-
+# usage: expect list_backup.expect <path-to-archive.age>
+set timeout 60
+# NOTE: in this Expect build $argv is a Tcl list, not an array — use lindex.
+if {$argc < 1} {
+    puts "usage: expect list_backup.expect <path-to-archive.age>"
+    exit 2
+}
+# NOTE: expect's `spawn` does not go through a shell, so the pipe must be
+# wrapped in `sh -c`. Running bare `spawn age ... | tar tzf -` makes expect
+# pass the pipeline tokens as argv to age ("too many INPUT arguments").
+spawn sh -c "age -d [lindex $argv 0] | tar -tzf -"
+# Single compound so the prompt(s) and a fast exit can never race: decryption
+# prompts once, encryption would prompt twice; the eof branch handles age exiting
+# between sends.
 expect {
     "Confirm passphrase:" {
-        send "kimba123\r"
+        send -- "kimba123\r"
         exp_continue
     }
+    -re "(?i)Enter passphrase.*:" {
+        send -- "kimba123\r"
+        exp_continue
+    }
+    eof {}
 }
 
-expect eof
+wait
