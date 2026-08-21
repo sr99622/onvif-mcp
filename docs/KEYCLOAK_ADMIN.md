@@ -248,6 +248,14 @@ sudo docker compose --project-directory /opt/keycloak exec keycloak \
     --password "$KC_BOOTSTRAP_ADMIN_PASSWORD"'
 ```
 
+If this docker build lacks `-T`/`--no-tty` (check `docker exec --help`; some
+builds remove both), the pipe idiom used later in this document
+(`sudo cat FILE | sudo docker compose ... exec -T keycloak sh -c 'IFS= read -r ...'`)
+is not available as written: substitute `-i` for `-T`. Piped stdin still feeds
+the inner `IFS= read`, and TTY allocation is not required for a non-interactive
+read. The host-side Admin REST token pattern in STREAM_AUTH.md is the other
+supported path.
+
 ## 5. Create and verify the permanent administrator
 
 Create the user in Keycloak's database using the bootstrap credentials:

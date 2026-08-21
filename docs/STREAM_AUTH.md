@@ -62,8 +62,8 @@ Replace every symbolic value with the target environment's actual value.
 | `{{COMPOSE_DIR}}` | Keycloak Compose project directory |
 | `{{ACTIVE_SITE_LINK}}` | Enabled Nginx site symlink name |
 | `{{NGINX_SITE}}` | Active Nginx site file outside `sites-enabled` |
-| `{{PRIVATE_CA_FILE}}` | Public private-CA root certificate on the server |
-| `{{HERMES_SERVER_NAME}}` | Existing Hermes MCP entry used for regression testing |
+| `{{PRIVATE_CA_FILE}}` | Public private-CA root certificate on the server (the root that Nginx's served chain verifies against) |
+| `{{HERMES_SERVER_NAME}}` | Existing Hermes MCP entry used for regression testing (resolve via `hermes mcp list`: the entry whose transport is `https://{{SERVER_FQDN}}/mcp`) |
 
 Derived URLs:
 
@@ -128,6 +128,29 @@ Do not continue after a failed guard. Do not display:
 Use direct live API queries to resolve installation-specific UUIDs. Never copy
 UUIDs from another realm or deployment.
 
+Admin REST token (all phases). Keycloak 26 disables password grants for most
+built-in clients, and kcadm in the container cannot prompt without a console;
+some docker builds also lack `-T`/`--no-tty`. The reliable pattern is
+`admin-cli` with the permanent administrator user from one root-controlled
+process, using a root-only temporary body file so the credential never appears
+on a command line or in an untrusted environment:
+
+```bash
+pass="$(sudo cat /opt/keycloak/admin.pass)"
+umask 077
+body="/opt/keycloak/.kctmp.$$"
+printf 'grant_type=password&client_id=admin-cli&username=keycloak-admin&password=%s' "$pass" > "$body"
+tok=$(curl -sS -X POST --data @"$body" \
+  http://127.0.0.1:{{KEYCLOAK_PORT}}/auth/realms/master/protocol/openid-connect/token \
+  | python3 -c 'import sys,json; print(json.load(sys.stdin)["access_token"])')
+rm -f "$body"; unset pass   # keep tok until its last use, then unset it
+```
+
+kcadm alternative (verified non-interactive via stdin when the docker build
+lacks `-T`): `docker exec -i keycloak-keycloak-1 sh -c '/opt/keycloak/bin/kcadm.sh get realms --server http://127.0.0.1:{{KEYCLOAK_PORT}}/auth --realm master --user keycloak-admin --password "$(cat /dev/stdin)"' < passfile`.
+Note that kcadm persists its session to `/opt/keycloak/.keycloak/kcadm.config`;
+remove that file after use.
+
 ## 1. Preflight
 
 Confirm the existing services and ports before making changes:
@@ -191,10 +214,18 @@ done
 curl -sS -D - -o /dev/null "https://{{SERVER_FQDN}}/mcp"
 ```
 
+A `404` at the bare `/outputs/` and `/webrtc/` root paths is an acceptable
+baseline before protection exists: content in those families lives at deeper
+paths, and Phase 7's location-level `auth_request` covers all of them
+regardless.
+
 ## 2. Prepare the browser login user
 
 Resolve `{{MCP_LOGIN_USER}}` by exact username in `{{MCP_REALM}}`. Require
-exactly one enabled user with a nonempty email address.
+exactly one enabled user with a nonempty email address. Resolve via the list
+query (`/admin/realms/{realm}/users?username=...`) and filter for an exact
+username match locally; there is no by-name direct lookup — fetch the full
+user representation by the resolved UUID, never by name.
 
 oauth2-proxy requests the `email` scope. Require:
 
@@ -231,8 +262,48 @@ one OpenID Connect client with:
 | Web origin | `https://{{SERVER_FQDN}}` |
 | PKCE method | `S256` |
 
+Keycloak 26 Admin API field mapping. The table above uses console labels;
+these are the representation fields (top-level `postLogoutRedirectUris` is
+rejected with HTTP 400):
+
+| Setting | Representation field |
+|---|---|
+| Root URL | `baseUrl` |
+| Home URL | `attributes.frontend_url` |
+| Post-logout redirect URI | `attributes["post.logout.redirect.uris"]` (string, comma-separated) |
+| PKCE method | `attributes["pkce.code.challenge.method"]` |
+
+Minimal accepted payload:
+
+```json
+{
+  "clientId": "{{BROWSER_CLIENT_ID}}",
+  "enabled": true,
+  "publicClient": false,
+  "clientAuthenticatorType": "client-secret",
+  "standardFlowEnabled": true,
+  "implicitFlowEnabled": false,
+  "directAccessGrantsEnabled": false,
+  "serviceAccountsEnabled": false,
+  "authorizationServicesEnabled": false,
+  "consentRequired": false,
+  "baseUrl": "https://{{SERVER_FQDN}}/",
+  "attributes": {
+    "frontend_url": "https://{{SERVER_FQDN}}/cameras/",
+    "post.logout.redirect.uris": "https://{{SERVER_FQDN}}/cameras/",
+    "pkce.code.challenge.method": "S256"
+  },
+  "redirectUris": ["https://{{SERVER_FQDN}}/oauth2/callback"],
+  "webOrigins": ["https://{{SERVER_FQDN}}"]
+}
+```
+
 Resolve the created client by exact client ID, require one match, capture its
-live internal UUID, retrieve it directly, and verify every setting.
+live internal UUID, retrieve it directly, and verify every setting. Resolve via
+the list query `/admin/realms/{realm}/clients?clientId={{BROWSER_CLIENT_ID}}`
+and filter for an exact match: `/client-by-id/{X}` takes the *internal UUID*,
+not the client name, and returns 404 with an error body for a client ID string
+— do not parse that body as the representation.
 
 Keycloak may omit optional boolean fields whose value is the default `false`.
 During verification, treat an omitted optional boolean as false only when the
@@ -247,6 +318,9 @@ In the verified environment:
   null representation and failed.
 - The installed `kcadm.sh` did not accept the attempted `-i` input-file flag.
 - Host-side Admin REST calls to the loopback Keycloak listener were reliable.
+- In the verified deployment, host-side REST using the admin-token pattern
+  above was the consistent path: it avoided kcadm's prompting/TTY issues and
+  its null-representation create failure in a single technique.
 
 If the CLI creation path fails, use the Keycloak Admin REST API from the host.
 Read the administrator password inside one root-controlled process, obtain an
@@ -289,7 +363,15 @@ clean retry.
 
 ## 5. Add oauth2-proxy to Compose
 
-Back up `compose.yaml` outside the active Compose model. Add:
+Back up `compose.yaml` outside the active Compose model. Before pulling or
+starting, confirm two things directly: (a) the public chain — Nginx listens on
+the public IP, not loopback — so use `openssl s_client -connect {{SERVER_IP}}:443 -servername {{SERVER_FQDN}}`, then verify the leaf against the CA file
+with `openssl verify -CAfile {{PRIVATE_CA_FILE}} ...`; if it does not verify, apply the
+troubleshooting-section fix rather than disabling verification. (b) which flags
+this docker build's `exec` actually supports (`docker exec --help`) before any
+later step relies on TTY or stdin patterns.
+
+Then back up `compose.yaml` outside the active Compose model and add:
 
 ```yaml
 services:
@@ -368,7 +450,13 @@ bound only to `{{LOOPBACK_IP}}`.
 Back up the active site outside `sites-enabled`. Every regular file beneath
 `sites-enabled` can become active configuration.
 
-Add these blocks inside the HTTPS server before protected application routes:
+Add these blocks inside the HTTPS server before protected application routes.
+Canonical insertion anchor in the verified deployment: immediately before the
+`location /cameras/ {` line — the first protected application route; verify
+each new block sits after the `listen ... 443 ssl;` line and occurs exactly
+once. Do not reload Nginx after this phase: the single reload happens in
+Phase 7, after auth_request protection lands, so the site never runs with
+half-wired protection.
 
 ```nginx
 location = /oauth2/auth {
@@ -463,7 +551,8 @@ Also require:
 
 ## 9. Verify browser behavior
 
-Use a private/incognito browser session:
+Use a private/incognito browser session (or the scripted headless
+alternative given after step 6). Either way, confirm:
 
 1. Open `https://{{SERVER_FQDN}}/cameras/`.
 2. Authenticate as `{{MCP_LOGIN_USER}}`.
@@ -472,9 +561,25 @@ Use a private/incognito browser session:
 5. Open a known direct `/webrtc/.../` stream URL.
 6. Confirm no second login is required and live video plays.
 
-If the user password was generated by the deployment agent, retrieve it only
-through a direct privileged terminal on the server. Do not copy it into chat
-or documentation.
+If the user password was generated by the deployment agent, read it only
+inside one root-controlled process on the server (for example from
+`/opt/keycloak/mcp-user.pass`). Do not copy it into chat, documentation, or a
+command line; never persist browser cookies to disk in a scripted run — use an
+in-memory cookie jar.
+
+Agent-executable alternative: a scripted headless flow with an in-memory
+cookie jar verifies steps 1-4 and the WebRTC pass-through without a human.
+Expected status sequence: unauthenticated `302` chain to the Keycloak
+authorization endpoint (PKCE parameter names present), login form with fields
+`credentialId`, `username`, `password`; after POST, callback parameters
+`code`, `iss`, `session_state`, `state`; then a `302` landing exactly on the
+requested path with HTTP 200 — not the site root. In oauth2-proxy 7.15.x an
+authenticated `/oauth2/ping` answers HTTP 202 with body `Authenticated`;
+unauthenticated it redirects to sign-in. The WebRTC check asserts that a
+known direct stream URL under `/webrtc/.../` passes auth to MediaMTX without a
+login bounce (any non-302-to-sign-in outcome such as 200 is the expected
+signaling response). Live-video rendering remains a human confirmation only —
+UDP ICE/DTLS/SRTP cannot be asserted over HTTP checks.
 
 Finally verify Hermes MCP access remains independent:
 
@@ -497,7 +602,16 @@ Require:
 - one new nonempty `keycloak-*.dump`
 - mode `0600`, owner/group `root:root`
 - safe basename without `/`
-- successful `pg_restore --list` with output suppressed
+- successful `pg_restore --list` with detail output suppressed. The dump is
+  root-owned mode `0600`, so the host shell must read it as root and stream it
+  into the postgres container:
+
+```bash
+sudo bash -c 'cat /var/backups/keycloak-postgres/DUMP_FILE.dump | \
+  docker exec -i keycloak-postgres-1 sh -c "cat > /tmp/.chk.dump && pg_restore --list /tmp/.chk.dump >/dev/null 2>&1; echo pg_restore_exit=\$?"'
+```
+
+  Require `pg_restore_exit=0`, then remove `/tmp/.chk.dump` from the container.
 - no unintended timer creation
 - all services healthy afterward
 
