@@ -21,6 +21,27 @@ git config --global user.email "sr99622@gmail.com"
 git config --global user.name "Stephen Rhodes"
 ```
 
+<h2>Github CLI</h2>
+
+Integrate github to the desktop, first set up archive 
+
+```
+sudo mkdir -p -m 755 /etc/apt/keyrings && wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null && sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
+```
+
+create installation artifacts
+
+```
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+```
+
+install and login 
+
+```
+sudo apt update && sudo apt install gh -y
+gh auth login
+```
+
 <h2>Install ghostty</h2>
 
 LazyVIM works best with ghostty terminal
@@ -85,19 +106,17 @@ Quit terminal and reopen to get the font.
 #### On Ubuntu
 
 ```
-wget -P ~/.local/share/fonts https://github.com/ryanoasis/nerd-fonts/releases/download/v3.0.2/JetBrainsMono.zip && cd ~/.local/share/fonts && unzip JetBrainsMono.zip && rm JetBrainsMono.zip && fc-cache -f -v
+wget -P ~/.local/share/fonts https://github.com/ryanoasis/nerd-fonts/releases/download/v3.0.2/JetBrainsMono.zip && cd ~/.local/share/fonts && unzip JetBrainsMono.zip && rm JetBrainsMono.zip
 cd
 ```
 
-Then you open the terminal and select Preferences from the hamburger icon in the upper right corner. Scroll down a bit and unselect 'Use Sytem Font', then use the menu to select the 'JetBrainsMono Nerd Font Mono' type of your choice.
-
-Because Ubuntu is super janky, the font may not render properly. Try running 
+Register the font in the cache 
 
 ```
 fc-cache -f -v 
 ```
 
-You might have to run it a few times to get it working.
+Open the terminal and select Preferences from the hamburger icon in the upper right corner. Scroll down a bit and unselect 'Use Sytem Font', then use the menu to select the 'JetBrainsMono Nerd Font Mono' type of your choice.
 
 #### Install LazyVim
 
@@ -199,25 +218,12 @@ pipx install onvif-tui
 onvif-tui -u admin -p admin123
 ```
 
-<h2>Github CLI</h2>
-
-Integrate github to the desktop, first set up archive 
+<h2>Download onvif-mcp repository</h2>
 
 ```
-sudo mkdir -p -m 755 /etc/apt/keyrings && wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null && sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
-```
-
-create installation artifacts
-
-```
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-```
-
-install and login 
-
-```
-sudo apt update && sudo apt install gh -y
-gh auth login
+mkdir Projects
+cd Projects
+git clone https://github.com/sr99622/onvif-mcp
 ```
 
 <h2>Install Hermes</h2>
@@ -230,6 +236,8 @@ Use the minimal configuration and add the LLM model of your choice. You may see 
 
 <h2>Give Hermes sudo privilege</h2>
 
+from inside the onvif-mcp repository,
+
 ```
 sudo env USER="$USER" ./docs/scripts/enable-nopasswd.sh
 ```
@@ -239,7 +247,7 @@ sudo env USER="$USER" ./docs/scripts/enable-nopasswd.sh
 use these commands in the Hermes prompt to tell it what to do.
 
 ```
-please show the ethernet port configuration on this machine 
+please show the ethernet port configuration on this machine, including Gateway and DNS information
 ```
 
 You will get back a listing of the ports. Pick out the one that is currently connected to your LAN and note the interface name, it will be something like `enp86s0` but will vary. Tell Hermes to configure that specific port to have a static IP address that you have chosen based on your network topology, and to use the current Gateway and DNS settings. This will work best if you explicitly state the Gateway and DNS values.
