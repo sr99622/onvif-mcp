@@ -68,6 +68,22 @@ sudo apt install ripgrep
 
 LazyVim needs a font package, JetBrains is widely used.
 
+#### On MacOS, 
+
+```
+brew install --cask font-jetbrains-mono-nerd-font
+```
+
+Then open terminal, go to Terminal → Settings → Profiles → Text → Font → Change
+
+Select:
+
+JetBrainsMono Nerd Font Mono
+
+Quit terminal and reopen to get the font.
+
+#### On Ubuntu
+
 ```
 wget -P ~/.local/share/fonts https://github.com/ryanoasis/nerd-fonts/releases/download/v3.0.2/JetBrainsMono.zip && cd ~/.local/share/fonts && unzip JetBrainsMono.zip && rm JetBrainsMono.zip && fc-cache -fv
 cd
