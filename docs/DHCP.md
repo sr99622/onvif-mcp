@@ -59,6 +59,8 @@ sudo nmcli connection down "OLD-CONNECTION-NAME"
 sudo nmcli connection up isolated
 ```
 
+Note: a netplan-generated profile (e.g. `netplan-{{EN_NAME}}`) may already be active on {{EN_NAME}} even when the port shows no carrier — that is the expected "old" profile to deactivate.
+
 Verify the result:
 
 ```bash
@@ -98,6 +100,15 @@ Back up the packaged configuration:
 sudo cp /etc/kea/kea-dhcp4.conf /etc/kea/kea-dhcp4.conf.backup
 sudoedit /etc/kea/kea-dhcp4.conf
 ```
+
+If writing the file programmatically (e.g. `sudo install` or `sudo tee`) instead of using `sudoedit`, set ownership and mode so the service user can read it:
+
+```bash
+sudo chown root:_kea /etc/kea/kea-dhcp4.conf
+sudo chmod 640 /etc/kea/kea-dhcp4.conf
+```
+
+The `kea-dhcp4-server` unit runs as the `_kea` user (see `systemctl cat kea-dhcp4-server`). On Ubuntu the netplan config files under `/etc/netplan/` are mode 600 root-only, so inspect NM state with `nmcli` instead of reading them directly.
 
 Use this configuration:
 
@@ -184,6 +195,28 @@ Check the configuration before restarting the service:
 
 ```bash
 sudo kea-dhcp4 -t /etc/kea/kea-dhcp4.conf
+```
+
+Known pitfall (observed on Ubuntu 26.04): that command as **root** can fail with
+`Syntax check failed with: Unable to open file /etc/kea/kea-dhcp4.conf` even when the
+file is root-readable. The enforced AppArmor profile `kea-dhcp4` denies the process the
+`dac_read_search`/`dac_override` capabilities it probes during startup
+(`audit: apparmor="DENIED" ... capability=2 capname="dac_read_search"`). This does NOT
+affect the systemd service, which runs as `_kea` and reads the file via group access.
+
+Validate in the same context the service will run under:
+
+```bash
+sudo -u _kea kea-dhcp4 -t /etc/kea/kea-dhcp4.conf   # exit 0 = valid (warnings are informational)
+```
+
+If you want the literal `sudo kea-dhcp4 -t ...` command to work as root, add these lines
+to `/etc/apparmor.d/usr.sbin.kea-dhcp4` inside the profile block and reload it with
+`sudo apparmor_parser -r /etc/apparmor.d/usr.sbin.kea-dhcp4`:
+
+```text
+  capability dac_read_search,
+  capability dac_override,
 ```
 
 If validation succeeds:
