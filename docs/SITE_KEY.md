@@ -77,7 +77,7 @@ Required SAN:
 DNS:{{SERVER_FQDN}}
 ```
 
-## 3. Transfer only the CSR to the CA workstation
+## 3. Create a Tranferrable Copy of the CSR
 
 Because `/etc/nginx/tls` is mode `700`, create a temporary user-owned transfer copy:
 
