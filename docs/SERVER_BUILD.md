@@ -85,9 +85,21 @@ Quit terminal and reopen to get the font.
 #### On Ubuntu
 
 ```
-wget -P ~/.local/share/fonts https://github.com/ryanoasis/nerd-fonts/releases/download/v3.0.2/JetBrainsMono.zip && cd ~/.local/share/fonts && unzip JetBrainsMono.zip && rm JetBrainsMono.zip && fc-cache -fv
+wget -P ~/.local/share/fonts https://github.com/ryanoasis/nerd-fonts/releases/download/v3.0.2/JetBrainsMono.zip && cd ~/.local/share/fonts && unzip JetBrainsMono.zip && rm JetBrainsMono.zip && fc-cache -f -v
 cd
 ```
+
+Then you open the terminal and select Preferences from the hamburger icon in the upper right corner. Scroll down a bit and unselect 'Use Sytem Font', then use the menu to select the 'JetBrainsMono Nerd Font Mono' type of your choice.
+
+Because Ubuntu is super janky, the font may not render properly. Try running 
+
+```
+fc-cache -f -v 
+```
+
+You might have to run it a few times to get it working.
+
+#### Install LazyVim
 
 Here we install the LazyVim package. The git configuration is removed in case you want to archive your own conifguration on git somewhere.
 
