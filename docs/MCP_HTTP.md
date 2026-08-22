@@ -2,7 +2,6 @@
 
 ## Variables Supplied by the Agent
 
-
 | Config Variable | Description |
 | --- | --- |
 | {{SERVER_FQDN}} | Fully Qualified Domain Name of the Server |
