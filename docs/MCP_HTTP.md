@@ -1,16 +1,26 @@
 # ONVIF Camera MCP HTTP Server
 
+## Variables Supplied by the Agent
+
+
+| Config Variable | Description |
+| --- | --- |
+| {{SERVER_FQDN}} | Fully Qualified Domain Name of the Server |
+| {{USERNAME}}    | Camera Username                           |
+| {{PASSWORD}}    | Camera Password                           |
+| {{REPO_PATH}}   | Full Pathname of Repository Location      |
+
 ## Overview
 
-The `onvif-mcp-http` package provides an HTTP-based MCP (Model Context Protocol) server for discovering and controlling ONVIF cameras on the local network. It exposes 28 tools through a Streamable HTTP transport (SSE + POST), accessible both locally on port 8001 and externally through nginx at `http://nuc.home.arpa/mcp/`.
+The `onvif-mcp-http` package provides an HTTP-based MCP (Model Context Protocol) server for discovering and controlling ONVIF cameras on the local network. It exposes 28 tools through a Streamable HTTP transport (SSE + POST), accessible both locally on port 8001 and externally through nginx at `http://{{SERVER_FQDN}}/mcp/`.
 
 ## Current State
 
 - **Service**: `onvif-mcp-http.service` — running, enabled for auto-start on boot
 - **Local endpoint**: `http://127.0.0.1:8001/mcp`
-- **Nginx proxy**: `http://nuc.home.arpa/mcp/` (forwarded to port 8001)
-- **Python venv**: `/home/stephen/Projects/onvif-mcp/.venv`
-- **Executable**: `/home/stephen/Projects/onvif-mcp/.venv/bin/onvif-mcp-http`
+- **Nginx proxy**: `http://{{SERVER_FQDN}}/mcp/` (forwarded to port 8001)
+- **Python venv**: `{{REPO_PATH}}/onvif-mcp/.venv`
+- **Executable**: `{{REPO_PATH}}/onvif-mcp/.venv/bin/onvif-mcp-http`
 - **Source**: `packages/http/src/onvif_mcp_http/main.py`
 
 ## Nginx Proxy Configuration
@@ -20,7 +30,7 @@ The `onvif-mcp-http` package provides an HTTP-based MCP (Model Context Protocol)
 ```nginx
 server {
     listen 80;
-    server_name nuc.home.arpa;
+    server_name {{SERVER_FQDN}};
 
     # MCP endpoint - exact match to avoid redirect issues with POST
     location = /mcp {
@@ -63,13 +73,13 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=stephen
-WorkingDirectory=/home/stephen/Projects/onvif-mcp
+WorkingDirectory={{REPO_PATH}}/onvif-mcp
 Environment=MCP_HTTP_HOST=127.0.0.1
 Environment=MCP_HTTP_PORT=8001
 Environment=CAMERA_USERNAME=admin
 Environment=CAMERA_PASSWORD=admin123
-Environment=STREAM_SERVER_URL=https://nuc.home.arpa
-ExecStart=/home/stephen/Projects/onvif-mcp/.venv/bin/onvif-mcp-http
+Environment=STREAM_SERVER_URL=https://{{SERVER_FQDN}}
+ExecStart={{REPO_PATH}}/onvif-mcp/.venv/bin/onvif-mcp-http
 Restart=on-failure
 RestartSec=5
 
@@ -85,42 +95,6 @@ systemctl restart onvif-mcp-http          # Restart after code changes
 sudo systemctl disable onvif-mcp-http     # Disable auto-start
 ```
 
-## Bug Fix: Broken Pipe on `get_cameras`
-
-### Problem
-
-Calling `get_cameras()` or `get_cameras_by_adapter()` through the MCP HTTP server returned:
-```json
-{"error": {"message": "Broken pipe"}, ...}
-```
-
-### Root Cause
-
-`libonvif.discover()` contains a hardcoded `print("Discovering cameras on {ip_address}...")` that writes to stdout. When called during an active SSE (Server-Sent Events) stream, this stdout output interferes with the MCP transport layer, causing a "Broken pipe" error. The direct CLI call works fine because it runs in a standalone process; only the HTTP server is affected.
-
-### Fix
-
-Modified `/home/stephen/Projects/onvif-mcp/packages/core/src/onvif_mcp_core/camera_queries.py` to redirect stdout to `/dev/null` during `libonvif.discover()` calls. This was applied in both `get_cameras()` and `get_cameras_by_adapter()`:
-
-```python
-for adapter_ip in adapter_ips:
-    logger.debug("Discovering cameras on adapter %s", adapter_ip)
-    with open(os.devnull, "w") as devnull:
-        import sys
-        old_stdout = sys.stdout
-        try:
-            sys.stdout = devnull
-            cameras = discover(
-                adapter_ip,
-                _get_camera_credentials,
-                on_error=_on_error,
-                camera_filled=_camera_filled,
-                use_threads=True,
-            )
-        finally:
-            sys.stdout = old_stdout
-```
-
 ## MCP Protocol Usage (curl examples)
 
 The MCP Streamable HTTP transport uses a session-based handshake. All requests must carry the session ID from the initialize response.
@@ -133,7 +107,7 @@ INIT=$(curl -sD- \
   -H "Content-Type: application/json" \
   -H "Accept: text/event-stream, application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"curl-test","version":"1.0"}}}' \
-  http://nuc.home.arpa/mcp)
+  http://{{SERVER_FQDN}}/mcp)
 
 SESSION_ID=$(echo "$INIT" | grep -i "^mcp-session-id:" | awk '{print $2}' | tr -d '\r')
 ```
@@ -147,7 +121,7 @@ curl -s \
   -H "Accept: text/event-stream, application/json" \
   -H "mcp-session-id: $SESSION_ID" \
   -d '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
-  http://nuc.home.arpa/mcp
+  http://{{SERVER_FQDN}}/mcp
 ```
 
 ### Step 3: List Available Tools
@@ -159,7 +133,7 @@ curl -s \
   -H "Accept: text/event-stream, application/json" \
   -H "mcp-session-id: $SESSION_ID" \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
-  http://nuc.home.arpa/mcp
+  http://{{SERVER_FQDN}}/mcp
 ```
 
 ### Step 4: Call a Tool (get_cameras)
@@ -171,7 +145,7 @@ curl -s \
   -H "Accept: text/event-stream, application/json" \
   -H "mcp-session-id: $SESSION_ID" \
   -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get_cameras","arguments":{}}}' \
-  http://nuc.home.arpa/mcp
+  http://{{SERVER_FQDN}}/mcp
 ```
 
 ### Step 5: Call a Tool (get_adapters)
@@ -183,41 +157,23 @@ curl -s \
   -H "Accept: text/event-stream, application/json" \
   -H "mcp-session-id: $SESSION_ID" \
   -d '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"get_adapters","arguments":{}}}' \
-  http://nuc.home.arpa/mcp
+  http://{{SERVER_FQDN}}/mcp
 ```
-
-## Discovered Cameras
-
-| IP Address | Hostname |
-|------------|----------|
-| 10.1.1.70 | Hikvision |
-| 10.1.1.72 | Kitchen |
-| 10.1.1.68 | Driveway |
-| 10.1.1.71 | Monopoly |
-| 10.1.1.67 | Office |
-
-## Available MCP Tools (28 total)
-
-Video configuration: `set_camera_video_resolution`, `set_camera_video_frame_rate`, `set_camera_video_bitrate`, `set_camera_video_gov_length`
-Audio configuration: `set_camera_audio_encoding`, `set_camera_audio_sample_rate`
-PTZ controls: `goto_camera_preset`, `set_camera_preset`, `remove_camera_preset`, `create_camera_preset_tour`, `set_camera_preset_tour`, `remove_camera_preset_tour`, `start_camera_preset_tour`, `stop_camera_preset_tour`, `pan_tilt_camera`, `zoom_camera`, `stop_camera_pan_tilt`, `stop_camera_zoom`
-Device management: `change_camera_hostname`, `sync_camera_time`, `reboot_camera`
-Queries: `get_cameras`, `get_cameras_by_adapter`, `get_camera`, `get_web_player_url`, `get_adapters`, `get_camera_mcp_version`, `example_elicit_tool`
 
 ## Architecture Diagram
 
 ```
-                    ┌─────────────────────┐
+                  ┌─────────────────────┐
 External clients  │                     │   natively uses MCP protocol.
     ─────────────►│  Nginx (:80)        │
-                  │  nuc.home.arpa/mcp/ │
+                  │{{SERVER_FQDN}}/mcp/ │
                   └──────────┬──────────┘
                              │ reverse proxy
                              ▼
 ┌─────────────────────────────────────────────────┐
 │              systemd: onvif-mcp-http.service     │
 │                                                  │
-│  /home/stephen/Projects/onvif-mcp/.venv/bin/     │
+│  {{REPO_PATH}}/onvif-mcp/.venv/bin/              │
 │  python3 -m onvif_mcp_http.main                  │
 │                                                  │
 │  Listens on http://127.0.0.1:8001/mcp            │
@@ -225,13 +181,13 @@ External clients  │                     │   natively uses MCP protocol.
 │  transport (SSE + POST).                         │
 │                                                  │
 │  Environment:                                    │
-│    CAMERA_USERNAME=admin                         │
-│    CAMERA_PASSWORD=admin123                      │
-│    STREAM_SERVER_URL=https://nuc.home.arpa       │
+│    CAMERA_USERNAME={{USERNAME}}                  │
+│    CAMERA_PASSWORD={{PASSWORD}}                  │
+│    STREAM_SERVER_URL=https://{{SERVER_FQDN}}     │
 │    MCP_HTTP_HOST=127.0.0.1                       │
 │    MCP_HTTP_PORT=8001                            │
 └──────────────┬───────────────────────────────────┘
-               │ libonvif.discover() (stdout suppressed)
+               │ libonvif.discover()
                ▼
           ┌─────────────┐
           │ ONVIF       │
@@ -240,22 +196,3 @@ External clients  │                     │   natively uses MCP protocol.
           └─────────────┘
 ```
 
-## Troubleshooting
-
-### Service fails to start
-
-Check logs: `journalctl -u onvif-mcp-http -n 50 --no-pager`
-Verify port is free: `ss -tlnp | grep 8001`
-Check environment variables are set in the service file.
-
-### MCP calls return "Broken pipe"
-
-This was caused by `libonvif.discover()` printing to stdout which conflicted with SSE streams. The fix redirects stdout to `/dev/null` during discovery. If this bug recurs in a future libonvif version, look for similar `print()` statements in the `discover()` function and suppress them via stdout redirection.
-
-### Nginx returns 421 Misdirected Request
-
-The MCP server validates the Host header for DNS rebinding protection. Ensure nginx proxies with `proxy_set_header Host $host;` so the backend receives the correct hostname. Direct curl to `http://127.0.0.1:80/mcp` will fail — always access via the hostname (`nuc.home.arpa`) or add the server IP to the allowed hosts list in `main.py`.
-
-### Camera discovery returns empty results
-
-Check that cameras are on the same subnet as the server's network adapters. Use `get_adapters` first, then verify camera IPs are reachable from those subnets. The `get_cameras_by_adapter("10.1.1.6")` tool can test a specific adapter.
