@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Server-side companion to Step 4 of `ADD_CLIENT.md`. It adds one new Hermes
+Server-side configuration for keycloak client access. It adds one new Hermes
 client's source address to the anonymous Dynamic Client Registration (DCR)
 Trusted Hosts policy in Keycloak, so that machine can register its own public
 OAuth client.
@@ -20,7 +20,7 @@ Runbook values used by this document:
 | `{{KEYCLOAK_ADMIN_USER}}` | Permanent administrator user in the `master` realm | `keycloak-admin` |
 | `{{KEYCLOAK_PORT}}` | Loopback TCP port of the Keycloak listener | `8080` |
 | `{{KEYCLOAK_PATH}}` | Keycloak relative path on loopback (`KC_HTTP_RELATIVE_PATH`) | `/auth` |
-| `{{CLIENT_SOURCE_IP}}` | Address Nginx recorded for the client's DCR request (from Step 3 of `ADD_CLIENT.md`) | e.g. `192.168.68.51` |
+| `{{CLIENT_SOURCE_IP}}` | Address supplied by agent representing the client IP | e.g. `192.168.68.51` |
 
 The admin password lives in a root-owned, mode `0600` file
 (`/opt/keycloak/admin.pass` in this deployment). Create the token body and
@@ -56,9 +56,8 @@ Expected result: `HTTP 200`. If Keycloak is not up, start it before
 continuing; do not attempt DCR policy changes against a dead or restarting
 server.
 
-`{{CLIENT_SOURCE_IP}}` must be the address from Step 3 of `ADD_CLIENT.md`,
-i.e. the source address recorded by Nginx for the client's DCR request —
-not an address guessed from the client machine:
+`{{CLIENT_SOURCE_IP}}` is supplied by the agent. If there is ambiguity around 
+this value, please refer to section 3 of the ADD_CLIENT.md document for details.
 
 ```bash
 sudo grep 'clients-registrations/openid-connect' \

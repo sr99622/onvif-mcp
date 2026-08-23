@@ -47,3 +47,43 @@ Essay on Trust
 Yes, that is something we need to work on. I was going to ask you for the tour, it is how i test functionality. this is not a real world installation, you are in a laboratory environment. It would have caused problems for us if that happened in a critical installation. Something I need to write down in detail is your relationship with the user. We have been very focused on making the system swift and reliable, and we have made great strides towards that goal. We are very near production ready, however we need to balance those priorities against a higher priority, which is user confidence in your ability to operate the system. Users may be reluctant to trust you with camera streams as they represent what could be highly confidential data. It is critical that users have absolute trust in your abilities if you are to be allowed to handle such data. One thing that will scare them off immediately is you taking unauthorized action. Most users do not understand how you work, so they may ascribe qualities to your action that represent worst case scenarios which could lead to a complete breakdown of trust. There's an old saying that trust takes a lifetime to build, butcan be destroyed in an instant. I hope i have communicated clearly, and please understand that I want you to succeed, and I think the more feedback you recieve, the better. I know you recognize the situation and are prepared to move forward, I just want to write this down for our reference, and use it in the future when training new agents. thank you for listening
 ```
 
+## 4. Trust the CA in macOS
+
+Check whether it is already installed:
+
+```bash
+security find-certificate \
+  -c "Camera System Root CA" \
+  /Library/Keychains/System.keychain
+```
+
+Install the public CA as a trusted root:
+
+```bash
+sudo security add-trusted-cert \
+  -d \
+  -r trustRoot \
+  -k /Library/Keychains/System.keychain \
+  "$HOME/Private-CA/camera-system-ca/certs/camera-system-root-ca.crt.pem"
+```
+
+Verify identity and fingerprint:
+
+```bash
+security find-certificate \
+  -c "Camera System Root CA" \
+  -p /Library/Keychains/System.keychain |
+openssl x509 -noout -subject -issuer -fingerprint -sha256
+```
+
+Test using normal DNS and macOS trust:
+
+```bash
+/usr/bin/curl --head https://{{SERVER_FQDN}}/cameras/
+```
+
+Expected:
+
+```text
+HTTP/1.1 200 OK
+```

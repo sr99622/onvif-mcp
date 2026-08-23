@@ -1,3 +1,21 @@
+## 0. Set deployment values
+
+Set these for the target installation. Re-export them after opening a new SSH
+session.
+
+```bash
+export PUBLIC_HOST="gmktec.home.arpa"
+export MCP_REALM="mcp"
+export MCP_SCOPE="mcp:tools"
+export MCP_LOGIN_USER="mcp-user"
+export KEYCLOAK_ADMIN_USER="keycloak-admin"
+export MCP_RESOURCE_URL="https://${PUBLIC_HOST}/mcp"
+export KEYCLOAK_PUBLIC_URL="https://${PUBLIC_HOST}/auth"
+export MCP_ISSUER="${KEYCLOAK_PUBLIC_URL}/realms/${MCP_REALM}"
+
+```
+
+The keycloak admin password lives in a root-owned, mode 0600 file (/opt/keycloak/admin.pass in this deployment). Create the token body and token stash with a restrictive umask so the credential never appears on a command line, in an environment variable, or in an untrusted location. Do not attempt to use the bootstrap admin credentials, they have been deleted at this point.
 
 ## 1. Create the MCP realm and login user
 
@@ -487,6 +505,12 @@ test ! -e /tmp/keycloak-dcr-test.json && echo "DCR test artifacts removed"
 
 If Keycloak returns an internal UUID different from `clientId`, use the exact
 returned internal `id` in the delete path.
+
+<b>
+IMPORTANT: Stop here. Prompt the user to acknowledge that they will be expected 
+to provide the username and password for the next step. Only proceed after the 
+user has acknowledged.
+</b>
 
 ## 8. Configure and verify Hermes Agent
 
