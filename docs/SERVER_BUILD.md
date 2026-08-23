@@ -42,14 +42,6 @@ sudo apt update && sudo apt install gh -y
 gh auth login
 ```
 
-<h2>Install ghostty</h2>
-
-LazyVIM works best with ghostty terminal
-
-```
-sudo apt install ghostty
-```
-
 <h2>Install LazyVim Editing Tool</h2>
 
 You can run the rest of the configuration from remote. We want to install an editor that will work from the remote terminal. We will be installing LazyVim. The first step is to install the latest version of neovim.
@@ -112,11 +104,13 @@ cd
 
 Register the font in the cache 
 
+### You will probably need to run this twice, for some reason it usually fails on the first run, check the output 
+
 ```
 fc-cache -f -v 
 ```
 
-Open the terminal and select Preferences from the hamburger icon in the upper right corner. Scroll down a bit and unselect 'Use Sytem Font', then use the menu to select the 'JetBrainsMono Nerd Font Mono' type of your choice.
+Close and re-open the terminal then select Preferences from the hamburger icon in the upper right corner. Scroll down a bit and unselect 'Use Sytem Font', then use the menu to select the 'JetBrainsMono Nerd Font Mono' type of your choice.
 
 #### Install LazyVim
 
@@ -221,8 +215,6 @@ onvif-tui -u admin -p admin123
 <h2>Download onvif-mcp repository</h2>
 
 ```
-mkdir Projects
-cd Projects
 git clone https://github.com/sr99622/onvif-mcp
 ```
 
@@ -234,12 +226,52 @@ curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
 
 Use the minimal configuration and add the LLM model of your choice. You may see the following error, which is benign `error: The lockfile at uv.lock needs to be updated, but --locked was provided`, it can be safely ignored.
 
+The installation will hang at 
+
+```
+BEWARE: your OS is not officially supported by Playwright; downloading fallback build for ubuntu24.04-x64.
+Downloading Chrome for Testing 145.0.7632.6 (playwright chromium v1208) from https://cdn.playwright.dev/builds/cft/145.0.7632.6/linux64/chrome-linux64.zip
+167.3 MiB [====================] 100% 0.0s
+```
+
+use ctrl-C to end that.
+
+Sign up for the model of your choice.
+
+Edit the .hermes/config.yaml to set up the camera MCP stdio, replacing the values in {{ }} double curly braces to fit your own configuration. 
+
+The STREAK_SERVER_URL should be something like <hostname>.home.arpa, where .arpa is the reserved DNS domain name for internal servers. If you have a DNS sever on the local network, you can add this hostname and static IP to the DNS address mappings. If not, just add the name to your /etc/hosts file for now. At a later stage in the configuration, the DNS server issue will become more prominent, and you can add the DNS serving capability to the machine for use by other machines on the local network for local name resolution. Depending on your network topology, it may be preferable to use hosts files on client computers rather than local DNS resolution. This topic will be explored in detail later.
+
+```
+mcp_servers:
+  camera:
+    command: uv
+    args:
+    - --directory
+    - {{HOME}}/onvif-mcp/packages/stdio/src
+    - run
+    - camera.py
+    enabled: true
+    env:
+      CAMERA_USERNAME: {{USERNAME}}
+      CAMERA_PASSWORD: {{PASSWORD}}
+      STREAM_SERVER_URL: {{SERVER_FQDN}}
+```
+
+You can test the camera MCP using the prompt
+
+```
+use the camera MCP server to get its version
+```
+
+It should reply with both the MCP version and the libonvif version.
+
 <h2>Give Hermes sudo privilege</h2>
 
 from inside the onvif-mcp repository,
 
 ```
-sudo env USER="$USER" ./docs/scripts/enable-nopasswd.sh
+sudo env USER="$USER" onvif-mcp/docs/scripts/enable-nopasswd.sh
 ```
 
 <h2>Set a static IP</h2>
@@ -252,8 +284,8 @@ please show the ethernet port configuration on this machine, including Gateway a
 
 You will get back a listing of the ports. Pick out the one that is currently connected to your LAN and note the interface name, it will be something like `enp86s0` but will vary. Tell Hermes to configure that specific port to have a static IP address that you have chosen based on your network topology, and to use the current Gateway and DNS settings. This will work best if you explicitly state the Gateway and DNS values.
 
-<h2>Assign a host name to the computer</h2>
+```
+set a static IP address on <adapter name> to be <static IP>, Gateway <existing gateway>, DNS <existing DNS>
+```
 
-The name should have the format `<your_server_name>.home.arpa` which uses the reserved `arpa` domain for resolution on the local network only.
-
-If you have a DNS sever on the local network, you can add this hostname and static IP to the DNS address mappings. If not, just add the name to your /etc/hosts file for now. At a later stage in the configuration, the DNS server issue will become more prominent, and you can add the DNS serving capability to the machine for use by other machines on the local network for local name resolution. Depending on your network topology, it may be preferable to use hosts files on client computers rather than local DNS resolution. This topic will be explored in detail later.
+Reboot the machine to verify that settings are correct and survive reboot.

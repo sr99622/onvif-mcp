@@ -10,6 +10,10 @@ Symbolic names provided by agent
 
 {password}
 
+## nginx requirement
+
+install nginx first, it will be needed later. Once nginx is set up, continue.
+
 ## Binary Executable
 
 location: https://github.com/bluenviron/mediamtx/releases

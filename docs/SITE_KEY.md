@@ -4,6 +4,8 @@
 
 {{SERVER_USER}} - $USER account name for agent
 
+{{CSR_PATH}} - Path Location to store the CSR
+
 
 ## 1. Generate the Nginx site key on {{SERVER_FQDN}}
 
@@ -87,5 +89,5 @@ sudo install \
   -g {{SERVER_USER}} \
   -m 600 \
   /etc/nginx/tls/{{SERVER_FQDN}}.csr.pem \
-  /home/{{SERVER_USER}}/{{SERVER_FQDN}}.csr.pem
+  {{CSR_PATH}}/{{SERVER_FQDN}}.csr.pem
 ```

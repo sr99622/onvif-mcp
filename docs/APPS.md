@@ -2,16 +2,22 @@
 
 This document describes how to install the two local camera-viewing
 applications in `apps/` so they are served by nginx on this host
-(`gmktec.home.arpa`) and pull live streams from the MediaMTX server
-(see `docs/MEDIAMTX.md`). It reflects a working deployment, not just the
-original design.
+and pull live streams from the MediaMTX server
+(see `docs/MEDIAMTX.md`).
+
+## Values provided by the Agent
+
+| Value Name | Description|
+|------------|------------|
+| {{SERVER_FQDN}} | Server Fully Qualified Domain Name e.g. camera.home.arpa |
+| {{REPO_PATH}} | Path Location of git repo, most likely $HOME |
 
 ## Applications
 
 | App | URL | Purpose |
 |-----|-----|---------|
-| Camera Switchboard | `http://gmktec.home.arpa/cameras/` | One large live stream with fast camera switching (uses each camera's **main** stream) |
-| Four-Camera View | `http://gmktec.home.arpa/multiview/` | Four simultaneous streams in a responsive 2x2 layout (uses each camera's **substream**) |
+| Camera Switchboard | `http://{{SERVER_FQDN}}/cameras/` | One large live stream with fast camera switching (uses each camera's **main** stream) |
+| Four-Camera View | `http://{{SERVER_FQDN}}/multiview/` | Four simultaneous streams in a responsive 2x2 layout (uses each camera's **substream**) |
 
 Both apps are static HTML/CSS/JS. They need no build step and run as the
 system nginx user, not under a per-user `python -m http.server` process.
@@ -32,7 +38,7 @@ system nginx user, not under a per-user `python -m http.server` process.
    sudo apt-get install nginx
    ```
 
-3. The apps live at `/home/stephen/Projects/onvif-mcp/apps/` with this layout:
+3. The apps live at `{{REPO_PATH}}/onvif-mcp/apps/` with this layout:
    ```
    apps/
      cameras/index.html  app.js  styles.css     # Camera Switchboard
@@ -48,7 +54,7 @@ the **MediaMTX WebRTC player URL** — not directly at a camera RTSP URI and
 not at HTTPS (this host has no TLS):
 
 ```
-http://gmktec.home.arpa/webrtc/<SERIAL_NUMBER>/<PROFILE_TOKEN>/
+http://{{SERVER_FQDN}}/webrtc/<SERIAL_NUMBER>/<PROFILE_TOKEN>/
 ```
 
 - `<SERIAL_NUMBER>` = the camera `serial_number` from `get_cameras`
@@ -68,8 +74,8 @@ Example entry:
   "ip_address": "10.1.1.70",
   "manufacturer": "HIKVISION",
   "model": "DS-2CD2142FWD-IS",
-  "media_player_url": "http://gmktec.home.arpa/webrtc/DS-2CD2142FWD-IS20171118BBWR129028868/Profile_1/",
-  "substream_player_url": "http://gmktec.home.arpa/webrtc/DS-2CD2142FWD-IS20171118BBWR129028868/Profile_2/"
+  "media_player_url": "http://{{SERVER_FQDN}}/webrtc/DS-2CD2142FWD-IS20171118BBWR129028868/Profile_1/",
+  "substream_player_url": "http://{{SERVER_FQDN}}/webrtc/DS-2CD2142FWD-IS20171118BBWR129028868/Profile_2/"
 }
 ```
 
@@ -89,7 +95,7 @@ sudo sed -i 's/^user www-data;/user webcam;/' /etc/nginx/nginx.conf
 ```
 
 The group membership is what grants `x` (traverse) + `r` on
-`/home/stephen/Projects/...`. No setuid bits or extra file permissions are
+`{{REPO_PATH}}/...`. No setuid bits or extra file permissions are
 needed.
 
 ## Step 3: Configure the nginx vhost
@@ -101,7 +107,7 @@ MEDIAMTX.md install — extend it; do not create a second vhost):
 ```nginx
 server {
     listen 80;
-    server_name gmktec.home.arpa;
+    server_name {{SERVER_FQDN}};
 
     # --- MediaMTX WebRTC proxy (from docs/MEDIAMTX.md, unchanged) ---
     location /webrtc/ {
@@ -125,20 +131,20 @@ server {
     location = /multiview { return 301 /multiview/; }
 
     location /cameras/ {
-        alias /home/stephen/Projects/onvif-mcp/apps/cameras/;
+        alias {{REPO_PATH}}/onvif-mcp/apps/cameras/;
     }
 
     location /multiview/ {
-        alias /home/stephen/Projects/onvif-mcp/apps/multiview/;
+        alias {{REPO_PATH}}/onvif-mcp/apps/multiview/;
     }
 
     # Shared camera registry — both apps fetch it at this root-relative path
     location /outputs/ {
-        alias /home/stephen/Projects/onvif-mcp/apps/outputs/;
+        alias {{REPO_PATH}}/onvif-mcp/apps/outputs/;
     }
 
     location = / {
-        return 200 "MediaMTX server at gmktec.home.arpa | apps: /cameras/ (switchboard), /multiview/ (four-camera view)\n";
+        return 200 "MediaMTX server at {{SERVER_FQDN}} | apps: /cameras/ (switchboard), /multiview/ (four-camera view)\n";
         add_header Content-Type text/plain;
     }
 }
@@ -192,7 +198,7 @@ curl -s -o /dev/null -w '%{http_code}\n' \
   http://127.0.0.1/webrtc/4B0013BPAABE264/MediaProfile000/
 ```
 
-Then open `http://gmktec.home.arpa/cameras/` in a browser. If a tile stays
+Then open `http://{{SERVER_FQDN}}/cameras/` in a browser. If a tile stays
 black, check `sudo journalctl -u mediamtx` for that path — common causes are
 a missing path in `mediamtx.yml`, camera auth failure (`bad status code: 401`),
 or a registry URL with the wrong serial/token or a missing trailing slash.
