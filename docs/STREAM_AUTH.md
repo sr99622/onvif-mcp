@@ -49,9 +49,9 @@ Replace every symbolic value with the target environment's actual value.
 |---|---|
 | `{{SERVER_FQDN}}` | Public DNS name shared by Nginx, Keycloak, and MCP |
 | `{{SERVER_IP}}` | Address on which Nginx accepts public HTTPS |
-| `{{LOOPBACK_IP}}` | Host loopback address used for private listeners |
+| `{{LOOPBACK_IP}}` | Host loopback address used for private listeners `127.0.0.1` |
 | `{{MCP_REALM}}` | Keycloak realm, normally `mcp` |
-| `{{MCP_LOGIN_USER}}` | Browser login user |
+| `{{MCP_LOGIN_USER}}` | Browser login user `mcp-user`|
 | `{{BROWSER_CLIENT_ID}}` | Confidential browser client, normally `camera-web` |
 | `{{CONTAINER_BIND_IP}}` | In-container wildcard address used by oauth2-proxy |
 | `{{KEYCLOAK_PORT}}` | Loopback Keycloak HTTP port, normally `8080` |
@@ -62,7 +62,7 @@ Replace every symbolic value with the target environment's actual value.
 | `{{COMPOSE_DIR}}` | Keycloak Compose project directory |
 | `{{ACTIVE_SITE_LINK}}` | Enabled Nginx site symlink name |
 | `{{NGINX_SITE}}` | Active Nginx site file outside `sites-enabled` |
-| `{{PRIVATE_CA_FILE}}` | Public private-CA root certificate on the server (the root that Nginx's served chain verifies against) |
+| `{{PRIVATE_CA_FILE}}` | Public private-CA root certificate on the server `/etc/nginx/tls/camera-system-root-ca.crt.pem` |
 | `{{HERMES_SERVER_NAME}}` | Existing Hermes MCP entry used for regression testing (resolve via `hermes mcp list`: the entry whose transport is `https://{{SERVER_FQDN}}/mcp`) |
 
 Derived URLs:
@@ -237,6 +237,37 @@ requiredActions = []
 If the address was verified outside Keycloak but the flag is false, update
 only `emailVerified=true` and retrieve the user directly afterward. Do not
 change the password, email, enabled state, or required actions.
+
+To update `emailVerified`, use PUT, not PATCH. Partial updates via
+`PATCH /auth/admin/realms/{realm}/users/{uuid}` are rejected with HTTP 405 on
+Keycloak 26 even though OPTIONS on the same endpoint returns 200. PUT is the
+accepted mutation verb and carries replace semantics, so it must be performed
+against the current live representation — never a hand-built or stale body.
+
+Within one root-controlled process, using the admin token from the pattern
+above (`{uuid}` = internal UUID resolved by the Phase 2 list query, not the
+username):
+
+```bash
+umask 077
+curl -sS -H "Authorization: Bearer ***" \
+  "http://127.0.0.1:{{KEYCLOAK_PORT}}/auth/admin/realms/{{MCP_REALM}}/users/{uuid}" > /tmp/.kcuser.$$
+# Change exactly one field in the retrieved JSON object: emailVerified -> true.
+# Touch no other field and discard the result of any other source.
+python3 -c "import json; u = json.load(open(\"/tmp/.kcuser.$$\")); u[\"emailVerified\"] = True; json.dump(u, open(\"/tmp/.kcpayload.tmp\", \"w\"))"
+curl -sS -o /dev/null -w 'HTTP %{http_code}\n' -X PUT \
+  -H "Authorization: Bearer ***" -H "Content-Type: application/json" \
+  --data @/tmp/.kcuser.$$ \
+  "http://127.0.0.1:{{KEYCLOAK_PORT}}/auth/admin/realms/{{MCP_REALM}}/users/{uuid}"
+```
+
+Require HTTP 204, then re-retrieve directly by UUID and re-verify every Phase 2
+invariant: exact username, enabled=true, nonempty email, emailVerified=true,
+requiredActions=[]. Delete `/tmp/.kcuser.$$` and `/tmp/.kcpayload.tmp`
+afterward. A successful PUT alone does not prove unchanged fields survived;
+the re-retrieval is what closes this step. Do not set `emailVerified` to
+false under any circumstances: with it false, every browser login fails at
+`/oauth2/callback` (HTTP 500 from oauth2-proxy) before any session exists.
 
 ## 3. Create the confidential browser client
 
