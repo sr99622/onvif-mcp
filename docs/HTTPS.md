@@ -2,12 +2,13 @@
 
 ## 0. Variables supplied by the agent
 
-| Variable             | Description                         
-| -------------------- | ------------------------------------
-| {{SERVER_FQDN}}      | Server fully qualified domain name  
-| {{SERVER_IP}}        | Server IP address                   
-| {{SERVER_USER}}      | Server user account                 
-| {{REPO_PATH}}        | Project repository location         
+| Variable             | Description                         |
+| -------------------- | ------------------------------------|
+| {{SERVER_FQDN}}      | Server fully qualified domain name  |
+| {{SERVER_IP}}        | Server IP address                   |
+| {{SERVER_USER}}      | Server user account                 |
+| {{REPO_PATH}}        | Project repository location         |
+| {{CERT_PATH}}        | Certificates Path Location          |
 
 ## 1. Verify Certificate
 
@@ -15,10 +16,10 @@ Verify on `{{SERVER_FQDN}}`:
 
 ```bash
 openssl verify \
-  -CAfile /home/{{SERVER_USER}}/camera-system-root-ca.crt.pem \
+  -CAfile {{CERT_PATH}}/camera-system-root-ca.crt.pem \
   -purpose sslserver \
   -verify_hostname {{SERVER_FQDN}} \
-  /home/{{SERVER_USER}}/{{SERVER_FQDN}}.crt.pem
+  {{CERT_PATH}}/{{SERVER_FQDN}}.crt.pem
 ```
 
 Confirm the certificate matches the server key:
@@ -27,7 +28,7 @@ Confirm the certificate matches the server key:
 sudo sh -c '
 openssl pkey -in /etc/nginx/tls/{{SERVER_FQDN}}.key.pem -pubout |
   openssl sha256
-openssl x509 -in /home/{{SERVER_USER}}/{{SERVER_FQDN}}.crt.pem -pubkey -noout |
+openssl x509 -in {{CERT_PATH}}/{{SERVER_FQDN}}.crt.pem -pubkey -noout |
   openssl sha256
 '
 ```
@@ -38,11 +39,11 @@ Install the certificates:
 
 ```bash
 sudo install -o root -g root -m 644 \
-  /home/{{SERVER_USER}}/{{SERVER_FQDN}}.crt.pem \
+  {{CERT_PATH}}/{{SERVER_FQDN}}.crt.pem \
   /etc/nginx/tls/{{SERVER_FQDN}}.crt.pem
 
 sudo install -o root -g root -m 644 \
-  /home/{{SERVER_USER}}/camera-system-root-ca.crt.pem \
+  {{CERT_PATH}}/camera-system-root-ca.crt.pem \
   /etc/nginx/tls/camera-system-root-ca.crt.pem
 ```
 
@@ -256,12 +257,12 @@ After a Firefox hard refresh with Command-Shift-R, all camera streams appeared.
 
 ## 7. Temporary files to clean up after final verification
 
-The tested workflow created public transfer copies in `/home/{{SERVER_USER}}` on `{{SERVER_FQDN}}`:
+The tested workflow created public transfer copies in `{{CERT_PATH}}` on `{{SERVER_FQDN}}`:
 
 ```text
-/home/{{SERVER_USER}}/{{SERVER_FQDN}}.csr.pem
-/home/{{SERVER_USER}}/{{SERVER_FQDN}}.crt.pem
-/home/{{SERVER_USER}}/camera-system-root-ca.crt.pem
+{{CERT_PATH}}/{{SERVER_FQDN}}.csr.pem
+{{CERT_PATH}}/{{SERVER_FQDN}}.crt.pem
+{{CERT_PATH}}/camera-system-root-ca.crt.pem
 ```
 
 These contain no private CA key, but should be removed after confirming their installed copies and backups. Use a recoverable deletion method where available.
