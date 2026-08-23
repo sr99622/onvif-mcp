@@ -27,6 +27,19 @@ The admin password lives in a root-owned, mode `0600` file
 token stash with a restrictive umask so the credential never appears on a
 command line, in an environment variable, or in an untrusted location.
 
+Token lifetime rule (hard): Keycloak access tokens here carry a 60-second
+lifespan (`exp - iat = 60`, the container default when no token lifespan is
+configured), and there is no keepalive or renewal. Any Admin REST call that
+presents an expired token returns `401` with a JSON error body; a step that
+captures such a body into a file can mistake it for a normal response.
+Therefore every mutating step in this runbook is self-contained: it mints its
+own token at the top of its own bounded command, performs all of its Admin
+REST calls inside that same command, verifies its own result inside it, and
+cleans up before the command exits. No step may depend on a token or a file
+minted by a previous step. If any verification fails or an unexpected response
+is seen, re-run the entire step with a fresh mint; do not retry individual
+calls with an old credential.
+
 ## Security rules
 
 - Never print the admin password, the access token, or DCR registration
@@ -38,7 +51,7 @@ command line, in an environment variable, or in an untrusted location.
   do not disable Trusted Hosts to simplify onboarding.
 - Change only the anonymous `trusted-hosts` component of the MCP realm.
   Never copy a component UUID from another installation, another realm, or a
-  previous deployment — always resolve it live as in Step 3 below.
+  previous deployment — always resolve it live as in Steps 2 and 3 below.
 
 ## 1. Confirm the server identity and the client source address
 
@@ -67,45 +80,42 @@ sudo grep 'clients-registrations/openid-connect' \
 If no entry exists yet, the client has not attempted registration; the
 policy change is harmless but cannot be confirmed against traffic.
 
-## 2. Obtain an Admin REST token
+## 2. Resolve the live anonymous Trusted Hosts component (preflight)
 
-Keycloak 26 disables password grants for most built-in clients, and `kcadm`
-inside the deployment directory can prompt without a console. The reliable
-pattern is `admin-cli` with the permanent administrator from one process,
-using a mode `0600` temporary body file.
-
-Note: in this deployment `/opt/keycloak` is root-owned (mode `750`) and not
-writable by the operating user; create temp files under `/tmp`, not there.
+Mint a token and resolve the component in one bounded command. This step is a
+confirmation only; Step 3 resolves the component live again immediately before
+the write, so no state is carried between steps:
 
 ```bash
-pass="$(sudo cat /opt/keycloak/admin.pass)" || exit 1
 umask 077
+pass="$(sudo cat /opt/keycloak/admin.pass)" || exit 1
 body=$(mktemp /tmp/.kctmp.XXXXXX)
 printf 'grant_type=password&client_id=admin-cli&username={{KEYCLOAK_ADMIN_USER}}&password=%s' "$pass" > "$body"
 tok=$(curl -sS -X POST --data @"$body" \
   http://127.0.0.1:{{KEYCLOAK_PORT}}{{KEYCLOAK_PATH}}/realms/master/protocol/openid-connect/token \
   | python3 -c 'import sys,json; print(json.load(sys.stdin)["access_token"])') || { rm -f "$body"; unset pass; exit 1; }
 rm -f "$body"; unset pass
+[ -n "$tok" ] || exit 1
 
 tfile=$(mktemp /tmp/.kctok.XXXXXX); chmod 600 "$tfile"
 printf '%s' "$tok" > "$tfile"; unset tok
-echo "TOKEN_FILE=$tfile" > /tmp/.kcstep4.env   # keep out of shell history
-```
 
-If the token call fails, inspect the response body (it is an error JSON when
-authentication fails), fix the credential or username, and delete both temp
-files before retrying. The `master` realm administrator with the realm-level
-`admin` role can manage components in any realm.
+curl -sS -H "Authorization: Bearer $(cat "$tfile")" \
+  'http://127.0.0.1:{{KEYCLOAK_PORT}}{{KEYCLOAK_PATH}}/admin/realms/{{MCP_REALM}}/components?subType=anonymous' > /tmp/kc-components.json
 
-## 3. Resolve the live anonymous Trusted Hosts component
+python3 - <<'EOF'
+import json, sys
+data = json.load(open('/tmp/kc-components.json'))
+matches = [c for c in data if c.get('providerId') == 'trusted-hosts' and c.get('subType') == 'anonymous']
+print("exact matches:", len(matches))
+for m in matches:
+    print("id:", m['id'], "| name:", m.get('name'))
+assert len(matches) == 1, "stop: zero or multiple components; the realm was modified by hand or the wrong realm is in use"
+EOF
+rc=$?
 
-Query the MCP realm's DCR policy components filtered by sub-type:
-
-```bash
-source /tmp/.kcstep4.env
-curl -sS -H "Authorization: Bearer $(cat "$TOKEN_FILE")" \
-  'http://127.0.0.1:{{KEYCLOAK_PORT}}{{KEYCLOAK_PATH}}/admin/realms/{{MCP_REALM}}/components?subType=anonymous' \
-  | python3 -m json.tool
+rm -f "$tfile" /tmp/kc-components.json
+[ $rc -eq 0 ]
 ```
 
 Select the component whose:
@@ -117,9 +127,10 @@ subType      = anonymous
 name          "Trusted Hosts" (informational; not required)
 ```
 
-Require exactly one match and take its `id`. If zero or multiple components
-match, stop: the realm was modified by hand or the wrong realm is in use.
-Never substitute a UUID remembered from another machine or an earlier realm.
+Require exactly one match. If zero or multiple components match, stop: the realm
+was modified by hand or the wrong realm is in use. Never substitute a UUID
+remembered from another machine or an earlier realm — each step below resolves
+it live.
 
 Two operational notes learned in practice:
 
@@ -131,23 +142,56 @@ Two operational notes learned in practice:
   configuration exists. Never read or write policy values from a collection
   view — always fetch the single component by ID.
 
-## 4. Fetch, update, and push the component
+## 3. Fetch, update, and push the component (single bounded command)
 
-Fetch the component *directly* by ID so you edit the exact stored
-representation. Preserve every existing trusted host; append only
-`{{CLIENT_SOURCE_IP}}`; keep both matching controls:
+The entire mint, resolve, fetch, change, push, verify, and cleanup sequence
+runs in one root-controlled command. Mint-to-verify wall time is seconds, so
+it cannot cross the token's 60-second lifetime, and verification happens in
+the same process directly after the PUT. If this step fails for any reason,
+re-run the whole command — a fresh mint is taken at its top, the component is
+re-resolved live, and the presence guard makes a retry idempotent (an address
+already present is a no-success, not an error):
 
 ```bash
-source /tmp/.kcstep4.env
-CID=<component id from step 3>
-curl -sS -H "Authorization: Bearer $(cat "$TOKEN_FILE")" \
-  http://127.0.0.1:{{KEYCLOAK_PORT}}{{KEYCLOAK_PATH}}/admin/realms/{{MCP_REALM}}/components/$CID > /tmp/kc-th-before.json
+umask 077
+pass="$(sudo cat /opt/keycloak/admin.pass)" || exit 1
+body=$(mktemp /tmp/.kctmp.XXXXXX)
+printf 'grant_type=password&client_id=admin-cli&username={{KEYCLOAK_ADMIN_USER}}&password=%s' "$pass" > "$body"
+tok=$(curl -sS -X POST --data @"$body" \
+  http://127.0.0.1:{{KEYCLOAK_PORT}}{{KEYCLOAK_PATH}}/realms/master/protocol/openid-connect/token \
+  | python3 -c 'import sys,json; print(json.load(sys.stdin)["access_token"])') || { rm -f "$body"; unset pass; exit 1; }
+rm -f "$body"; unset pass
+[ -n "$tok" ] || exit 1
+
+# Resolve the component live in this same command (never from a previous step).
+curl -sS -H "Authorization: Bearer ***" \
+  'http://127.0.0.1:{{KEYCLOAK_PORT}}{{KEYCLOAK_PATH}}/admin/realms/{{MCP_REALM}}/components?subType=anonymous' > /tmp/kc-components.json
 
 python3 - <<'EOF'
-import json
-c = json.load(open('/tmp/kc-th-before.json'))
-assert c.get('providerId') == 'trusted-hosts' and c.get('subType') == 'anonymous'
+import json, sys
+data = json.load(open('/tmp/kc-components.json'))
+matches = [c for c in data if c.get('providerId') == 'trusted-hosts' and c.get('subType') == 'anonymous']
+assert len(matches) == 1, "stop: zero or multiple components; the realm was modified by hand or the wrong realm is in use"
+open('/tmp/kc-cid.txt', 'w').write(matches[0]['id'])
+EOF
+[ $? -eq 0 ] || exit 1
+
+CID=$(cat /tmp/kc-cid.txt)
+
+# Fetch directly by ID and assert the shape before any edit. An error body (for
+# example a 401 JSON from an expired token) captured into this file must fail
+# loudly, not pass as data.
+curl -sS -H "Authorization: Bearer ***" \
+  "http://127.0.0.1:{{KEYCLOAK_PORT}}{{KEYCLOAK_PATH}}/admin/realms/{{MCP_REALM}}/components/$CID" > /tmp/kc-th-before.json
+
+python3 - <<'EOF'
+import json, sys
+raw = open('/tmp/kc-th-before.json').read()
+c = json.loads(raw)
+assert c.get('providerId') == 'trusted-hosts' and c.get('subType') == 'anonymous', \
+    "unexpected component shape (possible transient or error body): " + raw[:200]
 hosts = list(c['config'].get('trusted-hosts', []))
+print("current hosts:", hosts)
 new_ip = "{{CLIENT_SOURCE_IP}}"
 if new_ip not in hosts:
     hosts.append(new_ip)
@@ -156,12 +200,50 @@ c['config']['host-sending-registration-request-must-match'] = ["true"]
 c['config']['client-uris-must-match'] = ["true"]
 with open('/tmp/kc-th-update.json', 'w') as f:
     json.dump(c, f)
-print("hosts:", hosts)
+print("hosts after change:", hosts)
 EOF
+[ $? -eq 0 ] || exit 1
+
+# Push the full representation back with a single PUT; require an HTTP 2xx code.
+PUT_CODE=$(curl -sS -o /dev/null -w 'HTTP %{http_code}' -X PUT \
+  -H "Authorization: Bearer ***" \
+  -H 'Content-Type: application/json' --data @/tmp/kc-th-update.json \
+  "http://127.0.0.1:{{KEYCLOAK_PORT}}{{KEYCLOAK_PATH}}/admin/realms/{{MCP_REALM}}/components/$CID") || exit 1
+case "$PUT_CODE" in
+  HTTP\ 2*) : ;;
+  *) echo "PUT failed: $PUT_CODE"; exit 1 ;;
+esac
+
+# Verify against a SECOND direct fetch, in this same process, after the PUT.
+curl -sS -H "Authorization: Bearer ***" \
+  "http://127.0.0.1:{{KEYCLOAK_PORT}}{{KEYCLOAK_PATH}}/admin/realms/{{MCP_REALM}}/components/$CID" > /tmp/kc-th-after.json
+
+python3 - <<'EOF'
+import json, sys
+raw = open('/tmp/kc-th-after.json').read()
+c = json.loads(raw)
+if c.get('providerId') != 'trusted-hosts':
+    sys.exit("unexpected component representation: " + raw[:200])
+hosts = c['config']['trusted-hosts']
+print("stored:", hosts)
+assert "{{CLIENT_SOURCE_IP}}" in hosts, "new client address missing"
+for keep in ["localhost", "127.0.0.1"]:          # plus any pre-existing LAN IPs
+    assert keep in hosts, f"pre-existing host lost: {keep}"
+assert c['config']['host-sending-registration-request-must-match'] == ["true"]
+assert c['config']['client-uris-must-match'] == ["true"]
+print("VERIFY OK")
+EOF
+rc=$?
+
+# Clean up this step's artifacts, including the update payload, before exit.
+rm -f /tmp/kc-components.json /tmp/kc-cid.txt \
+  /tmp/kc-th-before.json /tmp/kc-th-update.json /tmp/kc-th-after.json
+[ $rc -eq 0 ]
 ```
 
-The resulting configuration must look like the shape below (order in the list
-is not significant — Keycloak may store the appended value at any position):
+The resulting stored configuration must look like the shape below (order in the
+list is not significant — Keycloak may store the appended value at any
+position):
 
 ```json
 {
@@ -176,69 +258,17 @@ is not significant — Keycloak may store the appended value at any position):
 }
 ```
 
-Push the full representation back with a single PUT:
+If a fetch ever returns an unexpected or empty body (a transient condition was
+observed once in the field), re-run the entire step — a fresh mint is taken at
+its top and the shape assertion fails loudly on an error body. The verification
+must be against the *second* direct fetch, after the PUT, in the same process.
 
-```bash
-source /tmp/.kcstep4.env
-CID=<component id from step 3>
-curl -sS -X PUT \
-  -H "Authorization: Bearer $(cat "$TOKEN_FILE")" \
-  -H 'Content-Type: application/json' --data @/tmp/kc-th-update.json \
-  http://127.0.0.1:{{KEYCLOAK_PORT}}{{KEYCLOAK_PATH}}/admin/realms/{{MCP_REALM}}/components/$CID
-```
+## 4. Hand back to the client
 
-A successful PUT returns the updated representation (or empty body in some
-versions) with HTTP `2xx`. Check the exit code and, on failure, fetch the
-component before retrying so you never PUT a stale or partial document.
-
-## 5. Verify the exact stored configuration
-
-Retrieve the component directly again — not from a collection view — and
-assert the stored configuration:
-
-```bash
-source /tmp/.kcstep4.env
-CID=<component id from step 3>
-curl -sS -H "Authorization: Bearer $(cat "$TOKEN_FILE")" \
-  http://127.0.0.1:{{KEYCLOAK_PORT}}{{KEYCLOAK_PATH}}/admin/realms/{{MCP_REALM}}/components/$CID > /tmp/kc-th-after.json
-
-python3 - <<'EOF'
-import json, sys
-raw = open('/tmp/kc-th-after.json').read()
-c = json.loads(raw)
-# Guard against a transient or error body (an earlier run once received a
-# response missing the expected fields); fail loudly instead of passing.
-if c.get('providerId') != 'trusted-hosts':
-    sys.exit("unexpected component representation: " + raw[:200])
-hosts = c['config']['trusted-hosts']
-print("stored:", hosts)
-assert "{{CLIENT_SOURCE_IP}}" in hosts, "new client address missing"
-for keep in ["localhost", "127.0.0.1"]:          # plus any pre-existing LAN IPs
-    assert keep in hosts, f"pre-existing host lost: {keep}"
-assert c['config']['host-sending-registration-request-must-match'] == ["true"]
-assert c['config']['client-uris-must-match'] == ["true"]
-print("VERIFY OK")
-EOF
-```
-
-If a fetch ever returns an unexpected or empty body (a transient condition
-was observed once in the field), retry the direct GET before concluding the
-write failed. The verification must be against the *second* direct fetch,
-after the PUT.
-
-## 6. Clean up and hand back to the client
-
-Remove every temporary secret artifact, including the update payloads:
-
-```bash
-source /tmp/.kcstep4.env
-rm -f /tmp/kc-th-before.json /tmp/kc-th-update.json /tmp/kc-th-after.json \
-  "$TOKEN_FILE" /tmp/.kcstep4.env
-```
-
-Confirm nothing matching the patterns remains in `/tmp`, then tell the client
-to proceed with Step 5 of `ADD_CLIENT.md` (add the Hermes MCP entry) and let
-it run DCR. Confirm success by watching Nginx record a `201` for the
+Confirm nothing matching the patterns remains in `/tmp` (no `.kctmp.*`,
+`.kctok.*`, `kc-components.json`, `kc-cid.txt`, or `kc-th-*` files), then tell
+the client to proceed with Step 5 of `ADD_CLIENT.md` (add the Hermes MCP entry)
+and let it run DCR. Confirm success by watching Nginx record a `201` for the
 `clients-registrations/openid-connect` POST from `{{CLIENT_SOURCE_IP}}`:
 
 ```bash
@@ -281,7 +311,7 @@ onboarding.
 ## Final checklist
 
 - Keycloak health on loopback returned `200`.
-- `{{CLIENT_SOURCE_IP}}` came from the Nginx DCR access log (Step 3), not a guess.
+- `{{CLIENT_SOURCE_IP}}` came from the Nginx DCR access log (Step 1), not a guess.
 - Exactly one anonymous `trusted-hosts` component existed in `{{MCP_REALM}}`.
 - All pre-existing trusted hosts were preserved; exactly one address was added.
 - Both matching controls remain `["true"]`.
