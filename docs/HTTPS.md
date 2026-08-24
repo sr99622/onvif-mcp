@@ -273,6 +273,43 @@ The authoritative installed files remain under:
 /etc/nginx/tls
 ```
 
+## 8. Update the ONVIF MCP HTTP server to HTTPS (if deployed)
+
+If the ONVIF Camera MCP HTTP server was previously installed per
+`docs/MCP_HTTP.md`, its `STREAM_SERVER_URL` environment variable still points at
+plain HTTP (it predates this step, since there was no TLS yet). Left unchanged,
+every web-player URL it generates (`get_web_player_url` and the streaming tools)
+points at port 80, which now only redirects.
+
+Update the unit to the HTTPS base URL — the server appends
+`/webrtc/<SERIAL>/<PROFILE>` to it (see `packages/core/src/onvif_mcp_core/streaming.py`),
+so the value is the scheme + host only, with no path:
+
+```bash
+sudo sed -i 's#^Environment=STREAM_SERVER_URL=.*#Environment=STREAM_SERVER_URL=https://{{SERVER_FQDN}}#' \
+  /etc/systemd/system/onvif-mcp-http.service
+
+sudo systemctl daemon-reload
+sudo systemctl restart onvif-mcp-http
+```
+
+Verify the running environment and generated URL:
+
+```bash
+systemctl show onvif-mcp-http --property=Environment | grep STREAM_SERVER_URL
+# expected: STREAM_SERVER_URL=https://{{SERVER_FQDN}}
+```
+
+Then exercise `get_web_player_url` through the MCP endpoint (session handshake per
+`docs/MCP_HTTP.md`) and confirm it returns a URL of the form
+
+```text
+https://{{SERVER_FQDN}}/webrtc/<SERIAL>/<PROFILE>/
+```
+
+Note: clients using the HTTPS player URLs must trust the `camera-system-root` CA
+(Step 1 certificate) — see Step 3, which verifies against that CA file.
+
 ## Renewal procedure (NOT USED DURING INSTALLTION)
 
 Before the 397-day site certificate expires:
