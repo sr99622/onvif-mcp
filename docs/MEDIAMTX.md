@@ -1,18 +1,20 @@
 # MediaMTX Server Configuration
 
-This document describes the MediaMTX RTSP-to-WebRTC/HLS streaming server. The server pulls live video from IP cameras and makes them available via WebRTC for browser playback. In this document, the server name is represented symbolically surrounded by curly braces as `{hostname}`, which should be relaced by the actual server name, e.g. `camera.home.arpa`, in production. The curly braces convention for representing symbolic values is followed throughout this document.
+This document describes the MediaMTX RTSP-to-WebRTC/HLS streaming server. The server pulls live video from IP cameras and makes them available via WebRTC for browser playback. In this document, the server name is represented symbolically surrounded by curly braces as `{{SERVER_FQDN}}`, which should be relaced by the actual server name, e.g. `camera.home.arpa`, in production. The curly braces convention for representing symbolic values is followed throughout this document.
 
-Symbolic names provided by agent
+## Values provided by Agent
 
-{hostname}
+| Value | Description |
+|---|---|
+| {{SERVER_FQDN}} | Server Fully Qualified Domain Name |
+| {{USERNAME}} | Camera Username |
+| {{PASSWORD}} | Camera Password |
 
-{username}
-
-{password}
+These values are required for operation. Stop and prompt the user if they are not provided.
 
 ## nginx requirement
 
-install nginx first, it will be needed later. Once nginx is set up, continue.
+Install nginx first, it will be needed later. Once nginx is set up, continue.
 
 ## Binary Executable
 
@@ -39,7 +41,7 @@ sudo cp mediamtx /usr/local/bin/mediamtx && sudo chmod 755 /usr/local/bin/mediam
 
 | Item | Value |
 |------|-------|
-| Server URL | `http://{hostname}/webrtc/` |
+| Server URL | `http://{{SERVER_FQDN}}/webrtc/` |
 | Binary | `/usr/local/bin/mediamtx` |
 | Config | `/etc/mediamtx/mediamtx.yml` |
 | Service | `sudo systemctl status mediamtx` (system service, multi-user.target) |
@@ -92,7 +94,7 @@ The camera path is constructed using the formula shown below. Values inside the 
 
 ```py
   {serial_number}/{profile.token}
-    source: {stream_uri[:7]}{username}:{password}@{stream_uri[7:]}
+    source: {stream_uri[:7]}{{USERNAME}}:{{PASSWORD}}@{stream_uri[7:]}
 ```
 
 Using concrete example values
@@ -211,7 +213,7 @@ Full nginx config at `/etc/nginx/sites-available/mediamtx`:
 ```nginx
 server {
     listen 80;
-    server_name {hostname};
+    server_name {{SERVER_FQDN}};
 
     location /webrtc/ {
         proxy_pass http://127.0.0.1:8889/;   # trailing slash REQUIRED
@@ -232,7 +234,7 @@ server {
     }
 
     location = / {
-        return 200 "MediaMTX server at {hostname}\n";
+        return 200 "MediaMTX server at {{SERVER_FQDN}}\n";
         add_header Content-Type text/plain;
     }
 }
@@ -249,10 +251,10 @@ sudo systemctl reload nginx                # apply changes
 
 ### URL Format (Trailing Slash Required)
 
-MediaMTX requires a **trailing slash** at the end of camera paths. Note that the symbolic value in the curly braces {hostname} should be replaced with the actual server host name, e.g. `camera.home.arpa`.
+MediaMTX requires a **trailing slash** at the end of camera paths. Note that the symbolic value in the curly braces {{SERVER_FQDN}} should be replaced with the actual server host name, e.g. `camera.home.arpa`.
 
-- ✅ `http://{hostname}/webrtc/DS-2CD2142022579764/Profile_1/`
-- ❌ `http://{hostname}/webrtc/DS-2CD2142022579764/Profile_1` (redirects but browser may not follow)
+- ✅ `http://{{SERVER_FQDN}}/webrtc/DS-2CD2142022579764/Profile_1/`
+- ❌ `http://{{SERVER_FQDN}}/webrtc/DS-2CD2142022579764/Profile_1` (redirects but browser may not follow)
 
 The `proxy_redirect / /webrtc/;` directive ensures that MediaMTX's internal redirects preserve the `/webrtc/` prefix.
 
@@ -290,7 +292,7 @@ Delete the path entry from the `paths:` section of `/etc/mediamtx/mediamtx.yml` 
 
 - MediaMTX listens on `127.0.0.1` for WebRTC TCP ports, but access flows through Nginx at `/webrtc/`.
 - Without authentication layers, anyone on the network who can reach port 8889 (or port 80 via nginx) gets a live stream.
-- All cameras use the same default credentials (`{username}` / `{password}`).
+- All cameras use the same default credentials (`{{USERNAME}}` / `{{PASSWORD}}`).
 
 ## Known Issues
 

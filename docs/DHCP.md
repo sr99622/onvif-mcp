@@ -13,6 +13,13 @@ This configuration creates an isolated IPv4 network on {{EN_NAME}}:
 
 The server's other interface and its existing LAN/Internet configuration are not changed.
 
+## Value provided by Agent
+| Value | Desription |
+|---|---|
+| {{EN_NAME}} | Ethernet Adapter Interface name hosting the private camera subnet |
+
+This value is required for operation. Stop and prompt the user if it is not provided.
+
 ## 1. Configure Private Network Interface with NetworkManager
 
 Review current connections first:

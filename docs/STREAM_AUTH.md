@@ -33,37 +33,36 @@ Routes that must remain independent and must not receive browser
 /.well-known/oauth-protected-resource/mcp
 ```
 
-## Status
-
-This procedure reflects the current agent-guided deployment. It was verified
-with Keycloak 26.7.0 and oauth2-proxy 7.15.3.
-
-The procedure is suitable for supervised agent execution in bounded phases.
-It is not yet intended as a fully unattended orchestration script.
-
-## Symbolic deployment values
-
-Replace every symbolic value with the target environment's actual value.
+## Values provided by Agent
 
 | Symbol | Meaning |
 |---|---|
 | `{{SERVER_FQDN}}` | Public DNS name shared by Nginx, Keycloak, and MCP |
 | `{{SERVER_IP}}` | Address on which Nginx accepts public HTTPS |
-| `{{LOOPBACK_IP}}` | Host loopback address used for private listeners `127.0.0.1` |
-| `{{MCP_REALM}}` | Keycloak realm, normally `mcp` |
-| `{{MCP_LOGIN_USER}}` | Browser login user `mcp-user`|
-| `{{BROWSER_CLIENT_ID}}` | Confidential browser client, normally `camera-web` |
-| `{{CONTAINER_BIND_IP}}` | In-container wildcard address used by oauth2-proxy |
-| `{{KEYCLOAK_PORT}}` | Loopback Keycloak HTTP port, normally `8080` |
-| `{{OAUTH2_PROXY_PORT}}` | Loopback oauth2-proxy port, normally `4180` |
-| `{{MCP_HTTP_PORT}}` | Loopback MCP HTTP port, normally `8001` |
-| `{{MEDIAMTX_WEBRTC_PORT}}` | Loopback MediaMTX signaling port, normally `8889` |
-| `{{MEDIAMTX_ICE_PORT}}` | MediaMTX UDP ICE/media port, normally `8189` |
-| `{{COMPOSE_DIR}}` | Keycloak Compose project directory |
-| `{{ACTIVE_SITE_LINK}}` | Enabled Nginx site symlink name |
-| `{{NGINX_SITE}}` | Active Nginx site file outside `sites-enabled` |
-| `{{PRIVATE_CA_FILE}}` | Public private-CA root certificate on the server `/etc/nginx/tls/camera-system-root-ca.crt.pem` |
-| `{{HERMES_SERVER_NAME}}` | Existing Hermes MCP entry used for regression testing (resolve via `hermes mcp list`: the entry whose transport is `https://{{SERVER_FQDN}}/mcp`) |
+
+These values are required for operation. Stop and prompt the user if they are not provided.
+
+## Symbolic deployment values
+
+Replace every symbolic value with the target environment's actual value.
+
+| Symbol | Default | Meaning |
+|---|---|---|
+| `{{LOOPBACK_IP}}` | 127.0.0.1 | Host loopback address used for private listeners |
+| `{{MCP_REALM}}` | mcp | Keycloak realm |
+| `{{MCP_LOGIN_USER}}` | mcp-user | Browser login user |
+| `{{BROWSER_CLIENT_ID}}` | camera-web | Confidential browser client, normally |
+| `{{CONTAINER_BIND_IP}}` | 0.0.0.0 | In-container wildcard address used by oauth2-proxy |
+| `{{KEYCLOAK_PORT}}` | 8080 | Loopback Keycloak HTTP port |
+| `{{OAUTH2_PROXY_PORT}}` | 4180 | Loopback oauth2-proxy port, normally |
+| `{{MCP_HTTP_PORT}}` | 8001 | Loopback MCP HTTP port, normally |
+| `{{MEDIAMTX_WEBRTC_PORT}}` | 8889 | Loopback MediaMTX signaling port, normally |
+| `{{MEDIAMTX_ICE_PORT}}` | 8189 | MediaMTX UDP ICE/media port, normally |
+| `{{COMPOSE_DIR}}` | /opt/keycloak | Keycloak Compose project directory |
+| `{{ACTIVE_SITE_LINK}}` | camera-apps | Enabled Nginx site symlink name |
+| `{{NGINX_SITE}}` | /etc/nginx/sites-enabled/camera-apps | Active Nginx site |
+| `{{PRIVATE_CA_FILE}}` | /etc/nginx/tls/camera-system-root-ca.crt.pem | Public private-CA root certificate on the server |
+| `{{HERMES_SERVER_NAME}}` | camera-new | Existing Hermes MCP entry used for regression testing (resolve via `hermes mcp list`: the entry whose transport is `https://{{SERVER_FQDN}}/mcp`) |
 
 Derived URLs:
 

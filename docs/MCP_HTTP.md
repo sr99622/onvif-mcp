@@ -9,6 +9,8 @@
 | {{PASSWORD}}    | Camera Password                           |
 | {{REPO_PATH}}   | Full Pathname of Repository Location      |
 
+These values are required for operation. Stop and prompt the user if they are not provided.
+
 ## Overview
 
 The `onvif-mcp-http` package provides an HTTP-based MCP (Model Context Protocol) server for discovering and controlling ONVIF cameras on the local network. It exposes 28 tools through a Streamable HTTP transport (SSE + POST), accessible both locally on port 8001 and externally through nginx at `http://{{SERVER_FQDN}}/mcp/`.
