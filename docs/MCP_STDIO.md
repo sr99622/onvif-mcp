@@ -6,7 +6,7 @@ mcp_servers:
     command: uv
     args:
     - --directory
-    - {{HOME}}/Projects/onvif-mcp/packages/stdio/src
+    - {{HOME}}/onvif-mcp/packages/stdio/src
     - run
     - camera.py
     enabled: true
