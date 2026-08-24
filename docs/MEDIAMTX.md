@@ -111,6 +111,17 @@ paths:
     source: rtsp://admin:admin123@10.1.1.70:554/Streaming/Channels/101?transportmode=unicast&profile=Profile_1
 ```
 
+### Stream Coverage Requirement
+
+For EVERY camera returned by `get_cameras`, ALL media profiles must be added as separate
+paths — both the main stream profile AND every substream profile. A camera that reports a
+single profile gets one path; a camera reporting multiple profiles (e.g. MediaProfile000 +
+MediaProfile001, Profile_1 + Profile_2, profile1 + profile2) gets one path per profile,
+each using that profile's own token and its own stream_uri. Never omit substreams to keep
+the config short: consumers of this server depend on low-bandwidth substreams for thumbnail
+and multi-camera views. After writing the config, verify the path count matches the total
+number of profiles reported across all cameras before starting the service.
+
 ## Authentication
 
 MediaMTX uses **internal database mode** with permissive access rules — no password is required for any user (`pass:` is empty). The config grants full permissions (publish, read, playback) to all cameras. Access control is managed by the nginx proxy front end.
@@ -158,7 +169,7 @@ authInternalUsers:
 paths:
   DS-2CD2142022579764/Profile_1:
     source: rtsp://admin:admin123@10.1.1.70:554/Streaming/Channels/101?transportmode=unicast&profile=Profile_1
-  # ... additional paths follow same pattern
+  # ... one additional path per profile: the main stream AND every substream, for every camera
 ```
 
 ## Systemd Service Setup
@@ -278,7 +289,7 @@ MediaMTX prints a startup line showing which paths have online streams. Look for
 - `ERR [path {name}] bad status code: 401` = camera auth failure (occurs on HIKVISION Profile_2)
 
 ### Adding a new camera
-1. Add a new path entry in the `paths:` section of /etc/mediamtx/mediamtx.yml` as described above in **Camera Streams**.
+1. Add new path entries in the `paths:` section of `/etc/mediamtx/mediamtx.yml` as described above in **Camera Streams** — one entry per profile, including all substreams (see **Stream Coverage Requirement**).
 
 2. Restart the service:
 ```bash
