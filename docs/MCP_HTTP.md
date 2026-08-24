@@ -8,6 +8,7 @@
 | {{USERNAME}}    | Camera Username                           |
 | {{PASSWORD}}    | Camera Password                           |
 | {{REPO_PATH}}   | Full Pathname of Repository Location      |
+| {{SERVER_USER}} | System user the service runs as (project owner) |
 
 These values are required for operation. Stop and prompt the user if they are not provided.
 
@@ -61,6 +62,34 @@ server {
 - Uses `location = /mcp` (exact match) because the MCP server redirects `/mcp/` to `/mcp`, and POST requests don't survive the redirect. Nginx must forward directly to `/mcp` without trailing slash.
 - Proxy headers include Upgrade/Connection for SSE, plus standard forwarded headers.
 
+### Merging into an existing vhost (important)
+
+If a `server` block for `{{SERVER_FQDN}}` already exists on this host (e.g. from
+`docs/MEDIAMTX.md` or `docs/APPS.md`, which both create one and instruct that no
+second vhost be made), **merge these two locations into that existing block instead
+of creating a second file**. Do not enable two separate files declaring the same
+`listen 80` + `server_name`.
+
+Observed failure mode on this host (two enabled blocks with identical name and
+port): nginx logs only a warning —
+
+    [warn] conflicting server name "<FQDN>" on 0.0.0.0:80, ignored
+
+— and `nginx -t` still exits 0 ("syntax is ok", "test is successful"). The later
+block's server-name registration is discarded (files are parsed alphabetically),
+so all of its locations stop working while requests for that host silently route
+to whichever block was parsed first. In the incident on this box, `/cameras/`,
+`/multiview/`, `/outputs/` and `/webrtc/` all returned 404 while only `/mcp`
+worked; the breakage appeared in behavior, never in `nginx -t`.
+
+After installing the MCP locations, verify with:
+
+```bash
+# must print exactly 1 per port — a second occurrence means a conflict
+sudo nginx -T | grep -c 'server_name {{SERVER_FQDN}}'
+# re-test every pre-existing endpoint (apps, web player, registry), not just /mcp
+```
+
 ## systemd Service
 
 **File**: `/etc/systemd/system/onvif-mcp-http.service`
@@ -73,13 +102,13 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=stephen
+User={{SERVER_USER}}
 WorkingDirectory={{REPO_PATH}}/onvif-mcp
 Environment=MCP_HTTP_HOST=127.0.0.1
 Environment=MCP_HTTP_PORT=8001
 Environment=CAMERA_USERNAME=admin
 Environment=CAMERA_PASSWORD=admin123
-Environment=STREAM_SERVER_URL=https://{{SERVER_FQDN}}
+Environment=STREAM_SERVER_URL=http://{{SERVER_FQDN}}
 ExecStart={{REPO_PATH}}/onvif-mcp/.venv/bin/onvif-mcp-http
 Restart=on-failure
 RestartSec=5
@@ -184,7 +213,7 @@ External clients  │                     │   natively uses MCP protocol.
 │  Environment:                                    │
 │    CAMERA_USERNAME={{USERNAME}}                  │
 │    CAMERA_PASSWORD={{PASSWORD}}                  │
-│    STREAM_SERVER_URL=https://{{SERVER_FQDN}}     │
+│    STREAM_SERVER_URL=http://{{SERVER_FQDN}}     │
 │    MCP_HTTP_HOST=127.0.0.1                       │
 │    MCP_HTTP_PORT=8001                            │
 └──────────────┬───────────────────────────────────┘
