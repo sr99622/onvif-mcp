@@ -16,9 +16,9 @@ We will need git for next steps, so install and configure.
 
 ```
 sudo apt install git
-git config --global core.editor "vi"
-git config --global user.email "sr99622@gmail.com"
-git config --global user.name "Stephen Rhodes"
+git config --global core.editor "nvim"
+git config --global user.email <your email>
+git config --global user.name <your name>
 ```
 
 <h2>Github CLI</h2>
@@ -218,6 +218,12 @@ onvif-tui -u admin -p admin123
 git clone https://github.com/sr99622/onvif-mcp
 ```
 
+<h2>Install VS Code</h2>
+
+```
+https://code.visualstudio.com/sha/download?build=stable&os=linux-deb-x64
+```
+
 <h2>Install Hermes</h2>
 
 ```
@@ -240,7 +246,7 @@ Sign up for the model of your choice.
 
 Edit the .hermes/config.yaml to set up the camera MCP stdio, replacing the values in {{ }} double curly braces to fit your own configuration. 
 
-The STREAK_SERVER_URL should be something like <hostname>.home.arpa, where .arpa is the reserved DNS domain name for internal servers. If you have a DNS sever on the local network, you can add this hostname and static IP to the DNS address mappings. If not, just add the name to your /etc/hosts file for now. At a later stage in the configuration, the DNS server issue will become more prominent, and you can add the DNS serving capability to the machine for use by other machines on the local network for local name resolution. Depending on your network topology, it may be preferable to use hosts files on client computers rather than local DNS resolution. This topic will be explored in detail later.
+The STREAM_SERVER_URL should be something like `<hostname>.home.arpa`, where .arpa is the reserved DNS domain name for internal servers. If you have a DNS sever on the local network, you can add this hostname and static IP to the DNS address mappings. If not, just add the name to your /etc/hosts file for now. At a later stage in the configuration, the DNS server issue will become more prominent, and you can add the DNS serving capability to the machine for use by other machines on the local network for local name resolution. Depending on your network topology, it may be preferable to use hosts files on client computers rather than local DNS resolution. This topic will be explored in detail later.
 
 ```
 mcp_servers:
