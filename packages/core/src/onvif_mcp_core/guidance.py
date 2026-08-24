@@ -113,8 +113,8 @@ TOOL_GUIDANCE: dict[str, str] = {
         Each camera summary contains the most important fields an agent typically 
         needs to manage cameras and streams — hostname, serial number, 
         profiles, encoder config, PTZ presets, tours, snapshot & stream URIs, 
-        and time offset. If full ONVIF data is needed, the get_camera tool can
-        be used on a per camera basis.
+        web player URLs, and time offset. If full ONVIF data is needed, the
+        get_camera tool can be used on a per camera basis.
 
         Returns:
             A delimited string containing summary dicts for each camera found on
@@ -128,9 +128,10 @@ TOOL_GUIDANCE: dict[str, str] = {
         Get the web player URL for a camera live stream. The url is suitable
         for playing the camera live stream in a browser window.
 
-        Builds the URL using the camera's serial number and a media profile token. 
-        The values needed to call this tool are present in the camera sunmary 
-        returned by the get_camera tool.
+        Builds the URL using the camera's serial number and a media profile token.
+        Note that the web player URL for each profile is also included directly in
+        the camera summary returned by get_cameras, so this tool is only needed if
+        the summary was not kept in context.
 
         Args:
             serial_number: The camera serial number found in the summary data of the 

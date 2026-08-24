@@ -13,6 +13,8 @@ from libonvif.devices.camera import Camera, discover, get_camera_by_ip
 from libonvif.utils.adapters import find_adapters
 from libonvif.utils.serialization import to_dict
 
+from .streaming import build_web_player_url
+
 logger = logging.getLogger(__name__)
 
 
@@ -51,15 +53,17 @@ def _camera_summary(
     hostname_obj = data.get("hostname") or {}
     xaddr = data.get("xaddr") or ""
     ip_addr = xaddr.split("://", 1)[1].split("/", 1)[0] if "://" in xaddr else ""
+    serial_number = dev.get("serial_number") or ""
 
     profiles = []
     for profile in data.get("profiles") or []:
         video_encoder = profile.get("video_encoder") or {}
         rate_control = video_encoder.get("rate_control") or {}
         audio_encoder = profile.get("audio_encoder") or {}
+        token = profile.get("token") or ""
         profiles.append(
             {
-                "token": profile.get("token") or "",
+                "token": token,
                 "name": profile.get("name") or "",
                 "video_encoder": {
                     "encoding": video_encoder.get("encoding") or "",
@@ -74,6 +78,7 @@ def _camera_summary(
                 },
                 "stream_uri": profile.get("stream_uri") or "",
                 "snapshot_uri": profile.get("snapshot_uri") or "",
+                "web_player_url": build_web_player_url(serial_number, token),
             }
         )
 
