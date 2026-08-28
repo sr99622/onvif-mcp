@@ -1,0 +1,23 @@
+[Unit]
+Description=Loopback-only camera snapshot proxy (services/snapshot_proxy.py)
+Documentation=file:/home/stephen/onvif-mcp/services/snapshot_proxy.py
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=stephen
+WorkingDirectory=/home/stephen/onvif-mcp
+# Loopback-only bind: the proxy is reached only through nginx, which handles
+# client authentication (keycloak). Credentials for the cameras are supplied
+# via environment so they are not embedded in the unit file on disk.
+Environment=SNAPSHOT_PROXY_HOST=127.0.0.1
+Environment=SNAPSHOT_PROXY_PORT=8891
+Environment=CAMERA_USERNAME=admin
+Environment=CAMERA_PASSWORD=admin123
+ExecStart=/home/stephen/onvif-mcp/.venv/bin/python /home/stephen/onvif-mcp/services/snapshot_proxy.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

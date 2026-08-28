@@ -13,7 +13,7 @@ from libonvif.devices.camera import Camera, discover, get_camera_by_ip
 from libonvif.utils.adapters import find_adapters
 from libonvif.utils.serialization import to_dict
 
-from .streaming import build_web_player_url
+from .streaming import build_web_player_url, build_web_snapshot_url
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +79,7 @@ def _camera_summary(
                 "stream_uri": profile.get("stream_uri") or "",
                 "snapshot_uri": profile.get("snapshot_uri") or "",
                 "web_player_url": build_web_player_url(serial_number, token),
+                "web_snapshot_url": build_web_snapshot_url(serial_number, token),
             }
         )
 
