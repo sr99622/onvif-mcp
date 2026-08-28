@@ -123,6 +123,41 @@ TOOL_GUIDANCE: dict[str, str] = {
         """
     ).rstrip("\n"),
 
+    "get_snapshot": dedent(
+        """\
+        Capture a live JPEG snapshot of a camera and return it as an image.
+
+        Fetches a fresh still frame directly through the local loopback-only
+        snapshot proxy, which performs the per-vendor authentication to the
+        camera (Basic or Digest). No browser session or additional credentials
+        are needed from the client side — this is a server-to-server call.
+
+        The returned value is an image (MCP image content), suitable for sending
+        straight to a model for visual analysis. Call it whenever you need to
+        see what a camera is currently showing; do not guess at the image's
+        contents without calling it first.
+
+        These two values come from the per-camera summary produced by
+        get_cameras:
+          serial_number   <- that camera's serial_number field
+          profile_token   <- one of that camera's profiles[].token values (almost
+                             always the main profile, e.g. profiles[0].token)
+
+        The snapshot is live and unrepeatable — each call captures whatever the
+        camera sees at that moment. If a camera cannot be reached, or its frame
+        is not a valid JPEG, this tool raises an error describing what went
+        wrong rather than returning corrupted data.
+
+        Args:
+            serial_number: The camera serial number, from get_cameras.
+            profile_token: The media profile token whose snapshot to capture,
+                           from that camera's profiles in get_cameras.
+
+        Returns:
+            A JPEG image of the camera's current frame.
+        """
+    ).rstrip("\n"),
+
     "get_web_player_url": dedent(
         """\
         Get the web player URL for a camera live stream. The url is suitable

@@ -3,7 +3,7 @@
 from .audio import set_camera_audio_encoding, set_camera_audio_sample_rate
 from .camera_queries import get_adapters, get_camera, get_cameras
 from .device import change_camera_hostname, reboot_camera, sync_camera_time
-from .streaming import get_web_player_url
+from .streaming import get_snapshot, get_web_player_url
 from .tools import (
     register_audio_configuration_tools,
     register_camera_query_tools,
@@ -24,6 +24,7 @@ __all__ = [
     "get_cameras",
     "get_adapters",
     "get_web_player_url",
+    "get_snapshot",
     "change_camera_hostname",
     "reboot_camera",
     "sync_camera_time",
