@@ -48,7 +48,7 @@ cd Projects/llama.cpp
 
 $env:LLAMA_CACHE="unsloth/Qwen3.8-27B-GGUF"
 
-.\build\bin\Release\llama-server.exe -hf williamliao/Qwen3.8-27B-NVFP4-GGUF --temp 1.0 --top-p 0.95 --top-k 20 --presence_penalty 1.5 --min-p 0.00 --host 10.1.1.2 --port 8080 --ctx-size 209398 --n-gpu-layers 999 --jinja --cache-type-k q8_0 --cache-type-v q8_0 --spec-type draft-mtp --spec-draft-n-max 3 --reasoning-format deepseek --reasoning-effort medium
+.\build\bin\Release\llama-server.exe -hf williamliao/Qwen3.8-27B-NVFP4-GGUF --temp 1.0 --top-p 0.95 --top-k 20 --presence_penalty 1.5 --min-p 0.00 --host 10.1.1.2 --port 8080 --ctx-size 209398 --n-gpu-layers 999 --jinja --cache-type-k q8_0 --cache-type-v q8_0 --spec-type draft-mtp --spec-draft-n-max 3 --reasoning-format deepseek --reasoning-effort medium -fa on --mmproj C:\Users\sr996\Projects\llama.cpp\mmproj-F16.gguf
 ```
 
 ### Qwen3.8 27B UNSLOTH BUILD
