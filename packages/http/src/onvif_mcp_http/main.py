@@ -124,11 +124,6 @@ oauth_token_verifier = (
     else None
 )
 
-# DNS-rebinding protection stays enabled, but we explicitly allow the
-# llama.cpp web UI's origin (10.1.1.2) alongside the usual localhost
-# entries FastMCP would otherwise add automatically. Supplying our own
-# transport_security here means FastMCP's auto-default (localhost-only)
-# is skipped in favor of this one.
 mcp = FastMCP(
     "camera-mcp",
     auth=oauth_settings,
@@ -136,10 +131,15 @@ mcp = FastMCP(
     transport_security=TransportSecuritySettings(
         enable_dns_rebinding_protection=True,
         allowed_hosts=[
-            "127.0.0.1:*", "localhost:*", "[::1]:*",
-            "10.1.1.2:*", "10.1.1.3:*", "10.1.1.5:*",
+            "127.0.0.1:*", 
+            "localhost:*", 
+            "[::1]:*",
+            "10.1.1.2:*", 
+            "10.1.1.3:*", 
+            "10.1.1.5:*",
             "10.1.1.6:*",
-            "gmktec.home.arpa", "flexi.home.arpa",
+            "gmktec.home.arpa", 
+            "flexi.home.arpa",
             "nuc.home.arpa",
         ],
         allowed_origins=[
