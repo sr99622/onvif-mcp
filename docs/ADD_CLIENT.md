@@ -29,10 +29,12 @@ Substitute these symbolic values for the target environment:
 | `{{CLIENT_SOURCE_IP}}` | Source address Keycloak sees for the new client |
 | `{{MCP_REALM}}` | Keycloak realm, normally `mcp` |
 | `{{MCP_SCOPE}}` | Required MCP scope, normally `mcp:tools` |
-| `{{MCP_LOGIN_USER}}` | Keycloak user used for interactive login |
+| `{{MCP_LOGIN_USER}}` | Keycloak user used for interactive login (normally `mcp-user`; additional per-user accounts can be created with `ADD_USER.md`) |
 | `{{HERMES_SERVER_NAME}}` | Local name for the Hermes MCP entry |
 | `{{CA_CERT_PATH}}` | Client-local absolute path to the private root CA |
 | `{{CALLBACK_PORT}}` | Optional fixed loopback callback port |
+| `{{SERVER_USER}}` | Login account on the server (for SSH and sudo) |
+| `{{REMOTE_USER}}` | Local account used when SSHing from the client workstation |
 
 Derived URLs:
 
@@ -142,24 +144,22 @@ Use the source address at the beginning of the relevant entry as
 
 ## 4. Permit the client in the DCR Trusted Hosts policy
 
-On the server, resolve the live realm component whose:
+The full server-side procedure (token minting, live component resolution,
+fetch-verify-put-verify with all asserts, cleanup) is `ADD_CLIENT_ON_SERVER.md` —
+run that document end to end rather than restating it here.
 
-```text
-type = org.keycloak.services.clientregistration.policy.ClientRegistrationPolicy
-providerId = trusted-hosts
-subType = anonymous
-```
+In short: resolve the live anonymous `trusted-hosts` realm component (exactly
+one match; never a remembered UUID), add only `{{CLIENT_SOURCE_IP}}` while
+preserving all existing hosts, keep both matching controls at `["true"]`, and
+verify against a direct by-ID fetch after the PUT. Collection views can
+display `config: {}` even when component configuration exists.
 
-Require exactly one match. Never copy its UUID from another installation or a
-previous realm.
-
-Retrieve the component directly and preserve all existing trusted hosts. Add
-only `{{CLIENT_SOURCE_IP}}`. Retain both matching controls:
+The stored configuration should look like:
 
 ```json
 {
   "trusted-hosts": [
-    "{{SERVER_IP}}",
+    "<pre-existing hosts...>",
     "{{CLIENT_SOURCE_IP}}",
     "localhost",
     "127.0.0.1"
@@ -169,9 +169,9 @@ only `{{CLIENT_SOURCE_IP}}`. Retain both matching controls:
 }
 ```
 
-Retrieve the component directly again and verify the exact stored
-configuration. Collection views can display `config: {}` even when component
-configuration exists.
+Note: `{{SERVER_IP}}` is not a trusted host — the list holds source addresses
+of *clients* that may register (plus loopback), never the server's own
+address.
 
 ### Individual addresses versus subnets
 
@@ -295,7 +295,20 @@ The second test must also succeed without browser authorization.
 
 ### Get password from client terminal
 
-ssh -t stephen@nuc.home.arpa 'sudo cat /opt/keycloak/.mcp-user-password'
+Run from a workstation that can SSH to the Keycloak host (substitute the
+actual server and login user):
+
+```bash
+ssh -t {{SERVER_USER}}@{{SERVER_FQDN}} 'sudo cat /opt/keycloak/{{MCP_LOGIN_USER}}.pass'
+```
+
+The secret file is root-owned mode `0600` on the server; never paste its
+contents into chat or logs. (An older deprecated document used the name
+`.mcp-user-password`; that is stale — the current deployment uses
+`mcp-user.pass`, per `KEYCLOAK.md` Section 6.)
+
+If several login accounts exist (see `ADD_USER.md`), each has its own file:
+`/opt/keycloak/<username>.pass`.
 
 ### `403 insufficient_scope` and `Host not trusted`
 

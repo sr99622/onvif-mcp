@@ -212,10 +212,12 @@ as the existing deployment (see `ADD_CLIENT.md`, Troubleshooting):
 sudo cat /opt/keycloak/{{NEW_LOGIN_USER}}.pass
 ```
 
-or over SSH to the user's machine:
+or from a local terminal over SSH (the remote command runs on the camera
+server, where `/opt/keycloak/` lives; same pattern as `ADD_CLIENT.md`,
+Troubleshooting — substitute `{{NEW_LOGIN_USER}}.pass` for the example):
 
 ```bash
-ssh -t <user>@<client-host> 'sudo cat /opt/keycloak/...'   # run on the SERVER, reading the server's own secret file
+ssh -t stephen@nuc.home.arpa 'sudo cat /opt/keycloak/mcp-user.pass'
 ```
 
 The secret file remains on the server as a recovery copy. To rotate, set a
@@ -224,12 +226,11 @@ from both.
 
 ## Notes
 
-- Earlier procedure notes for this deployment reference the login-user
-  password file as `/opt/keycloak/.mcp-user-password`, while `KEYCLOAK.md`
-  uses `{{MCP_LOGIN_USER}}.pass`. Before assuming either name exists, check
-  which one is actually on disk (`sudo ls -la /opt/keycloak`). This runbook
-  follows the `KEYCLOAK.md` convention for the new file; do not rename the
-  existing one without updating every procedure that reads it.
+- The login user's password file is `/opt/keycloak/mcp-user.pass` (no dot),
+  per `KEYCLOAK.md` Section 6 and the troubleshooting line in
+  `ADD_CLIENT.md`. A deprecated document used the name `.mcp-user-password`;
+  that name is stale. This runbook follows the `KEYCLOAK.md` convention for
+  the new file: `/opt/keycloak/{{NEW_LOGIN_USER}}.pass`.
 - Do not verify the account with a direct password-grant call to the token
   endpoint unless the realm has direct access grants enabled; the production
   path is browser Authorization Code, and the verification above plus Step 7
