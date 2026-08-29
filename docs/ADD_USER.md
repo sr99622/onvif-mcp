@@ -25,6 +25,8 @@ Runbook values:
 | `{{KEYCLOAK_PORT}}` | Loopback TCP port of the Keycloak listener | `8080` |
 | `{{KEYCLOAK_PATH}}` | Keycloak relative path on loopback (`KC_HTTP_RELATIVE_PATH`) | `/auth` |
 | `{{NEW_LOGIN_USER}}` | New login username supplied by agent, e.g. `mcp-user2` | — |
+| `{{SERVER_FQDN}}` | Server Fully Qualified Domain Name | `camera.home.arpa` |
+| `{{SERVER_USER}}` | User account name on server | - |
 
 All calls are made from the server host against the loopback Keycloak
 listener via `kcadm.sh` inside the container, exactly as in `KEYCLOAK.md`.
@@ -217,24 +219,12 @@ server, where `/opt/keycloak/` lives; same pattern as `ADD_CLIENT.md`,
 Troubleshooting — substitute `{{NEW_LOGIN_USER}}.pass` for the example):
 
 ```bash
-ssh -t stephen@nuc.home.arpa 'sudo cat /opt/keycloak/mcp-user.pass'
+ssh -t {{SERVER_USER}}@{{SERVER_FQDN}} 'sudo cat /opt/keycloak/mcp-user.pass'
 ```
 
 The secret file remains on the server as a recovery copy. To rotate, set a
 new password per Section 5 and overwrite the file; the old value is then gone
 from both.
-
-## Notes
-
-- The login user's password file is `/opt/keycloak/mcp-user.pass` (no dot),
-  per `KEYCLOAK.md` Section 6 and the troubleshooting line in
-  `ADD_CLIENT.md`. A deprecated document used the name `.mcp-user-password`;
-  that name is stale. This runbook follows the `KEYCLOAK.md` convention for
-  the new file: `/opt/keycloak/{{NEW_LOGIN_USER}}.pass`.
-- Do not verify the account with a direct password-grant call to the token
-  endpoint unless the realm has direct access grants enabled; the production
-  path is browser Authorization Code, and the verification above plus Step 7
-  covers it.
 
 ## Troubleshooting
 
