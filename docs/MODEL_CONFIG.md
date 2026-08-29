@@ -7,7 +7,8 @@ model:
   default: unsloth/Qwen3.6-35B-A3B-GGUF-Q4_K_XL
   provider: custom
   base_url: http://10.1.1.2:8080/v1
-
+  supports_vision: true
+  
 custom_providers:
   - name: flexi
     base_url: http://10.1.1.2:8080/v1
@@ -24,6 +25,7 @@ model:
   default: williamliao/Qwen3.8-27B-NVFP4-GGUF
   provider: custom
   base_url: http://10.1.1.2:8080/v1
+  supports_vision: true
 
 custom_providers:
   - name: flexi
