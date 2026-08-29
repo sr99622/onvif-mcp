@@ -45,7 +45,7 @@ custom_providers:
 
 ### Qwen3.8 27B NVIDIA BUILD
 
-```
+```powershell
 cd Projects/llama.cpp
 
 $env:LLAMA_CACHE="unsloth/Qwen3.8-27B-GGUF"
@@ -55,7 +55,7 @@ $env:LLAMA_CACHE="unsloth/Qwen3.8-27B-GGUF"
 
 ### Qwen3.8 27B UNSLOTH BUILD
 
-```
+```powershell
 cd Projects/llama.cpp
 
 $env:LLAMA_CACHE="unsloth/Qwen3.8-27B-GGUF"
@@ -66,7 +66,7 @@ $env:LLAMA_CACHE="unsloth/Qwen3.8-27B-GGUF"
 
 ### Qwen3.6 35B
 
-```
+```powershell
 $env:LLAMA_CACHE="unsloth\Qwen3.6-35B-A3B-GGUF"
 
 build\bin\Release\llama-server.exe -hf unsloth/Qwen3.6-35B-A3B-GGUF:UD-Q4_K_XL --temp 1.0 --top-p 0.95 --top-k 20 --presence_penalty 1.5 --min-p 0.00 --host 10.1.1.2 --port 8080 --ctx-size 262144 --n-gpu-layers 999 --jinja
