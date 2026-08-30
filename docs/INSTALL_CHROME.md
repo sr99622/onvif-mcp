@@ -39,6 +39,36 @@ Three-dot-button upper right corner
 
 Settings -> Privacy and Security -> Security -> Advanced Import Certificates -> Custom Installed by you [Import] -> /usr/local/share/ca-certificates -> camera-system-root-ca.crt.pem
 
+## Mac OS
+
+### Install Chrome browser
+
+```
+https://www.google.com/chrome
+```
+
+### Install the CA Certificate
+
+* Open Spotlight by pressing Command + Space, type Keychain Access, and press Return.
+
+* Select the System keychain in the left-hand sidebar.
+
+* Drag and drop your certificate file (.pem) directly into the Keychain Access window.
+
+* Enter your Mac’s administrator username and password when prompted to authorize the addition.
+
+### Trust the Certificate
+
+* Find and highlight your newly added certificate in the list.
+
+* Double-click the certificate to open its details window.
+
+* Click the triangle next to Trust to expand the trust policy menu.
+
+* Change Secure Sockets Layer (SSL) (or When using this certificate) to Always Trust.
+
+* Close the window and enter your administrator password again to confirm and save the changes.
+
 ## Sign on the cameras web page
 
 ### Login to the server
