@@ -5,19 +5,6 @@
 This runbook onboards a new machine to an existing camera MCP deployment that
 uses Keycloak for OAuth 2.1/OpenID Connect authorization.
 
-The current standard uses:
-
-- OAuth Authorization Code flow with PKCE (`S256`)
-- Dynamic Client Registration (DCR)
-- A separate public OAuth client registration for each Hermes installation
-- The `mcp:tools` scope
-- A private CA for HTTPS
-- Keycloak Trusted Hosts to restrict which machines may register clients
-
-Do not manually create a fixed Keycloak client unless DCR is intentionally
-disabled. Hermes should register its own public client and retain its own
-registration and token files.
-
 ## Deployment values
 
 Substitute these symbolic values for the target environment:
@@ -30,9 +17,8 @@ Substitute these symbolic values for the target environment:
 | `{{MCP_REALM}}` | Keycloak realm, normally `mcp` |
 | `{{MCP_SCOPE}}` | Required MCP scope, normally `mcp:tools` |
 | `{{MCP_LOGIN_USER}}` | Keycloak user used for interactive login (normally `mcp-user`; additional per-user accounts can be created with `ADD_USER.md`) |
-| `{{HERMES_SERVER_NAME}}` | Local name for the Hermes MCP entry |
+| `{{HERMES_SERVER_NAME}}` | Local name for the Hermes MCP entry usually `camera`|
 | `{{CA_CERT_PATH}}` | Client-local absolute path to the private root CA |
-| `{{CALLBACK_PORT}}` | Optional fixed loopback callback port |
 | `{{SERVER_USER}}` | Login account on the server (for SSH and sudo) |
 | `{{REMOTE_USER}}` | Local account used when SSHing from the client workstation |
 
@@ -68,37 +54,10 @@ Metadata:      https://{{SERVER_FQDN}}/.well-known/oauth-protected-resource/mcp
 Hermes is a public native client. It must not be configured with a client
 secret.
 
-## 1. Verify public server metadata
-
-Run on the new client machine:
-
-```bash
-curl -sS -o /dev/null -w 'Discovery: HTTP %{http_code}\n' \
-  "https://{{SERVER_FQDN}}/auth/realms/{{MCP_REALM}}/.well-known/openid-configuration"
-
-curl -sS \
-  "https://{{SERVER_FQDN}}/.well-known/oauth-protected-resource/mcp" |
-python3 -m json.tool
-```
-
-Expected results:
-
-- Discovery returns `HTTP 200`.
-- The issuer is exactly
-  `https://{{SERVER_FQDN}}/auth/realms/{{MCP_REALM}}`.
-- A registration endpoint is present.
-- `S256` appears in `code_challenge_methods_supported`.
-- `{{MCP_SCOPE}}` appears in `scopes_supported`.
-- Protected-resource metadata names the exact MCP resource and issuer.
-
-Do not use `curl -k`. If TLS validation fails, install or reference the private
-CA correctly.
-
 ## 2. Install or reference the private CA
 
-Hermes must validate the certificate for `{{SERVER_FQDN}}`. Copy only the
-public root CA certificate to the client. Do not copy a server private key, CA
-private key, or certificate-signing material.
+Hermes must validate the certificate for `{{SERVER_FQDN}}`. The certificate can be donwloaded from http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt.pem. Copy only the
+public root CA certificate to the client.
 
 Verify the certificate:
 
