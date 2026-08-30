@@ -16,6 +16,31 @@ sudo mv camera-system-root-ca.crt.pem /etc/pki/ca-trust/source/anchors/
 sudo update-ca-trust
 ```
 
+## Ubuntu
+
+### Install Chrome browser
+
+```bash
+wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+sudo apt install ./google-chrome-stable_current_amd64.deb
+```
+
+### Install certificate
+
+```bash
+curl -O http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt.pem
+sudo mv camera-system-root-ca.crt.pem /usr/local/share/ca-certificates/
+sudo update-ca-certificates
+```
+
+### Configure Chrome to accept certificate
+
+Three-dot-button upper right corner
+
+Settings -> Privacy and Security -> Security -> Advanced Import Certificates -> Custom Installed by you [Import] -> /usr/local/share/ca-certificates -> camera-system-root-ca.crt.pem
+
+## Sign on the cameras web page
+
 ### Login to the server
 
 Open the chrome browser and navigate to the cameras page on the server

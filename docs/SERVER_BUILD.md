@@ -104,7 +104,7 @@ cd
 
 Register the font in the cache 
 
-### You will probably need to run this twice, for some reason it usually fails on the first run, check the output 
+* ### Check the exit code to make it completed succesfully, you may need to run this twice. For some reason it often fails on the first run. 
 
 ```
 fc-cache -f -v 
@@ -184,31 +184,15 @@ This will be needed for the camera MCP server.
 
 ```
 curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-Exit the terminal
-
-```
-exit
-```
-
-Then restart the terminal and run uv to verify
-
-```
+source .bashrc
 uv
 ```
 
-<h2>Install pipx</h2>
-
-```
-sudo apt install pipx
-pipx ensurepath
-```
 
 <h2>Install onvif-tui and validate cameras</h2>
 
 ```
-pipx install onvif-tui
+uv tool install onvif-tui
 onvif-tui -u admin -p admin123
 ```
 
