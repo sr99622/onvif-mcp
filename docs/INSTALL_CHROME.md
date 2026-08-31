@@ -18,6 +18,8 @@ sudo update-ca-trust
 
 ## Ubuntu
 
+Please note that if your default browser is something other than Chrome, you will need to install the certificate manually to that browser in order for the camera MCP server to be able to login. The MCP server authentication is routed through the default browser.
+
 ### Install Chrome browser
 
 ```bash
