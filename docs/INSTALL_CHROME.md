@@ -69,6 +69,77 @@ https://www.google.com/chrome
 
 * Close the window and enter your administrator password again to confirm and save the changes.
 
+## Windows
+
+### Install Hermes
+
+```powershell
+iex (irm https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.ps1)
+```
+
+### Install the ceritificate
+
+```powershell
+curl -O http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt.pem 
+openssl x509 -outform der -in camera-system-root-ca.crt.pem -out camera-system-root-ca.crt
+```
+
+* ### If you don't have openssl installed:
+
+  ```powershell
+  winget install ShiningLight.OpenSSL.Light
+
+  $opensslBin = "C:\Program Files\OpenSSL-Win64\bin"
+  $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+
+  if (($userPath -split ";") -notcontains $opensslBin) {
+      [Environment]::SetEnvironmentVariable(
+          "Path",
+          ($userPath.TrimEnd(";") + ";" + $opensslBin),
+          "User"
+      )
+  }
+  ```
+
+#### Open the Certificate Manager
+Press Windows + R, type:
+
+```
+certmgr.msc
+```
+
+#### Access the Trusted Root Store
+
+In the left pane, expand Trusted Root Certification Authorities.
+
+#### Import the Certificate
+
+* Right-click Certificates under Trusted Root Certification Authorities.
+
+* Select All Tasks > Import.
+
+* Follow the Certificate Import Wizard:
+
+* Click Next.
+
+* Choose Browse local files and select your .crt or .cer file.
+
+* Click Next.
+
+* Ensure Place all certificates in the following store is set to Trusted Root Certification Authorities.
+
+* Click Next, then Finish.
+
+#### Verify Installation
+
+* In the MMC, expand Trusted Root Certification Authorities.
+
+* Your new CA certificate should now appear in the list. You can right-click it to view details or remove it if needed.
+
+#### Restart if Needed
+
+* Some applications may require a restart to recognize the new trusted CA.
+
 ## Sign on the cameras web page
 
 ### Login to the server
