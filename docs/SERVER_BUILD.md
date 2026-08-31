@@ -214,19 +214,7 @@ https://code.visualstudio.com/sha/download?build=stable&os=linux-deb-x64
 curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
 ```
 
-Use the minimal configuration and add the LLM model of your choice. You may see the following error, which is benign `error: The lockfile at uv.lock needs to be updated, but --locked was provided`, it can be safely ignored.
-
-The installation will hang at 
-
-```
-BEWARE: your OS is not officially supported by Playwright; downloading fallback build for ubuntu24.04-x64.
-Downloading Chrome for Testing 145.0.7632.6 (playwright chromium v1208) from https://cdn.playwright.dev/builds/cft/145.0.7632.6/linux64/chrome-linux64.zip
-167.3 MiB [====================] 100% 0.0s
-```
-
-use ctrl-C to end that.
-
-Sign up for the model of your choice.
+Use the minimal configuration and add the LLM model of your choice.
 
 Edit the .hermes/config.yaml to set up the camera MCP stdio, replacing the values in {{ }} double curly braces to fit your own configuration. 
 
