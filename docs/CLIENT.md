@@ -1,164 +1,254 @@
-# Add a Hermes Client to the Camera MCP Server
+# Camera System Client Configuration
 
-## Purpose
+This document describes how to configure clients to use the camera server. The top portion of the document shows instructions unique to each operating system, followed by common Hermes instructions used by all operating systems.
 
-This runbook onboards a new machine to an existing camera MCP deployment that
-uses Keycloak for OAuth 2.1/OpenID Connect authorization.
+Hermes has a built in Chrome browser MCP controller that is used by the system and requires the installation of the Chrome browser if not installed. Windows default Edge browser is Chrome compatible and can be used instead, so Chrome installation is not required for Windows.
 
-## Deployment values
+## Operating System Specific Instructions
+* [Fedora](#fedora)
+* [Ubuntu](#ubuntu)
+* [CachyOS](#cachyos)
+* [MacOS](#mac-os)
+* [Windows](#windows)
 
-Substitute these symbolic values for the target environment:
+## Fedora
 
-| Symbol | Meaning |
-|---|---|
-| `{{SERVER_FQDN}}` | Public DNS name of the MCP and Keycloak server |
-| `{{SERVER_IP}}` | Address of the MCP server |
-| `{{CLIENT_SOURCE_IP}}` | Source address Keycloak sees for the new client |
-| `{{MCP_REALM}}` | Keycloak realm, normally `mcp` |
-| `{{MCP_SCOPE}}` | Required MCP scope, normally `mcp:tools` |
-| `{{MCP_LOGIN_USER}}` | Keycloak user used for interactive login (normally `mcp-user`; additional per-user accounts can be created with `ADD_USER.md`) |
-| `{{HERMES_SERVER_NAME}}` | Local name for the Hermes MCP entry usually `camera`|
-| `{{CA_CERT_PATH}}` | Client-local absolute path to the private root CA |
-| `{{SERVER_USER}}` | Login account on the server (for SSH and sudo) |
-| `{{REMOTE_USER}}` | Local account used when SSHing from the client workstation |
-
-Derived URLs:
-
-```text
-MCP resource:  https://{{SERVER_FQDN}}/mcp
-Issuer:        https://{{SERVER_FQDN}}/auth/realms/{{MCP_REALM}}
-Discovery:     https://{{SERVER_FQDN}}/auth/realms/{{MCP_REALM}}/.well-known/openid-configuration
-DCR endpoint:  https://{{SERVER_FQDN}}/auth/realms/{{MCP_REALM}}/clients-registrations/openid-connect
-Metadata:      https://{{SERVER_FQDN}}/.well-known/oauth-protected-resource/mcp
-```
-
-## How authentication works
-
-1. Hermes connects to the MCP resource without a token.
-2. The MCP server returns `401 Unauthorized` and points Hermes to the
-   protected-resource metadata document.
-3. Hermes discovers the Keycloak issuer and DCR endpoint.
-4. Hermes registers a native public client with a loopback redirect URI and
-   requests `{{MCP_SCOPE}}`.
-5. Keycloak accepts registration only if the request source and redirect host
-   satisfy the anonymous DCR policies.
-6. Hermes creates a PKCE verifier and `S256` challenge.
-7. The user signs in through Keycloak and approves consent.
-8. Keycloak returns an authorization code to Hermes' loopback callback.
-9. Hermes exchanges the code and verifier for tokens.
-10. Hermes saves its registration and token state locally and uses the access
-    token for MCP requests.
-11. The MCP server validates signature, issuer, audience, expiration, token
-    type, and scope.
-
-Hermes is a public native client. It must not be configured with a client
-secret.
-
-## 2. Install or reference the private CA
-
-Hermes must validate the certificate for `{{SERVER_FQDN}}`. The certificate can be donwloaded from http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt.pem. Copy only the
-public root CA certificate to the client.
-
-Verify the certificate:
+### Install Hermes
 
 ```bash
-openssl x509 -in "{{CA_CERT_PATH}}" \
-  -noout -subject -issuer -ext basicConstraints -fingerprint -sha256
+curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
+source ~/.bashrc
 ```
 
-Require `CA:TRUE`, then verify HTTPS using the exact path Hermes will use:
+### Install Chrome browser
 
 ```bash
-curl --cacert "{{CA_CERT_PATH}}" \
-  -sS -o /dev/null -w 'Discovery: HTTP %{http_code}\n' \
-  "https://{{SERVER_FQDN}}/auth/realms/{{MCP_REALM}}/.well-known/openid-configuration"
+sudo dnf install fedora-workstation-repositories
+sudo dnf config-manager setopt google-chrome.enabled=1
+sudo dnf install google-chrome-stable
 ```
 
-Expected result: `HTTP 200`.
-
-## 3. Determine the client source address
-
-The anonymous Keycloak Trusted Hosts policy validates the address from which
-the DCR request arrives. This may differ from an address reported locally
-because of routing, VPNs, multiple interfaces, or NAT.
-
-First inspect addresses on the client. For example, on macOS:
+### Install certificate
 
 ```bash
-ipconfig getifaddr en0
-ipconfig getifaddr en1
+curl -O http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt.pem
+sudo mv camera-system-root-ca.crt.pem /etc/pki/ca-trust/source/anchors/
+sudo update-ca-trust
 ```
 
-The authoritative value is the address recorded by Nginx for the DCR request.
-After an initial failed registration, or while testing, inspect the server log:
+## Ubuntu
+
+### Install Hermes
 
 ```bash
-sudo grep 'clients-registrations/openid-connect' \
-  /var/log/nginx/access.log |
-tail -n 5
+sudo apt install git curl build-essential -y
+curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
+source ~/.bashrc
 ```
 
-Use the source address at the beginning of the relevant entry as
-`{{CLIENT_SOURCE_IP}}`.
+Please note that if your default browser is something other than Chrome, you will need to install the certificate manually to that browser in order for the camera MCP server to be able to login. The MCP server authentication is routed through the default browser.
 
-## 4. Permit the client in the DCR Trusted Hosts policy
-
-The full server-side procedure (token minting, live component resolution,
-fetch-verify-put-verify with all asserts, cleanup) is `ADD_CLIENT_ON_SERVER.md` —
-run that document end to end rather than restating it here.
-
-In short: resolve the live anonymous `trusted-hosts` realm component (exactly
-one match; never a remembered UUID), add only `{{CLIENT_SOURCE_IP}}` while
-preserving all existing hosts, keep both matching controls at `["true"]`, and
-verify against a direct by-ID fetch after the PUT. Collection views can
-display `config: {}` even when component configuration exists.
-
-The stored configuration should look like:
-
-```json
-{
-  "trusted-hosts": [
-    "<pre-existing hosts...>",
-    "{{CLIENT_SOURCE_IP}}",
-    "localhost",
-    "127.0.0.1"
-  ],
-  "host-sending-registration-request-must-match": ["true"],
-  "client-uris-must-match": ["true"]
-}
-```
-
-Note: `{{SERVER_IP}}` is not a trusted host — the list holds source addresses
-of *clients* that may register (plus loopback), never the server's own
-address.
-
-### Individual addresses versus subnets
-
-The strict default is to allow each observed client address individually.
-This provides clear registration boundaries but requires stable addresses or
-DHCP reservations.
-
-A narrowly scoped trusted subnet may reduce administration on a controlled
-LAN, but use it only after confirming that the installed Keycloak provider
-accepts the intended CIDR syntax. Do not assume CIDR support, and do not
-disable Trusted Hosts merely to simplify onboarding.
-
-## 5. Add the Hermes MCP entry
-
-Back up the existing Hermes configuration and preserve all unrelated entries.
+### Install Chrome browser
 
 ```bash
-hermes mcp add "{{HERMES_SERVER_NAME}}" \
-  --url "https://{{SERVER_FQDN}}/mcp" \
-  --auth oauth \
-  --connect-timeout 30
+wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+sudo apt install ./google-chrome-stable_current_amd64.deb
 ```
 
-The first connection may fail before the CA path is stored. If prompted, save
-the entry for later correction.
+### Install certificate
 
-Inspect `~/.hermes/config.yaml` structurally. Do not print unrelated settings
-or credentials. Require:
+```bash
+curl -O http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt.pem
+sudo mv camera-system-root-ca.crt.pem /usr/local/share/ca-certificates/
+sudo update-ca-certificates
+```
+
+### Configure Chrome to accept certificate
+
+#### 1. Install libnss
+```
+sudo apt install libnss3-tools
+```
+
+#### 2. Create the database directory (if it doesn't exist)
+```
+mkdir -p "$HOME/.pki/nssdb"
+chmod 700 "$HOME/.pki/nssdb"
+```
+
+#### 3. Initialize a clean NSS database (press Enter twice to leave the password blank)
+```
+certutil -d "sql:$HOME/.pki/nssdb" -N
+```
+
+#### 4. Import the certificate
+```
+certutil -d "sql:$HOME/.pki/nssdb" -A -t "CP,CP," -n "Camera CA Certificate" -i /usr/local/ca-certificates/camera-system-root-ca.crt.pem
+```
+
+### Alternate manual certificate configuration
+
+Three-dot-button upper right corner
+
+Settings -> Privacy and Security -> Security -> Advanced Import Certificates -> Custom Installed by you [Import] -> /usr/local/share/ca-certificates -> camera-system-root-ca.crt.pem
+
+## CachyOS
+
+### Install Hermes
+
+```bash
+curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
+source ~/.config/fish/config.fish
+```
+
+### Install Chrome browser
+
+```bash
+sudo pacman -S paru
+paru -S google-chrome
+```
+
+### Install certificate
+
+```bash
+curl -O http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt.pem
+sudo mv camera-system-root-ca.crt.pem /etc/ca-certificates/trust-source/anchors/
+sudo update-ca-trust
+```
+
+## Mac OS
+
+### Install Hermes
+
+```bash
+curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
+source ~/.zshrc
+```
+
+### Install Chrome browser
+
+Go to the Chrome homepage and install the download
+
+```
+https://www.google.com/chrome
+```
+
+### Install the CA Certificate
+
+* Open Spotlight by pressing Command + Space, type Keychain Access, and press Return.
+
+* Select the System keychain in the left-hand sidebar.
+
+* Drag and drop your certificate file (.pem) directly into the Keychain Access window.
+
+* Enter your Mac’s administrator username and password when prompted to authorize the addition.
+
+### Trust the Certificate
+
+* Find and highlight your newly added certificate in the list.
+
+* Double-click the certificate to open its details window.
+
+* Click the triangle next to Trust to expand the trust policy menu.
+
+* Change Secure Sockets Layer (SSL) (or When using this certificate) to Always Trust.
+
+* Close the window and enter your administrator password again to confirm and save the changes.
+
+## Windows
+
+### Install Hermes
+
+```powershell
+iex (irm https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.ps1)
+```
+
+### Install the ceritificate
+
+```powershell
+curl -O http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt.pem 
+openssl x509 -outform der -in camera-system-root-ca.crt.pem -out camera-system-root-ca.crt
+```
+
+* ### If you don't have openssl installed:
+
+  ```powershell
+  winget install ShiningLight.OpenSSL.Light
+
+  $opensslBin = "C:\Program Files\OpenSSL-Win64\bin"
+  $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+
+  if (($userPath -split ";") -notcontains $opensslBin) {
+      [Environment]::SetEnvironmentVariable(
+          "Path",
+          ($userPath.TrimEnd(";") + ";" + $opensslBin),
+          "User"
+      )
+  }
+  ```
+
+#### Open the Certificate Manager
+Press Windows + R, type:
+
+```
+certmgr.msc
+```
+
+#### Access the Trusted Root Store
+
+In the left pane, expand Trusted Root Certification Authorities.
+
+#### Import the Certificate
+
+* Right-click Certificates under Trusted Root Certification Authorities.
+
+* Select All Tasks > Import.
+
+* Follow the Certificate Import Wizard:
+
+* Click Next.
+
+* Choose Browse local files and select your .crt or .cer file.
+
+* Click Next.
+
+* Ensure Place all certificates in the following store is set to Trusted Root Certification Authorities.
+
+* Click Next, then Finish.
+
+#### Verify Installation
+
+* In the MMC, expand Trusted Root Certification Authorities.
+
+* Your new CA certificate should now appear in the list. You can right-click it to view details or remove it if needed.
+
+#### Restart if Needed
+
+* Some applications may require a restart to recognize the new trusted CA.
+
+&nbsp;
+
+# Common Hermes Instructions
+
+### Login to the camera server
+
+Open the chrome browser and navigate to the cameras page on the server
+
+```
+https://{{SERVER_FQDN}}/cameras
+```
+
+You will be presented a login screen. Sign in using the {{MCP_LOGIN_USER}} credentials, which will be the username {{MCP_LOGIN_USER}}, and the password which can be retrieved using the command 
+
+```
+ssh -t {{SERVER_USER}}@{{SERVER_FQDN}} 'sudo cat /opt/keycloak/{{MCP_LOGIN_USER}}.pass
+```
+
+This will register and save the credentials in the browser, and you should be able to observe the camera streams.
+
+### Configure the MCP server
+
+Edit `~/.hermes/config.yaml` and add the following towards the end of the file above the comments and replace the {{...}} fields with your local values:
 
 ```yaml
 mcp_servers:
@@ -167,180 +257,81 @@ mcp_servers:
     ssl_verify: {{CA_CERT_PATH}}
     connect_timeout: 30.0
     auth: oauth
-    enabled: false
+    enabled: true
 ```
 
-Set `auth: oauth` explicitly. Do not rely on Hermes inferring OAuth from the
-HTTPS URL. Keep the entry disabled until browser login and saved-token testing
-succeed; this prevents configuration reloads from initiating concurrent OAuth
-flows.
+Get your IP address using the appropriate command for your operating system. Note that if you are using a Virtual Machine, the host IP address is the correct choince, not the VM address.
 
-### Optional fixed callback port
+* Linux
 
-For headless or SSH-based login, add a fixed free callback port:
+  ```bash
+  nmcli dev show
+  ```
 
-```yaml
-mcp_servers:
-  {{HERMES_SERVER_NAME}}:
-    oauth:
-      redirect_port: {{CALLBACK_PORT}}
-```
+* Mac OS
 
-The same port is used for the DCR redirect URI and callback listener. Confirm
-it is free before login.
+  ```
+  ifconfig -a | grep "inet "
+  ```
 
-## 6. Complete OAuth login
+* Windows (PowerShell)
 
-### Login on the same desktop machine
+  ```
+  Get-NetIPAddress -AddressFamily IPv4 -AddressState Preferred | Select-Object IPAddress
+  ```
 
-When Hermes and the browser run on the same machine:
+Attempt a login which will fail. This creates an entry on the server side that can be used to verify the IP address you are using.
 
 ```bash
-hermes mcp login "{{HERMES_SERVER_NAME}}"
+hermes mcp login {{HERMES_SERVER_NAME}}
 ```
 
-Open the authorization URL, sign in as `{{MCP_LOGIN_USER}}`, approve
-`{{MCP_SCOPE}}`, and allow the browser to return to the loopback callback.
+The command will fail with a 403 error. Go to the server machine, log in and start a hermes instance and prompt
 
-Never paste the authorization URL, callback URL, authorization code, `state`,
-PKCE values, passwords, or tokens into chat or logs.
+```
+execute /home/{{SERVER_USER}}/onvif-mcp/docs/ADD_CLIENT_ON_SERVER.md using {{CLIENT_SOURCE_IP}} <ip-address>
+```
 
-### Login over SSH
+This will register your IP address with the server to allow access. You should see confirmation that the IP address attempted to access.
 
-When Hermes runs remotely but the browser is local, use one SSH command for
-both the interactive terminal and port forwarding:
+Back on the client machine, run the login command again, this time it should launch a browser that you have already used to login to the cameras web page and ask you to allow Hermes agent to authenticate to which you should reply yes. You may need the password again, if so use the ssh command shown above to retrieve it from the server.
 
 ```bash
-ssh -tt -L {{CALLBACK_PORT}}:127.0.0.1:{{CALLBACK_PORT}} \
-  {{REMOTE_USER}}@{{SERVER_FQDN}} \
-  '/absolute/path/to/hermes mcp login {{HERMES_SERVER_NAME}}'
+hermes mcp login {{HERMES_SERVER_NAME}}
 ```
 
-Open the authorization URL locally and allow the redirect to complete through
-the tunnel. Avoid manual callback pasting; it caused a callback-port retry race
-during the verified deployment.
-
-## 7. Verify saved OAuth state
-
-Before enabling the entry:
+You can get the list of available tools from the server
 
 ```bash
-hermes mcp test "{{HERMES_SERVER_NAME}}"
+hermes mcp test {{HERMES_SERVER_NAME}}
 ```
 
-Success requires no additional browser login, a successful authenticated
-connection, and discovery of the expected protected MCP tools.
+Keep this command handy, you may need it to login to the server when you start a new hermes session.
 
-Hermes normally stores files equivalent to:
-
-```text
-~/.hermes/mcp-tokens/{{HERMES_SERVER_NAME}}.client.json
-~/.hermes/mcp-tokens/{{HERMES_SERVER_NAME}}.json
-~/.hermes/mcp-tokens/{{HERMES_SERVER_NAME}}.meta.json
-```
-
-Treat every file in this directory as secret. Require mode `0600`, but never
-display contents.
-
-After the saved-state test passes, set `enabled: true`, then test again:
+## Configure the browser CLI
 
 ```bash
-hermes mcp test "{{HERMES_SERVER_NAME}}"
+hermes tools enable browser --platform cli
+hermes config set browser.cdp_url http://127.0.0.1:9222
+hermes config set browser.allow_private_urls true
 ```
 
-The second test must also succeed without browser authorization.
+## Prompt the agent 
 
-## Troubleshooting
+Start hermes and check the header to see the http {{HERMES_SERVER_NAME}} mcp server enabled. You can verify the installation using a simple no-op prompt
 
-### Get password from client terminal
-
-Run from a workstation that can SSH to the Keycloak host (substitute the
-actual server and login user):
-
-```bash
-ssh -t {{SERVER_USER}}@{{SERVER_FQDN}} 'sudo cat /opt/keycloak/{{MCP_LOGIN_USER}}.pass'
+```
+use the {{HERMES_SERVER_NAME}} mcp server to get its version
 ```
 
-The secret file is root-owned mode `0600` on the server; never paste its
-contents into chat or logs. (An older deprecated document used the name
-`.mcp-user-password`; that is stale — the current deployment uses
-`mcp-user.pass`, per `KEYCLOAK.md` Section 6.)
+Which should display the version of the server the libonvif dependency. You can get a list of cameras
 
-If several login accounts exist (see `ADD_USER.md`), each has its own file:
-`/opt/keycloak/<username>.pass`.
-
-### `403 insufficient_scope` and `Host not trusted`
-
-```json
-{
-  "error": "insufficient_scope",
-  "error_description": "Policy 'Trusted Hosts' rejected request to client-registration service. Details: Host not trusted."
-}
+```
+get cameras
 ```
 
-DCR reached Keycloak, but the received source address was not trusted.
-Determine it from the Nginx DCR access-log entry, add only that address, verify
-the component directly, and retry.
+You can show the live stream from a camera in the browser
 
-### `Client not found`
-
-This usually indicates stale manual-client configuration or stale Hermes
-registration state. The current standard uses DCR; do not create an arbitrary
-fixed client ID to work around it.
-
-### Callback port already in use
-
-Do not start concurrent login attempts. Disable the Hermes entry, identify the
-exact callback helper, and terminate it gracefully only after verifying its
-owner and command.
-
-If login did not produce a token file:
-
-1. Parse `{{HERMES_SERVER_NAME}}.client.json` internally to obtain its client
-   ID without displaying its registration token.
-2. Match it to exactly one Keycloak client with the expected name, public
-   client state, redirect URI, and `{{MCP_SCOPE}}` assignment.
-3. Delete only that verified Keycloak client.
-4. Remove only the matching local `.client.json` artifact.
-5. Verify no callback listener remains before retrying.
-
-If the main token file exists, test saved authentication before deleting
-anything. The browser may report an error after token exchange succeeded.
-
-### Browser succeeds but SSH reports connection failures
-
-If Hermes already reported successful authentication, later SSH channel
-connection failures can be harmless browser follow-up requests after the
-one-time callback listener closed. Verify with `hermes mcp test` instead of
-repeating login.
-
-### Private CA validation failure
-
-- Confirm `ssl_verify` is an absolute path readable by the Hermes user.
-- Confirm the certificate has `CA:TRUE`.
-- Compare its SHA-256 fingerprint with the authoritative public root CA.
-- Test discovery with `curl --cacert`.
-- Never disable verification or use `curl -k`.
-
-## Final checklist
-
-- `{{SERVER_FQDN}}` resolves to `{{SERVER_IP}}`.
-- The private CA validates the server certificate.
-- Public discovery returns `200` with the exact issuer.
-- `S256` and `{{MCP_SCOPE}}` are published.
-- Protected-resource metadata contains the exact resource and issuer.
-- Nginx records `{{CLIENT_SOURCE_IP}}` for the client's DCR request.
-- The anonymous Trusted Hosts policy includes `{{CLIENT_SOURCE_IP}}`.
-- Hermes explicitly stores `auth: oauth` and the CA path.
-- DCR creates a public client with the expected loopback redirect.
-- Browser authorization succeeds.
-- Hermes token artifacts are mode `0600`.
-- `hermes mcp test` reconnects without another browser login.
-- The entry is enabled only after saved-state verification.
-
-## Result
-
-Each onboarded machine receives its own Keycloak DCR client and Hermes token
-state. No client secret is used or shared. Keycloak limits registration to
-trusted source addresses and approved loopback redirect hosts, while the MCP
-server enforces the exact issuer, audience, and `{{MCP_SCOPE}}` authorization.
+```
+show the {{CAMERA}} main stream in the chrome browser
+```
