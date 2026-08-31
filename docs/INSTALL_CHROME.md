@@ -35,6 +35,29 @@ sudo update-ca-certificates
 
 ### Configure Chrome to accept certificate
 
+#### 1. Install libnss
+```
+sudo apt install libnss3-tools
+```
+
+#### 2. Create the database directory (if it doesn't exist)
+```
+mkdir -p "$HOME/.pki/nssdb"
+chmod 700 "$HOME/.pki/nssdb"
+```
+
+#### 3. Initialize a clean NSS database (press Enter twice to leave the password blank)
+```
+certutil -d "sql:$HOME/.pki/nssdb" -N
+```
+
+#### 4. Import the certificate
+```
+certutil -d "sql:$HOME/.pki/nssdb" -A -t "CP,CP," -n "Camera CA Certificate" -i /usr/local/ca-certificates/camera-system-root-ca.crt.pem
+```
+
+### Alternate manual certificate configuration
+
 Three-dot-button upper right corner
 
 Settings -> Privacy and Security -> Security -> Advanced Import Certificates -> Custom Installed by you [Import] -> /usr/local/share/ca-certificates -> camera-system-root-ca.crt.pem
