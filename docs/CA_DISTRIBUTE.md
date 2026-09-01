@@ -11,8 +11,8 @@ Only the public CA certificate is distributed. No private key, CA database, serv
 ## Final layout
 
 ```text
-Authoritative CA workstation (Mac)
-└── /Users/stephen/Private-CA/camera-system-ca/
+Authoritative CA workstation
+└── {{CA_ROOT_PATH}}/camera-system-ca/
     ├── private/                         Encrypted CA private key
     ├── certs/                           Authoritative public CA certificate
     ├── issued/                          Issued certificates
@@ -23,7 +23,7 @@ Authoritative CA workstation (Mac)
 └── /etc/nginx/tls/
     ├── {{SERVER_FQDN}}.key.pem         Nginx private key
     ├── {{SERVER_FQDN}}.crt.pem         Nginx site certificate
-    └── camera-system-root-ca.crt.pem    Public CA verification copy
+    └── root-ca.crt.pem                  Public CA verification copy (SITE_CERT.md §8)
 
 {{SERVER_FQDN}} client distribution files
 └── /srv/camera-pki/public/
@@ -32,7 +32,8 @@ Authoritative CA workstation (Mac)
     └── README.txt
 ```
 
-The copy under `/srv/camera-pki/public` is the deliberately managed client-distribution copy. The authoritative CA state remains on the Mac and in its encrypted backups.
+The copy under `/srv/camera-pki/public` is the deliberately managed client-distribution
+copy. The authoritative CA state remains at `{{CA_ROOT_PATH}}` and in its encrypted backups.
 
 ## Site-specific values
 
@@ -54,7 +55,6 @@ Replace every symbolic value before using this runbook:
 |---|---|
 | `{{SERVER_FQDN}}` | Canonical DNS name used by clients and the TLS certificate |
 | `{{SERVER_IP}}` | Server IP address hosting the distribution endpoint |
-| `{{SERVER_USER}}` | Login account used for server-side files under `/home` |
 
 Generated documents must not contain any unresolved `{{...}}` symbols.
 
@@ -90,14 +90,14 @@ drwxr-xr-x root root
 
 ## 2. Install the public CA certificate
 
-Install the already verified public CA certificate from the Nginx TLS directory:
+Install the already verified public CA certificate from the Nginx TLS directory (SITE_CERT.md §8 installs it under this name):
 
 ```bash
 sudo install \
   -o root \
   -g root \
   -m 644 \
-  /etc/nginx/tls/camera-system-root-ca.crt.pem \
+  /etc/nginx/tls/root-ca.crt.pem \
   /srv/camera-pki/public/camera-system-root-ca.crt.pem
 ```
 
@@ -221,7 +221,8 @@ root root 644
 
 ## 5. Configure the restricted Nginx HTTP endpoint
 
-The existing `{{SERVER_FQDN}}` HTTP server originally redirected every request to HTTPS:
+On a deployment where `{{SERVER_FQDN}}` already has an HTTP server block that redirected
+every request to HTTPS:
 
 ```nginx
 server {
@@ -232,7 +233,8 @@ server {
 }
 ```
 
-It was changed to allow `/ca/` over HTTP while redirecting all other paths:
+change it to allow `/ca/` over HTTP while redirecting all other paths. On a fresh box no
+such block exists — create it instead, e.g. `/etc/nginx/conf.d/{{SERVER_FQDN}}-ca-dist.conf`:
 
 ```nginx
 server {
@@ -275,6 +277,11 @@ sudo systemctl reload nginx.service
 
 ## 6. Test locally on {{SERVER_FQDN}}
 
+Reload propagates to the existing workers asynchronously; a request fired in the same
+instant as `systemctl reload` can still be answered by an old worker (it briefly returns
+404 before the new config takes hold). If you see a one-off 404, wait a second and retry —
+do not assume the configuration is broken.
+
 Test the certificate endpoint:
 
 ```bash
@@ -315,7 +322,7 @@ curl \
 
 When the root CA certificate changes:
 
-1. Verify the new public certificate against the authoritative Mac CA workspace.
+1. Verify the new public certificate against the authoritative CA workspace at `{{CA_ROOT_PATH}}`.
 2. Install the new public certificate under `/srv/camera-pki/public`.
 3. Recalculate the PEM file checksum.
 4. Update `README.txt` with both the new file checksum and certificate fingerprint.
