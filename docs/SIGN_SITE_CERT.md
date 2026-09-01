@@ -20,7 +20,7 @@ the SMB share at `/mnt/taurus/Camera-CA-Backups/`.
 | `{{SMB_PATH}}` | Mounted SMB share path (e.g. `/mnt/taurus`) |
 
 Passphrases are **not** supplied as variables. Both live in the local `pass` vault under
-key `sr99622@gmail.com` (see PASS_MGR.md):
+the CA store's GPG key (see CREATE_CA_CERT.md §5):
 
 | Vault entry | Protects |
 |---|---|
@@ -71,7 +71,7 @@ only the canonical DNS name, not an IP SAN.
 
 `openssl ca` prompts three times: once for the CA key passphrase (readable via piped
 stdin), then "Sign?" and "commit?" which must be answered `y` **after** reviewing what it
-prints. Feed them in order from the vault — the same two-line PTY pattern as PASS_MGR.md §5:
+prints. Feed them in order from the vault — the same two-line PTY pattern as CREATE_CA_CERT.md §6:
 
 ```bash
 bash -lc 'pass show camera-ca/root-key-passphrase; echo y; echo y' \
@@ -118,7 +118,7 @@ bash -lc 'pass show camera-ca/age-archive-<DATE>; pass show camera-ca/age-archiv
 
 Set mode `600`, verify decryption by listing (one-line pattern), copy to
 `{{SMB_PATH}}/Camera-CA-Backups/` without overwriting, and compare SHA-256 hashes —
-exactly as CREATE_CA_CERT.md §6–7 prescribe. The archive must contain the encrypted CA
+exactly as CREATE_CA_CERT.md §10–11 prescribe. The archive must contain the encrypted CA
 key, root cert, issued site certificate, CSR + ext file, `index.txt`/`index.txt.old`,
 `serial`/`serial.old`, and `newcerts/<serial>.pem`.
 
