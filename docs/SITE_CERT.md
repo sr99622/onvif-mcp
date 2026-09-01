@@ -102,14 +102,16 @@ DNS:{{SERVER_FQDN}}
 ```
 
 The CSR stays at `/etc/nginx/tls/{{SERVER_FQDN}}.csr.pem` until installation completes —
-it is never copied to an intermediate directory (§3 moves it straight into the CA tree).
+it is never copied to an intermediate directory (§3 moves it into the CA tree). Note that
+`/etc/nginx/tls` is root-owned mode 700 (§1), so **reading** files out of it requires sudo;
+the agent user cannot `openssl ... -in /etc/nginx/tls/...` directly.
 
 ## 3. Pre-issuance review and import the CSR into the CA
 
-Verify the CSR:
+Verify the CSR (sudo: root-owned directory):
 
 ```bash
-openssl req \
+sudo openssl req \
   -in /etc/nginx/tls/{{SERVER_FQDN}}.csr.pem \
   -noout -verify -subject
 ```
@@ -118,7 +120,7 @@ Confirm the CSR matches the live nginx key you intend to certify — public-key 
 CSR versus the installed key (both lines must be identical):
 
 ```bash
-openssl req -in /etc/nginx/tls/{{SERVER_FQDN}}.csr.pem -noout -pubkey | openssl sha256
+sudo openssl req -in /etc/nginx/tls/{{SERVER_FQDN}}.csr.pem -noout -pubkey | openssl sha256
 sudo openssl pkey -in /etc/nginx/tls/{{SERVER_FQDN}}.key.pem -pubout | openssl sha256
 ```
 
@@ -126,13 +128,17 @@ Check pre-issuance state (read-only): `index.txt` (certs issued so far) and `ser
 (next serial to assign, e.g. `0x1000` on a fresh CA), at
 `{{CA_ROOT_PATH}}/camera-system-ca/`.
 
-Then move the CSR into the CA's `csr` directory:
+Then move the CSR into the CA's `csr` directory, owned by the agent user (the signing
+step runs as that user) and mode 600:
 
 ```bash
-install -m 600 \
-  /etc/nginx/tls/{{SERVER_FQDN}}.csr.pem \
-  "{{CA_ROOT_PATH}}/camera-system-ca/csr/{{SERVER_FQDN}}.csr.pem"
+tmp=$(mktemp)
+sudo cat /etc/nginx/tls/{{SERVER_FQDN}}.csr.pem > "$tmp"
+install -m 600 "$tmp" "{{CA_ROOT_PATH}}/camera-system-ca/csr/{{SERVER_FQDN}}.csr.pem"
+shred -u "$tmp"
 ```
+
+The original stays in `/etc/nginx/tls/`; the staged copy is wiped.
 
 ## 4. Define reviewed site-certificate extensions
 
@@ -231,8 +237,26 @@ sudo bash -c 'cat /etc/nginx/tls/{{SERVER_FQDN}}.crt.pem \
   /etc/nginx/tls/root-ca.crt.pem > /etc/nginx/tls/{{SERVER_FQDN}}.chain.pem'
 ```
 
-Point the nginx server block at `{{SERVER_FQDN}}.chain.pem` and `{{SERVER_FQDN}}.key.pem`,
-then prove the pair actually works:
+If no HTTPS server block for this FQDN exists yet (fresh box), create one, e.g.
+`/etc/nginx/conf.d/{{SERVER_FQDN}}.conf`:
+
+```nginx
+server {
+	listen 443 ssl default_server;
+	listen [::]:443 ssl default_server;
+
+	ssl_certificate /etc/nginx/tls/{{SERVER_FQDN}}.chain.pem;
+	ssl_certificate_key /etc/nginx/tls/{{SERVER_FQDN}}.key.pem;
+
+	server_name {{SERVER_FQDN}};
+
+	root /var/www/html;
+	index index.html index.htm;
+}
+```
+
+Otherwise point the existing server block at `{{SERVER_FQDN}}.chain.pem` and
+`{{SERVER_FQDN}}.key.pem`. Then prove the pair actually works:
 
 ```bash
 sudo nginx -t
