@@ -78,16 +78,3 @@ Required SAN:
 ```text
 DNS:{{SERVER_FQDN}}
 ```
-
-## 3. Create a Tranferrable Copy of the CSR
-
-Because `/etc/nginx/tls` is mode `700`, create a temporary user-owned transfer copy:
-
-```bash
-sudo install \
-  -o {{SERVER_USER}} \
-  -g {{SERVER_USER}} \
-  -m 600 \
-  /etc/nginx/tls/{{SERVER_FQDN}}.csr.pem \
-  {{CSR_PATH}}/{{SERVER_FQDN}}.csr.pem
-```

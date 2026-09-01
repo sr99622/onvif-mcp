@@ -1,36 +1,54 @@
+# Site Certificate Signing (single-host deployment)
+
+## Purpose
+
+Sign the nginx server certificate with the private CA **on the same host that runs nginx**.
+
+This deployment changed since the original draft of this document: the CA and the web
+server now live on one machine, so all scp/ssh transfer steps are gone. Files move only
+within local filesystems; the only cross-machine step is the encrypted backup copy to
+the SMB share at `/mnt/taurus/Camera-CA-Backups/`.
+
 ## 0. Variables supplied by agent
 
-{{SERVER_FQDN}} - Server Fully Qualified Domain Name
+| Name | Meaning |
+|---|---|
+| `{{SERVER_FQDN}}` | Server Fully Qualified Domain Name (e.g. `nuc.home.arpa`) |
+| `{{SERVER_USER}}` | `$USER` account name for the agent |
+| `{{CSR_PATH}}` | Path where the CSR transfer copy lives (see SITE_KEY.md §3) |
+| `{{CA_ROOT_PATH}}` | Private CA root directory (e.g. `/home/stephen/Private-CA`) |
+| `{{SMB_PATH}}` | Mounted SMB share path (e.g. `/mnt/taurus`) |
 
-{{SERVER_IP}} - Server IP Address
+Passphrases are **not** supplied as variables. Both live in the local `pass` vault under
+key `sr99622@gmail.com` (see PASS_MGR.md):
 
-{{SERVER_USER}} - User Account Name
+| Vault entry | Protects |
+|---|---|
+| `camera-ca/root-key-passphrase` | The CA private key used for signing |
+| `camera-ca/age-archive-<DATE>` | The age archive from that date (local + SMB) |
 
-{{SERVER_PASSWORD}} - Server user account password
+## 1. Collect the CSR locally
 
-{{CA_CERTIFICATE_PASSPHRASE}} - Passphrase for the CA certificate needed to sign
-
-{{AGE_PASSPHRASE}} - Passphrase needed for encrypted backup
-
-## 1a. Get Site Key
-
-On the Mac, the user will need this command to get the key from the target:
+The CSR was generated on this same machine (SITE_KEY.md §2) and its transfer copy is at
+`{{CSR_PATH}}/{{SERVER_FQDN}}.csr.pem`. Move it into the CA's `csr` directory:
 
 ```bash
-scp \
-  {{SERVER_USER}}@{{SERVER_IP}}:/home/{{SERVER_USER}}/{{SERVER_FQDN}}.csr.pem \
-  "$HOME/Private-CA/camera-system-ca/csr/"
+install -m 600 \
+  "{{CSR_PATH}}/{{SERVER_FQDN}}.csr.pem" \
+  "{{CA_ROOT_PATH}}/camera-system-ca/csr/{{SERVER_FQDN}}.csr.pem"
 ```
 
-## 1b. Verify Key
-
-Verify the transferred CSR again:
+Verify it:
 
 ```bash
 openssl req \
-  -in "$HOME/Private-CA/camera-system-ca/csr/{{SERVER_FQDN}}.csr.pem" \
+  -in "{{CA_ROOT_PATH}}/camera-system-ca/csr/{{SERVER_FQDN}}.csr.pem" \
   -noout -verify -subject
 ```
+
+Before signing, also check pre-issuance state (read-only): `index.txt`, `serial`, and
+confirm the CSR matches the server key you intend to certify (public-key hash of CSR vs
+the live nginx key), so you sign the right key.
 
 ## 2. Define reviewed site-certificate extensions
 
@@ -46,109 +64,107 @@ extendedKeyUsage       = serverAuth
 subjectAltName         = DNS:{{SERVER_FQDN}}
 ```
 
-The SAN must contain every hostname clients will use. This deployment intentionally uses only the canonical DNS name, not an IP SAN.
+The SAN must contain every hostname clients will use. This deployment intentionally uses
+only the canonical DNS name, not an IP SAN.
 
 ## 3. Sign the Nginx certificate
 
+`openssl ca` prompts three times: once for the CA key passphrase (readable via piped
+stdin), then "Sign?" and "commit?" which must be answered `y` **after** reviewing what it
+prints. Feed them in order from the vault — the same two-line PTY pattern as PASS_MGR.md §5:
+
 ```bash
-openssl ca \
-  -config "$HOME/Private-CA/camera-system-ca/openssl.cnf" \
-  -extfile "$HOME/Private-CA/camera-system-ca/csr/{{SERVER_FQDN}}.ext.cnf" \
-  -extensions server_cert \
-  -days 397 \
-  -md sha256 \
-  -notext \
-  -in "$HOME/Private-CA/camera-system-ca/csr/{{SERVER_FQDN}}.csr.pem" \
-  -out "$HOME/Private-CA/camera-system-ca/issued/{{SERVER_FQDN}}.crt.pem"
+bash -lc 'pass show camera-ca/root-key-passphrase; echo y; echo y' \
+  | script -qec "stty -echo 2>/dev/null; openssl ca \
+      -config {{CA_ROOT_PATH}}/camera-system-ca/openssl.cnf \
+      -extfile {{CA_ROOT_PATH}}/camera-system-ca/csr/{{SERVER_FQDN}}.ext.cnf \
+      -extensions server_cert \
+      -days 397 \
+      -md sha256 \
+      -notext \
+      -in {{CA_ROOT_PATH}}/camera-system-ca/csr/{{SERVER_FQDN}}.csr.pem \
+      -out {{CA_ROOT_PATH}}/camera-system-ca/issued/{{SERVER_FQDN}}.crt.pem" /dev/null
 ```
 
-Review the displayed subject and extensions before answering `y` to both signing and database-commit prompts.
-
-The tested certificate included:
-
-- Serial `0x1000`
-- `CN={{SERVER_FQDN}}`
-- SAN `DNS:{{SERVER_FQDN}}`
-- `CA:FALSE`
-- TLS Web Server Authentication
-- 397-day validity
+Review the subject and extensions `openssl ca` displays before answering `y` to both
+signing and database-commit prompts (on headless execution, review the captured
+transcript immediately). Expected: serial from `serial` file (`0x1000` on a fresh CA),
+`CN={{SERVER_FQDN}}`, 397-day validity, extensions from the reviewed ext file.
 
 Verify chain, purpose, and hostname:
 
 ```bash
 openssl verify \
-  -CAfile "$HOME/Private-CA/camera-system-ca/certs/camera-system-root-ca.crt.pem" \
+  -CAfile "{{CA_ROOT_PATH}}/camera-system-ca/certs/camera-system-root-ca.crt.pem" \
   -purpose sslserver \
   -verify_hostname {{SERVER_FQDN}} \
-  "$HOME/Private-CA/camera-system-ca/issued/{{SERVER_FQDN}}.crt.pem"
+  "{{CA_ROOT_PATH}}/camera-system-ca/issued/{{SERVER_FQDN}}.crt.pem"
 ```
 
 Expected result ends with `OK`.
 
 ## 4. Back up updated CA state after issuance
 
-Issuance changes `index.txt`, `serial`, and related prior-state files. Create a new archive immediately:
+Issuance changes `index.txt` (plus `index.txt.old`) and advances `serial`
+(`serial.old`). Create a new archive immediately, named
+`camera-system-ca-after-<server>-cert-<DATE>.tar.gz.age`:
 
 ```bash
-(
-  set -o pipefail
-  tar -C "$HOME/Private-CA" -czf - camera-system-ca |
-    age -p -o "$HOME/Private-CA/backups/camera-system-ca-after-camera-cert-2026-08-03.tar.gz.age"
-)
+bash -lc 'pass show camera-ca/age-archive-<DATE>; pass show camera-ca/age-archive-<DATE>' \
+  | script -qec "stty -echo 2>/dev/null; set -o pipefail; \
+      tar -C {{CA_ROOT_PATH}} -czf - camera-system-ca | \
+      age -p -o {{CA_ROOT_PATH}}/backups/camera-system-ca-after-<server>-cert-<DATE>.tar.gz.age" /dev/null
 ```
 
-Set mode `600`, decrypt/list it, copy it to SMB, and compare SHA-256 hashes exactly as described for the initial archive.
+Set mode `600`, verify decryption by listing (one-line pattern), copy to
+`{{SMB_PATH}}/Camera-CA-Backups/` without overwriting, and compare SHA-256 hashes —
+exactly as CREATE_CA_CERT.md §6–7 prescribe. The archive must contain the encrypted CA
+key, root cert, issued site certificate, CSR + ext file, `index.txt`/`index.txt.old`,
+`serial`/`serial.old`, and `newcerts/<serial>.pem`.
 
-The verified archive contained:
+## 5. Install the certificates for nginx (same host)
 
-- Encrypted CA private key
-- Root CA certificate
-- Issued site certificate
-- CSR and reviewed extension file
-- `index.txt` and `index.txt.old`
-- `serial` and `serial.old`
-- `newcerts/1000.pem`
-
-## 5. Transfer public certificates to {{SERVER_FQDN}}
-
-From the Mac:
+The public certificates are installed into `/etc/nginx/tls/` — no scp, no user-home copy:
 
 ```bash
-scp \
-  "$HOME/Private-CA/camera-system-ca/certs/camera-system-root-ca.crt.pem" \
-  "$HOME/Private-CA/camera-system-ca/issued/{{SERVER_FQDN}}.crt.pem" \
-  {{SERVER_USER}}@{{SERVER_IP}}:/home/{{SERVER_USER}}/
+sudo install -m 644 \
+  "{{CA_ROOT_PATH}}/camera-system-ca/issued/{{SERVER_FQDN}}.crt.pem" \
+  /etc/nginx/tls/"{{SERVER_FQDN}}.crt.pem"
+sudo install -m 644 \
+  "{{CA_ROOT_PATH}}/camera-system-ca/certs/camera-system-root-ca.crt.pem" \
+  /etc/nginx/tls/root-ca.crt.pem
 ```
 
-This step completes the process.
+The private key already lives at `/etc/nginx/tls/{{SERVER_FQDN}}.key.pem` (SITE_KEY.md §1,
+mode 600 root). For `ssl_certificate` nginx needs the leaf **followed by** the CA:
 
-### Adendum
+```bash
+sudo bash -c 'cat /etc/nginx/tls/{{SERVER_FQDN}}.crt.pem \
+  /etc/nginx/tls/root-ca.crt.pem > /etc/nginx/tls/{{SERVER_FQDN}}.chain.pem'
+```
 
-The following notes reflect an implementation where the site already had a certificate that was being replaced. This would mirror the process taken in a backup restore with new hardware for example.
+Point the nginx server block at `{{SERVER_FQDN}}.chain.pem` and `{{SERVER_FQDN}}.key.pem`,
+then prove the pair actually works:
 
-NECESSARY DEVIATIONS (environment forced them)
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+curl --cacert "{{CA_ROOT_PATH}}/camera-system-ca/certs/camera-system-root-ca.crt.pem" \
+  https://{{SERVER_FQDN}}/   # TLS must complete against our CA, not trust-store defaults
+```
 
-1. Host-key repair before any scp/ssh could work. The doc says nothing about host keys; it presumes scp stephen@{{SERVER_IP}}:... just works. The server had been reimaged (Aug 19), so both the 10.1.1.5 and gmktec.home.arpa entries in ~/.ssh/known_hosts were stale and SSH refused with TOFU warnings. I verified via DNS (gmktec.home.arpa resolves to 10.1.1.5) that both names are the same reimaged box, scanned its live keys, replaced all six affected known_hosts lines (3 per name), and kept a pre-change copy at ~/.ssh/known_hosts.pre-reimage-20260820.bak. Nothing in the doc covered this; without it, Step 1a would have failed.
+Sanity check that the cert pairs with the live key (public-key hash match), as in the old
+cross-machine verification:
 
-2. Password auth via sshpass. The doc shows bare scp/ssh commands that assume either key auth or an interactive prompt. No key auth exists (BatchMode test failed), so I used sshpass -p 'kimba123' throughout. Functionally identical, just non-interactive.
+```bash
+openssl x509 -in "{{CA_ROOT_PATH}}/camera-system-ca/issued/{{SERVER_FQDN}}.crt.pem" \
+  -noout -pubkey | openssl sha256
+sudo openssl pkey -in /etc/nginx/tls/{{SERVER_FQDN}}.key.pem -pubout | openssl sha256
+```
 
-3. Interactive prompts driven by expect instead of a human at the terminal.
-   - Signing (Step 3): the doc says "review the displayed subject and extensions before answering y to both prompts." I did review them — openssl ca printed the full subject/extension list into its transcript before the prompts, and the extensions matched the reviewed ext file — but the two y answers were sent by docs/scripts/sign_cert.expect (the repo's own helper for exactly this FQDN), not typed by me at a prompt.
-   - Backup (Step 4): this age build rejects one-shot --passphrase and prompts "Enter passphrase" + "Confirm passphrase" with -p, so the doc's literal pipeline can't run headless as written. I used an equivalent /tmp expect script that fed the same passphrase to the same commands. The resulting archive is byte-identical in content to what the doc's command would produce.
-   - Decryption for verification: same reason.
+## 6. Client distribution
 
-4. openssl verify ran with Homebrew OpenSSL 3.6.3 (/opt/homebrew/bin/openssl) instead of bare openssl. macOS system LibreSSL has no -verify_hostname flag (it printed its usage text and failed). CREATE_CA_CERT.md explicitly says the tested Mac used Homebrew OpenSSL 3.6.3, so this restores the doc's intended tool rather than deviating in substance; same command, different binary path.
-
-JUDGMENT CALLS / NAMING
-
-5. Archive filename (Step 4). The doc's literal name is camera-system-ca-after-camera-cert-2026-08-03.tar.gz.age — a stale sample from the first run (the same filename already exists in backups/ from August 3). I followed the convention actually used across this repo for gmktec re-issues (prior files like ...after-gmktec-cert-2026-08-18, and docs/scripts/run_backup.sh's own name) and created camera-system-ca-after-gmktec-cert-2026-08-20.tar.gz.age. If you'd rather I match the doc literally, it's a rename on two filesystems — say the word.
-
-6. The ext file (Step 2). The doc says "create {{SERVER_FQDN}}.ext.cnf". A reviewed gmktec.home.arpa.ext.cnf already existed in csr/ from a previous attempt; rather than overwriting it I diffed its content against the doc's required block — identical, including SAN being DNS:gmktec.home.arpa only — and used it as-is.
-
-7. SMB copy (Step 4). The doc says "copy it to SMB, and compare SHA-256 hashes exactly as described for the initial archive." First attempt: no share mounted, nothing on the wired LAN answered on TCP 445, so I skipped with a note instead of fabricating success. After you said the box was up: /Volumes/Users/sr996/Camera-CA-Backups existed, I cp -n'd (no overwrite) and compared shasum -a 256 pairs exactly as CREATE_CA_CERT.md §8 prescribes — both matched bit-for-bit.
-
-ADDITIONS BEYOND THE RUNBOOK
-
-8. Pre-flight investigation (read-only): inspected index.txt/serial before signing (found this is a re-issue after serials 1009/100A, and the 1003/1004 revocations), listed the prior day's archive contents to confirm it captured state up through 100A, and confirmed the server-side CSR/key were freshly generated that morning (CSR 15:04, key 15:02) so I was signing the right key.
-
-9. Extra transfer checks after Step 5: SHA-256 of both files compared Mac↔server post-scp (cert 94a970…f6422, root CA 136f12…80f25b0 — the latter also equals the documented client-distribution checksum), and cert-public-key-hash vs sudo openssl pkey -pubout of /etc/nginx/tls/gmktec.home.arpa.key.pem (d6f358e9… matches) to prove the new cert will actually pair with Nginx's live key.
+The root certificate (`/etc/nginx/tls/root-ca.crt.pem` or the copy in
+`{{CA_ROOT_PATH}}/camera-system-ca/certs/`) is public and may be distributed to clients;
+the private key never leaves this host, and the vault passphrases stay GPG-encrypted in
+`~/.password-store`.

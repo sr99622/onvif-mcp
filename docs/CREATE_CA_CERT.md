@@ -334,5 +334,3 @@ sha256sum \
 ```
 
 The two hashes must match exactly.
-
-SMB permissions produced an executable-bit artifact on the encrypted archive. This did not affect its encrypted contents.

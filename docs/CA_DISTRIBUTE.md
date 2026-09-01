@@ -118,7 +118,7 @@ Tested result:
 ```text
 subject=CN=Camera System Root CA
 issuer=CN=Camera System Root CA
-sha256 Fingerprint=48:68:BF:06:D5:8F:DC:10:1F:07:D5:64:90:D4:1D:44:73:EC:17:46:09:69:42:F5:90:B8:BA:FC:BC:B4:3F:1D
+sha256 Fingerprint={{GENERATED VALUE}}
 ```
 
 ## 3. Create and verify the PEM file checksum
@@ -134,7 +134,8 @@ sudo tee camera-system-root-ca.crt.pem.sha256
 Tested file checksum:
 
 ```text
-136f1293417e8a2b9399cfd07519e88d651adc0e8913266714c3d1dec80f25b0  camera-system-root-ca.crt.pem
+{{GENERATED VALUE}}
+  camera-system-root-ca.crt.pem
 ```
 
 Verify the checksum file:
@@ -176,11 +177,10 @@ PEM checksum file:
 http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt.pem.sha256
 
 PEM file SHA-256:
-136f1293417e8a2b9399cfd07519e88d651adc0e8913266714c3d1dec80f25b0
+{{GENERATED VALUE}}
 
 Certificate SHA-256 fingerprint:
-48:68:BF:06:D5:8F:DC:10:1F:07:D5:64:90:D4:1D:44:
-73:EC:17:46:09:69:42:F5:90:B8:BA:FC:BC:B4:3F:1D
+{{GENERATED VALUE}}
 
 Verify the downloaded PEM file:
 
@@ -310,113 +310,6 @@ curl \
   --show-error \
   http://{{SERVER_FQDN}}/ca/README.txt
 ```
-
-## 7. (PRE) Install certificate on Mac OS Safari
-
-Step-by-Step Import InstructionsOpen Keychain Access: 
-
-* Press Command + Spacebar to use Spotlight, 
-
-* type Keychain Access, 
-
-* and press Return.
-
-Choose a Keychain: 
-
-* On the left sidebar, click login (for your user account) or System (for all users on the Mac).
-
-Import the File: 
-
-* Drag your certificate file directly into the Keychain Access window
-
-* Type your Mac administrator name and password when prompted to allow the change.
-
-Trusting the Certificate - Open Details: 
-
-* Double-click the newly imported certificate in the list.
-
-* Change Trust Settings: Click the arrow next to Trust to expand the menu.
-
-* Set to Always Trust: Change "When using this certificate" to Always Trust, 
-
-* close the window and enter your password again.
-
-## 7. Test from a client computer
-
-Open:
-
-```text
-http://{{SERVER_FQDN}}/ca/README.txt
-```
-
-Confirm that it displays without redirecting to HTTPS.
-
-Then open:
-
-```text
-http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt.pem
-```
-
-The tested Windows client downloaded the certificate successfully.
-
-Before installing it, verify the PEM file checksum on Windows:
-
-```cmd
-certutil -hashfile camera-system-root-ca.crt.pem SHA256
-```
-
-Expected file checksum:
-
-```text
-136f1293417e8a2b9399cfd07519e88d651adc0e8913266714c3d1dec80f25b0
-```
-
-The certificate must be installed only into the trusted-root store used by the intended browser or operating system.
-
-Firefox may maintain its own authority store. If it does not use the operating-system trust store, import the public CA through:
-
-```text
-Settings -> Privacy & Security -> Certificates -> View Certificates -> Authorities
-```
-
-Enable only:
-
-```text
-Trust this CA to identify websites
-```
-
-Never bypass certificate warnings with **Accept the Risk and Continue**.
-
-## 8. Remove incidental transfer files
-
-The original certificate workflow temporarily staged these public files in `/home/{{SERVER_USER}}` on `{{SERVER_FQDN}}`:
-
-```text
-/home/{{SERVER_USER}}/{{SERVER_FQDN}}.csr.pem
-/home/{{SERVER_USER}}/{{SERVER_FQDN}}.crt.pem
-/home/{{SERVER_USER}}/camera-system-root-ca.crt.pem
-```
-
-After verifying the installed Nginx copies, CA workspace, encrypted backups, and `/srv` distribution copy, move only those staging files to recoverable trash:
-
-```bash
-gio trash \
-  /home/{{SERVER_USER}}/{{SERVER_FQDN}}.csr.pem \
-  /home/{{SERVER_USER}}/{{SERVER_FQDN}}.crt.pem \
-  /home/{{SERVER_USER}}/camera-system-root-ca.crt.pem
-```
-
-Verify that no matching files remain:
-
-```bash
-find /home/{{SERVER_USER}} -maxdepth 1 -type f \
-  \( -name '{{SERVER_FQDN}}.csr.pem' \
-     -o -name '{{SERVER_FQDN}}.crt.pem' \
-     -o -name 'camera-system-root-ca.crt.pem' \) \
-  -print
-```
-
-No output is expected.
 
 ## Operational maintenance
 

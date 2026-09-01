@@ -188,18 +188,22 @@ source .bashrc
 uv
 ```
 
-
-<h2>Install onvif-tui and validate cameras</h2>
+<h2>Install onvif-tui</h2>
 
 ```
 uv tool install onvif-tui
-onvif-tui -u admin -p admin123
 ```
 
 <h2>Download onvif-mcp repository</h2>
 
 ```
 git clone https://github.com/sr99622/onvif-mcp
+```
+
+<h2>Set up passwordless sudo</h2>
+
+```
+sudo env USER="$USER" onvif-mcp/docs/scripts/enable-nopasswd.sh
 ```
 
 <h2>Install VS Code</h2>
@@ -214,9 +218,17 @@ https://code.visualstudio.com/sha/download?build=stable&os=linux-deb-x64
 curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
 ```
 
-Use the minimal configuration and add the LLM model of your choice.
+Use the minimal configuration and add the LLM model of your choice, the source the environment.
 
-Edit the .hermes/config.yaml to set up the camera MCP stdio, replacing the values in {{ }} double curly braces to fit your own configuration. 
+```
+source .bashrc
+```
+
+Edit the .hermes/config.yaml to set up the camera MCP stdio, replacing the values in {{ }} double curly braces to fit your own configuration.
+
+```
+nvim .hermes/config.yaml
+```
 
 The STREAM_SERVER_URL should be something like `<hostname>.home.arpa`, where .arpa is the reserved DNS domain name for internal servers. If you have a DNS sever on the local network, you can add this hostname and static IP to the DNS address mappings. If not, just add the name to your /etc/hosts file for now. At a later stage in the configuration, the DNS server issue will become more prominent, and you can add the DNS serving capability to the machine for use by other machines on the local network for local name resolution. Depending on your network topology, it may be preferable to use hosts files on client computers rather than local DNS resolution. This topic will be explored in detail later.
 
@@ -236,6 +248,13 @@ mcp_servers:
       STREAM_SERVER_URL: {{SERVER_FQDN}}
 ```
 
+Launch hermes and inspect the header. Look for the mcp servers section it should look something like
+
+```
+MCP Servers
+camera (stdio) - 42 tool(s)
+```
+
 You can test the camera MCP using the prompt
 
 ```
@@ -244,13 +263,7 @@ use the camera MCP server to get its version
 
 It should reply with both the MCP version and the libonvif version.
 
-<h2>Give Hermes sudo privilege</h2>
 
-from inside the onvif-mcp repository,
-
-```
-sudo env USER="$USER" onvif-mcp/docs/scripts/enable-nopasswd.sh
-```
 
 <h2>Set a static IP</h2>
 
@@ -264,6 +277,19 @@ You will get back a listing of the ports. Pick out the one that is currently con
 
 ```
 set a static IP address on <adapter name> to be <static IP>, Gateway <existing gateway>, DNS <existing DNS>
+```
+
+The server will need a backup location for critical data. An SMB share is a good place to do this. Assuming you have an SMB server set up on your local network, Hermes can do this for you with the following prompt
+
+```
+There is an SMB server on the local network located on <smb server name> and is named <smb share name>. Create a mount point <mount point> and permanently mount the SMB server share there. SMB username is <username> and password is <password>
+
+```
+
+Am HTTP server is needed as well, install nginx using the prompt
+
+```
+install nginx
 ```
 
 Reboot the machine to verify that settings are correct and survive reboot.
