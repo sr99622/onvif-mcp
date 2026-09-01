@@ -1,16 +1,12 @@
+# Server Configuration
 
-<h2>Update System and Enable Remote Access</h2>
+This is a suggested configuration for the server. The best way to build this system is to start with a fresh Ubuntu installation on a dedicated machine. Update the system after installation to get the latest versions of tools.
 
-After installing Ubuntu, update the system and install SSH so you can remote into the machine.
+Later steps in the configuration may reference tools installed here, so be aware that skipping steps may require workarounds. One important feature is the passwordless sudo which Hermes needs to complete many tasks, and removing that step will make the configurations that follow very difficult. 
 
-```
-sudo apt update
-sudo apt upgrade
-sudo apt install openssh-server -y
-sudo systemctl enable --now ssh
-```
+The first part of the document describes useful but not critical steps, the [**Essential Configrations**](#essential-configurations) section describes critical steps. 
 
-<h2>Install git</h2>
+## Install git
 
 We will need git for next steps, so install and configure.
 
@@ -21,28 +17,18 @@ git config --global user.email <your email>
 git config --global user.name <your name>
 ```
 
-<h2>Github CLI</h2>
+## Github CLI
 
 Integrate github to the desktop, first set up archive 
 
 ```
 sudo mkdir -p -m 755 /etc/apt/keyrings && wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null && sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
-```
-
-create installation artifacts
-
-```
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-```
-
-install and login 
-
-```
 sudo apt update && sudo apt install gh -y
 gh auth login
 ```
 
-<h2>Install LazyVim Editing Tool</h2>
+## Install LazyVim Editing Tool
 
 You can run the rest of the configuration from remote. We want to install an editor that will work from the remote terminal. We will be installing LazyVim. The first step is to install the latest version of neovim.
 
@@ -81,22 +67,6 @@ sudo apt install ripgrep
 
 LazyVim needs a font package, JetBrains is widely used.
 
-#### On MacOS, 
-
-```
-brew install --cask font-jetbrains-mono-nerd-font
-```
-
-Then open terminal, go to Terminal → Settings → Profiles → Text → Font → Change
-
-Select:
-
-JetBrainsMono Nerd Font Mono
-
-Quit terminal and reopen to get the font.
-
-#### On Ubuntu
-
 ```
 wget -P ~/.local/share/fonts https://github.com/ryanoasis/nerd-fonts/releases/download/v3.0.2/JetBrainsMono.zip && cd ~/.local/share/fonts && unzip JetBrainsMono.zip && rm JetBrainsMono.zip
 cd
@@ -104,11 +74,11 @@ cd
 
 Register the font in the cache 
 
-* ### Check the exit code to make it completed succesfully, you may need to run this twice. For some reason it often fails on the first run. 
-
 ```
 fc-cache -f -v 
 ```
+* #### Check the exit code to make it completed succesfully, you may need to run this twice. For some reason it often fails on the first run. 
+
 
 Close and re-open the terminal then select Preferences from the hamburger icon in the upper right corner. Scroll down a bit and unselect 'Use Sytem Font', then use the menu to select the 'JetBrainsMono Nerd Font Mono' type of your choice.
 
@@ -149,7 +119,7 @@ vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold", "CursorHo
 })
 ```
 
-<h2>Install tmux</h2>
+## Install tmux
 
 tmux lets you split the screen into different prompts. This makes it super easy to run multiple prompts from the remote terminal.
 
@@ -178,7 +148,7 @@ bind-key X kill-pane
 
 Now, to split a screen horizontally, Ctl+a |, vertically, Ctl+a -
 
-<h2>Install uv</h2>
+## Install uv
 
 This will be needed for the camera MCP server.
 
@@ -188,31 +158,50 @@ source .bashrc
 uv
 ```
 
-<h2>Install onvif-tui</h2>
+## Install onvif-tui
 
 ```
 uv tool install onvif-tui
 ```
 
-<h2>Download onvif-mcp repository</h2>
+## Install VS Code
 
-```
-git clone https://github.com/sr99622/onvif-mcp
-```
-
-<h2>Set up passwordless sudo</h2>
-
-```
-sudo env USER="$USER" onvif-mcp/docs/scripts/enable-nopasswd.sh
-```
-
-<h2>Install VS Code</h2>
+Open this link in the browser to download the .deb file installer
 
 ```
 https://code.visualstudio.com/sha/download?build=stable&os=linux-deb-x64
 ```
 
-<h2>Install Hermes</h2>
+Then run the install, replacing the filename with the actual name in the Downloads folder
+
+```
+sudo apt install ./Downloads/<code.....deb>
+```
+
+&nbsp;
+
+# Essential Configurations
+
+## Enable Remote Access
+
+```
+sudo apt install openssh-server -y
+sudo systemctl enable --now ssh
+```
+
+## Download onvif-mcp repository
+
+```
+git clone https://github.com/sr99622/onvif-mcp
+```
+
+## Set up passwordless sudo
+
+```
+sudo env USER="$USER" onvif-mcp/docs/scripts/enable-nopasswd.sh
+```
+
+## Install Hermes
 
 ```
 curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
@@ -248,7 +237,7 @@ mcp_servers:
       STREAM_SERVER_URL: {{SERVER_FQDN}}
 ```
 
-Launch hermes and inspect the header. Look for the mcp servers section it should look something like
+Launch hermes and inspect the header. The first launch will show connecting to the MCP server, the second launch will stabilize the header. Look for the mcp servers section it should look something like:
 
 ```
 MCP Servers
@@ -265,7 +254,7 @@ It should reply with both the MCP version and the libonvif version.
 
 
 
-<h2>Set a static IP</h2>
+## Set a static IP
 
 use these commands in the Hermes prompt to tell it what to do.
 
@@ -279,6 +268,8 @@ You will get back a listing of the ports. Pick out the one that is currently con
 set a static IP address on <adapter name> to be <static IP>, Gateway <existing gateway>, DNS <existing DNS>
 ```
 
+## Mount an SMB share for backups
+
 The server will need a backup location for critical data. An SMB share is a good place to do this. Assuming you have an SMB server set up on your local network, Hermes can do this for you with the following prompt
 
 ```
@@ -286,7 +277,9 @@ There is an SMB server on the local network located on <smb server name> and is 
 
 ```
 
-Am HTTP server is needed as well, install nginx using the prompt
+## Install nginx
+
+A HTTP server is needed as well, install nginx using the prompt
 
 ```
 install nginx
