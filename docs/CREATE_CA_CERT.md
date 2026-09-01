@@ -74,7 +74,7 @@ Tested on macOS and on Debian/Ubuntu Linux. Differences handled in this runbook:
 - The complete CA state is archived using authenticated `age` encryption.
 - The archive passphrase and the CA-key passphrase are stored **separately from the
   files**, GPG-encrypted in the local `pass` store, with an encrypted backup on SMB.
-- The CA is backed up after every issuance or revocation operation (see SIGN_SITE_CERT.md).
+- The CA is backed up after every issuance or revocation operation (see SITE_CERT.md).
 
 ## Hard rules
 
@@ -273,7 +273,7 @@ extendedKeyUsage       = serverAuth
 ```
 
 `copy_extensions = none` prevents a CSR from injecting unreviewed extensions. A separate
-reviewed extension file controls each issued certificate (see SIGN_SITE_CERT.md).
+reviewed extension file controls each issued certificate (see SITE_CERT.md §4).
 
 ## 5. Generate the passphrases into the vault (single source of truth)
 
