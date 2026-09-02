@@ -213,7 +213,7 @@ External clients  │                     │   natively uses MCP protocol.
 │  Environment:                                    │
 │    CAMERA_USERNAME={{USERNAME}}                  │
 │    CAMERA_PASSWORD={{PASSWORD}}                  │
-│    STREAM_SERVER_URL=http://{{SERVER_FQDN}}     │
+│    STREAM_SERVER_URL=http://{{SERVER_FQDN}}      │
 │    MCP_HTTP_HOST=127.0.0.1                       │
 │    MCP_HTTP_PORT=8001                            │
 └──────────────┬───────────────────────────────────┘
@@ -221,8 +221,8 @@ External clients  │                     │   natively uses MCP protocol.
                ▼
           ┌─────────────┐
           │ ONVIF       │
-          │ Cameras on  │
-          │ 10.1.1.x    │
+          │ Cameras     │
+          │             │
           └─────────────┘
 ```
 

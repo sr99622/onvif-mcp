@@ -29,8 +29,8 @@ So an intermediate service sits between nginx and the cameras:
 browser/agent
     |
     v
-https://{{SERVER_FQDN}}/snapshot/<serial_number>/<profile_token>/
-    |  (nginx gates on keycloak, same as /webrtc/)
+http://{{SERVER_FQDN}}/snapshot/<serial_number>/<profile_token>/
+    |  (plain HTTP, port 80 — same open posture as /webrtc/ at this stage)
     v
 127.0.0.1:8891   services/snapshot_proxy.py   (loopback-only, systemd unit)
     |  (per-request Basic OR Digest auth to the camera)
@@ -39,9 +39,13 @@ camera's own ONVIF snapshot_uri  (native JPEG)
 ```
 
 The URL scheme matches what the MCP tools emit: `build_web_player_url` produces
-`https://{{SERVER_FQDN}}/webrtc/<serial>/<token>/`, and
+`http://{{SERVER_FQDN}}/webrtc/<serial>/<token>/`, and
 `build_web_snapshot_url` (`packages/core/src/onvif_mcp_core/streaming.py`)
-produces `https://{{SERVER_FQDN}}/snapshot/<serial>/<token>/`. The nginx
+produces `http://{{SERVER_FQDN}}/snapshot/<serial>/<token>/`. Both derive from
+`STREAM_SERVER_URL` on `onvif-mcp-http`, which is currently plain HTTP — this
+host has no TLS certificate and no Keycloak gate at this stage of the
+configuration. (TLS + keycloak will be added later; when they are, the scheme
+switches to `https://` and the Step 6 auth lines reappear.) The nginx
 location, the proxy's route table keys, and that scheme must all agree.
 
 ## Values supplied by Agent
@@ -201,21 +205,28 @@ sudo cp --update=none /etc/nginx/sites-available/mediamtx \
   "/etc/nginx/sites-available/mediamtx.backup-$(date +%F)"
 ```
 
-Inside the HTTPS server block (the one serving `/webrtc/`), add this location
-— it reuses the existing keycloak gate (`/oauth2/auth` + `@oauth2_signin`) that
-is already defined in that file:
+Inside the existing `server` block (the one serving `/webrtc/`) add this
+location. This host currently serves **plain HTTP on port 80** — it has no TLS
+certificate and no Keycloak gate, so at this stage there is no
+`auth_request`/`@oauth2_signin` wiring to reuse. Access control is the same
+open posture as `/webrtc/` (see the security notes at the bottom). When TLS +
+Keycloak are added later, insert the keycloak lines from that section's final
+form inside `location /snapshot/`:
+
+```nginx
+    auth_request /oauth2/auth;
+    error_page 401 = @oauth2_signin;
+    auth_request_set $auth_cookie $upstream_http_set_cookie;
+    add_header Set-Cookie $auth_cookie always;
+```
+
+The location as it is installed today (no client-side gate):
 
 ```nginx
     # --- Snapshot proxy (services/snapshot_proxy.py, loopback-only on 8891) ---
     # Cameras authenticate with per-request HTTP Digest which nginx cannot do
-    # natively, so the local snapshot service performs that handshake. The
-    # client-facing gate is identical to /webrtc/.
+    # natively, so the local snapshot service performs that handshake.
     location /snapshot/ {
-        auth_request /oauth2/auth;
-        error_page 401 = @oauth2_signin;
-        auth_request_set $auth_cookie $upstream_http_set_cookie;
-        add_header Set-Cookie $auth_cookie always;
-
         # Pass through unchanged: the proxy expects /snapshot/<serial>/<profile>/
         proxy_pass http://127.0.0.1:8891/snapshot/;
         proxy_http_version 1.1;
@@ -251,27 +262,38 @@ and re-test before reloading.
 
 ## Step 7 — End-to-End Verification
 
-1. **Unauthenticated requests must be bounced to keycloak** (proves the gate
-   behaves like `/webrtc/`):
+1. **Unauthenticated requests get a plain image** (there is no Keycloak gate
+   yet on this host, so there is nothing to bounce — same open posture as
+   `/webrtc/`). Verify the proxy path through nginx returns a real JPEG:
 
    ```bash
-   sudo curl --head -s --cacert /etc/nginx/tls/camera-system-root-ca.crt.pem \
-     "https://{{SERVER_FQDN}}/snapshot/<serial>/<token>/" | head -8
+   curl -s -o /tmp/e2e.jpg \
+     -w '%{http_code} %{content_type}\n' \
+     "http://{{SERVER_FQDN}}/snapshot/<serial>/<token>/"
+   file /tmp/e2e.jpg        # must say "JPEG image data"
    ```
 
-   Expected: `HTTP/1.1 302` with `Location: https://{{SERVER_FQDN}}/oauth2/start?rd=/snapshot/<serial>/<token>/`.
+   Expected: `200 image/jpeg` with a real JPEG body and
+   `Cache-Control: no-store` in the response headers.
 
-2. **Authenticated fetch returns the image.** The agent cannot complete the
-   keycloak login flow from the CLI; have the user open the URL in a browser
-   (or use an existing session) and confirm a photo of that camera appears:
+2. **Fetch returns the image.** Open
+   `http://{{SERVER_FQDN}}/snapshot/<serial>/<token>/` in a browser and
+   confirm a photo of that camera appears.
 
-   ```text
-   https://{{SERVER_FQDN}}/snapshot/<serial>/<token>/
-   ```
-
-3. **MCP tools emit the same URL.** With `STREAM_SERVER_URL=https://{{SERVER_FQDN}}`
+3. **MCP tools emit the same URL.** With `STREAM_SERVER_URL=http://{{SERVER_FQDN}}`
    set on `onvif-mcp-http`, call `get_cameras` and confirm each profile's
-   `web_snapshot_url` equals the URL verified in step 2.
+   `web_snapshot_url` equals the URL verified in step 1.
+
+> **When TLS + Keycloak are added later:** re-insert the keycloak lines from
+> Step 6 into the `/snapshot/` location, switch every client-facing URL above
+> to `https://{{SERVER_FQDN}}/...` (with a CA cert), and replace step 1 with
+> the gate check:
+>
+> ```bash
+> curl --head -s --cacert /etc/nginx/tls/camera-system-root-ca.crt.pem \
+>   "https://{{SERVER_FQDN}}/snapshot/<serial>/<token>/" | head -8
+> # expect: HTTP/1.1 302 with Location: .../oauth2/start?rd=/snapshot/<serial>/<token>/
+> ```
 
 ## Adding a Camera Later
 
@@ -286,8 +308,10 @@ The service needs no nginx changes — only:
 ## Security Notes
 
 - The proxy binds to loopback only; the cameras are reached solely through it,
-  and clients reach it solely through nginx behind the keycloak gate — the same
-  trust chain as `/webrtc/`.
+  and clients reach it solely through nginx. **At this stage there is no client
+  authentication gate** — `/snapshot/` is open on port 80 with the same posture
+  as `/webrtc/`. When TLS + Keycloak are added later, insert the keycloak
+  `auth_request` lines from Step 6 to put it behind the same gate.
 - Camera credentials live in environment (systemd unit) and in the upstream
   URLs' authentication, never in client-facing responses or logs. The proxy
   logs request paths only.

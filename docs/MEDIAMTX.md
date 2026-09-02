@@ -12,10 +12,6 @@ This document describes the MediaMTX RTSP-to-WebRTC/HLS streaming server. The se
 
 These values are required for operation. Stop and prompt the user if they are not provided.
 
-## nginx requirement
-
-Install nginx first, it will be needed later. Once nginx is set up, continue.
-
 ## Binary Executable
 
 location: https://github.com/bluenviron/mediamtx/releases
