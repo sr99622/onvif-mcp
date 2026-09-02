@@ -23,7 +23,7 @@ Authoritative CA workstation
 └── /etc/nginx/tls/
     ├── {{SERVER_FQDN}}.key.pem         Nginx private key
     ├── {{SERVER_FQDN}}.crt.pem         Nginx site certificate
-    └── root-ca.crt.pem                  Public CA verification copy (SITE_CERT.md §8)
+    └── camera-system-root-ca.crt.pem    Public CA verification copy (SITE_CERT.md §8)
 
 {{SERVER_FQDN}} client distribution files
 └── /srv/camera-pki/public/
@@ -97,7 +97,7 @@ sudo install \
   -o root \
   -g root \
   -m 644 \
-  /etc/nginx/tls/root-ca.crt.pem \
+  /etc/nginx/tls/camera-system-root-ca.crt.pem \
   /srv/camera-pki/public/camera-system-root-ca.crt.pem
 ```
 

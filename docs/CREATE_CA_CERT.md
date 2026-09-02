@@ -356,7 +356,8 @@ Key is valid
 
 ## 8. Create the root CA certificate (passphrase supplied from the vault)
 
-Create a ten-year self-signed root. The passphrase is again fed from the vault via a plain
+Create a ten-year self-signed root. The certificate should be named 
+`camera-system-root-ca.crt.pem`. The passphrase is again fed from the vault via a plain
 pipe (this is a read/verify-style `req`, so no PTY is required):
 
 ```bash

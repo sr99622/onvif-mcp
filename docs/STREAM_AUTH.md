@@ -13,6 +13,7 @@ The implementation uses:
 - Nginx `auth_request` for route enforcement
 - The existing MediaMTX service for WebRTC signaling and encrypted media
 - The existing MCP resource-server JWT validation for Hermes
+- The existing snapshot service for static images
 
 Protected browser routes:
 
@@ -21,6 +22,7 @@ Protected browser routes:
 /multiview/
 /outputs/
 /webrtc/
+/snapshot/
 ```
 
 Routes that must remain independent and must not receive browser
@@ -58,6 +60,7 @@ Replace every symbolic value with the target environment's actual value.
 | `{{MCP_HTTP_PORT}}` | 8001 | Loopback MCP HTTP port, normally |
 | `{{MEDIAMTX_WEBRTC_PORT}}` | 8889 | Loopback MediaMTX signaling port, normally |
 | `{{MEDIAMTX_ICE_PORT}}` | 8189 | MediaMTX UDP ICE/media port, normally |
+| `{{SNAPSHOT_PORT}}` | 8891 | Snapshot media port, normally |
 | `{{COMPOSE_DIR}}` | /opt/keycloak | Keycloak Compose project directory |
 | `{{ACTIVE_SITE_LINK}}` | camera-apps | Enabled Nginx site symlink name |
 | `{{NGINX_SITE}}` | /etc/nginx/sites-enabled/camera-apps | Active Nginx site |

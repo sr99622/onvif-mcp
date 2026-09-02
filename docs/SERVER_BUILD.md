@@ -244,6 +244,8 @@ MCP Servers
 camera (stdio) - 42 tool(s)
 ```
 
+If you have issues at this step and everything is set up properly, try restarting the terminal.
+
 You can test the camera MCP using the prompt
 
 ```
@@ -265,7 +267,7 @@ please show the ethernet port configuration on this machine, including Gateway a
 You will get back a listing of the ports. Pick out the one that is currently connected to your LAN and note the interface name, it will be something like `enp86s0` but will vary. Tell Hermes to configure that specific port to have a static IP address that you have chosen based on your network topology, and to use the current Gateway and DNS settings. This will work best if you explicitly state the Gateway and DNS values.
 
 ```
-use nmcli to set a static IP address on <adapter name> to be <static IP>, Gateway <existing gateway>, DNS <existing DNS>
+set a static IP address on <adapter name> to be <static IP>, Gateway <existing gateway>, DNS <existing DNS>
 ```
 
 ## Mount an SMB share for backups
@@ -274,7 +276,6 @@ The server will need a backup location for critical data. An SMB share is a good
 
 ```
 There is an SMB server on the local network located on <smb server name> and is named <smb share name>. Create a mount point <mount point> and permanently mount the SMB server share there. SMB username is <username> and password is <password>
-
 ```
 
 ## Install nginx

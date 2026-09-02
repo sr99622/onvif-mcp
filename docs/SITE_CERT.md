@@ -236,7 +236,7 @@ sudo install -m 644 \
   /etc/nginx/tls/"{{SERVER_FQDN}}.crt.pem"
 sudo install -m 644 \
   "{{CA_ROOT_PATH}}/camera-system-ca/certs/camera-system-root-ca.crt.pem" \
-  /etc/nginx/tls/root-ca.crt.pem
+  /etc/nginx/tls/camera-system-root-ca.crt.pem
 ```
 
 The private key already lives at `/etc/nginx/tls/{{SERVER_FQDN}}.key.pem`
@@ -245,7 +245,7 @@ the CA:
 
 ```bash
 sudo bash -c 'cat /etc/nginx/tls/{{SERVER_FQDN}}.crt.pem \
-  /etc/nginx/tls/root-ca.crt.pem > /etc/nginx/tls/{{SERVER_FQDN}}.chain.pem'
+  /etc/nginx/tls/camera-system-root-ca.crt.pem > /etc/nginx/tls/{{SERVER_FQDN}}.chain.pem'
 ```
 
 The final TLS directory should have:
@@ -409,13 +409,13 @@ and CA file — TLS must complete against **our** CA, not any trust-store defaul
 ```bash
 sudo curl \
   --resolve {{SERVER_FQDN}}:443:{{SERVER_IP}} \
-  --cacert /etc/nginx/tls/root-ca.crt.pem \
+  --cacert /etc/nginx/tls/camera-system-root-ca.crt.pem \
   --head https://{{SERVER_FQDN}}/cameras/
 # expected: HTTP/1.1 200 OK
 
 sudo curl -s \
   --resolve {{SERVER_FQDN}}:443:{{SERVER_IP}} \
-  --cacert /etc/nginx/tls/root-ca.crt.pem \
+  --cacert /etc/nginx/tls/camera-system-root-ca.crt.pem \
   -o /tmp/e2e.jpg -w '%{http_code} %{content_type}\n' \
   https://{{SERVER_FQDN}}/snapshot/<serial>/<token>/     # real JPEG, not HTML
 
@@ -423,8 +423,8 @@ sudo curl -s \
 for u in /cameras/ /multiview/ /outputs/camera_registry.json \
          /webrtc/<SERIAL>/<TOKEN>/; do
   curl -s --resolve {{SERVER_FQDN}}:443:{{SERVER_IP}} \
-    --cacert /etc/nginx/tls/root-ca.crt.pem \
-    -o /dev/null -w "%-45s %s\n" "$u" "$(curl -s -o /dev/null -w '%{http_code}' --resolve {{SERVER_FQDN}}:443:{{SERVER_IP}} --cacert /etc/nginx/tls/root-ca.crt.pem https://{{SERVER_FQDN}}$u)"
+    --cacert /etc/nginx/tls/camera-system-root-ca.crt.pem \
+    -o /dev/null -w "%-45s %s\n" "$u" "$(curl -s -o /dev/null -w '%{http_code}' --resolve {{SERVER_FQDN}}:443:{{SERVER_IP}} --cacert /etc/nginx/tls/camera-system-root-ca.crt.pem https://{{SERVER_FQDN}}$u)"
 done
 
 # port-80 must bounce, not serve
@@ -432,7 +432,7 @@ curl -sI http://{{SERVER_IP}}/cameras/ | head -3    # expect 301 -> https://{{SE
 ```
 
 Then open `https://{{SERVER_FQDN}}/cameras/` in a browser (it will accept the
-self-issued CA via `/etc/nginx/tls/root-ca.crt.pem`) and confirm streams play.
+self-issued CA via `/etc/nginx/tls/camera-system-root-ca.crt.pem`) and confirm streams play.
 
 ## 11. Update downstream consumers to HTTPS
 
@@ -488,7 +488,7 @@ https://{{SERVER_FQDN}}/webrtc/<SERIAL>/<PROFILE>/
 
 ### Client distribution
 
-The root certificate (`/etc/nginx/tls/root-ca.crt.pem` or the copy in
+The root certificate (`/etc/nginx/tls/camera-system-root-ca.crt.pem` or the copy in
 `{{CA_ROOT_PATH}}/camera-system-ca/certs/`) is public and must be distributed to
 clients that will consume the HTTPS endpoints; the private key never leaves this
 host, and the vault passphrases stay GPG-encrypted in `~/.password-store`.
@@ -524,14 +524,14 @@ openssl x509 -in certificate.pem -noout -text
 
 # CA verification
 openssl verify \
-  -CAfile /etc/nginx/tls/root-ca.crt.pem \
+  -CAfile /etc/nginx/tls/camera-system-root-ca.crt.pem \
   -purpose sslserver \
   -verify_hostname {{SERVER_FQDN}} \
   /etc/nginx/tls/{{SERVER_FQDN}}.crt.pem
 
 # HTTPS test (explicit resolve + our CA)
 curl --resolve {{SERVER_FQDN}}:443:{{SERVER_IP}} \
-  --cacert /etc/nginx/tls/root-ca.crt.pem \
+  --cacert /etc/nginx/tls/camera-system-root-ca.crt.pem \
   --head https://{{SERVER_FQDN}}/cameras/
 
 # MediaMTX signaling listener

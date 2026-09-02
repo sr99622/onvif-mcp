@@ -27,7 +27,7 @@ In this example, the most recent version is 1.20.0, which can change. The generi
 Example Deployment steps (the symbolic version in curly braces should be replaced with the actual version):
 ```bash
 # Download latest version
-curl -sL "https://github.com/bluenviron/mediamtx/releases/download/v{version}mediamtx_v{version}_linux_amd64.tar.gz" | tar xz
+curl -sL "https://github.com/bluenviron/mediamtx/releases/download/v{version}/mediamtx_v{version}_linux_amd64.tar.gz" | tar xz
 
 # Install binary
 sudo cp mediamtx /usr/local/bin/mediamtx && sudo chmod 755 /usr/local/bin/mediamtx

@@ -49,12 +49,14 @@ UPSTREAM_TIMEOUT_S = 20
 #     parameters; only the default endpoint and 1920x1080 reliably return a
 #     JPEG, so all four Axis tokens map to one of those two.
 #   * Reolink 19216868252 — only channel=0 yields a JPEG; map both tokens to it.
+#   * Speco 5CF2075C9F49 — all profile tokens share one /snapshot.JPG endpoint.
 ROUTES: dict[str, str] = {
     "4B0013BPAABE264/MediaProfile000": "http://10.2.2.98/onvifsnapshot/media_service/snapshot?channel=1&subtype=0",
     "4B0013BPAABE264/MediaProfile001": "http://10.2.2.98/onvifsnapshot/media_service/snapshot?channel=1&subtype=1",
 
     "5CF2075C9F49/profile1": "http://10.2.2.101/snapshot.JPG",
     "5CF2075C9F49/profile2": "http://10.2.2.101/snapshot.JPG",
+    "5CF2075C9F49/profile3": "http://10.2.2.101/snapshot.JPG",  # shared upstream for all Speco tokens
 
     "DS-2CD2142FWD-IS20171118BBWR129028868/Profile_1": "http://10.1.1.70/onvif-http/snapshot?Profile_1",
     "DS-2CD2142FWD-IS20171118BBWR129028868/Profile_2": "http://10.1.1.70/onvif-http/snapshot?Profile_2",
