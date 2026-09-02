@@ -33,7 +33,7 @@ OAuth client
     |
     | HTTPS, discovery, DCR, Authorization Code + PKCE
     v
-Nginx on PUBLIC_HOST:443
+Nginx on {{SERVER_FQDN}}:443
     |-- /auth/ --------------------------------> Keycloak 127.0.0.1:8080
     |                                               |
     |                                               v
@@ -48,8 +48,8 @@ The finished access token must contain claims equivalent to:
 
 ```json
 {
-  "iss": "https://PUBLIC_HOST/auth/realms/mcp",
-  "aud": "https://PUBLIC_HOST/mcp",
+  "iss": "https://{{SERVER_FQDN}}/auth/realms/mcp",
+  "aud": "https://{{SERVER_FQDN}}/mcp",
   "scope": "mcp:tools",
   "typ": "Bearer"
 }
@@ -75,13 +75,12 @@ Set these for the target installation. Re-export them after opening a new SSH
 session.
 
 ```bash
-export PUBLIC_HOST="{{SERVER_FQDN}}"
 export MCP_REALM="mcp"
 export MCP_SCOPE="mcp:tools"
 export MCP_LOGIN_USER="mcp-user"
 export KEYCLOAK_ADMIN_USER="keycloak-admin"
-export MCP_RESOURCE_URL="https://${PUBLIC_HOST}/mcp"
-export KEYCLOAK_PUBLIC_URL="https://${PUBLIC_HOST}/auth"
+export MCP_RESOURCE_URL="https://{{SERVER_FQDN}}/mcp"
+export KEYCLOAK_PUBLIC_URL="https://{{SERVER_FQDN}}/auth"
 export MCP_ISSUER="${KEYCLOAK_PUBLIC_URL}/realms/${MCP_REALM}"
 ```
 
@@ -90,12 +89,12 @@ Confirm identity and DNS before making changes:
 ```bash
 hostname --fqdn
 cat /etc/os-release
-getent ahostsv4 "${PUBLIC_HOST}"
+getent ahostsv4 "{{SERVER_FQDN}}"
 hostname -I
 ```
 
 The public hostname must resolve to the target server. A short local hostname
-is acceptable as long as `PUBLIC_HOST` resolves correctly and is covered by
+is acceptable as long as `{{SERVER_FQDN}}` resolves correctly and is covered by
 the HTTPS certificate.
 
 Inventory the current services and ports:
@@ -151,7 +150,7 @@ Expected modes are `drwxr-x---` for the directory and `-rw-------` for both
 `/opt/keycloak/admin.pass` (root:root, 0600). It is recoverable at any time
 via `sudo cat /opt/keycloak/admin.pass`.
 
-Create `/opt/keycloak/compose.yaml`. Replace `PUBLIC_HOST` in this file with
+Create `/opt/keycloak/compose.yaml`. Replace `{{SERVER_FQDN}}` in this file with
 the actual hostname; do not leave the placeholder in place.
 
 ```yaml
@@ -186,7 +185,7 @@ services:
       KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
       KC_HTTP_ENABLED: "true"
       KC_HTTP_RELATIVE_PATH: /auth
-      KC_HOSTNAME: https://PUBLIC_HOST/auth
+      KC_HOSTNAME: https://{{SERVER_FQDN}}/auth
       KC_PROXY_HEADERS: xforwarded
       KC_HEALTH_ENABLED: "true"
     ports:
@@ -688,7 +687,7 @@ Locate the CA certificate and inspect the server certificate issuer:
 
 ```bash
 sudo find /etc/nginx/tls -maxdepth 1 -type f -printf '%f\n' | sort
-sudo openssl x509 -in "/etc/nginx/tls/${PUBLIC_HOST}.crt.pem" \
+sudo openssl x509 -in "/etc/nginx/tls/{{SERVER_FQDN}}.crt.pem" \
   -noout -subject -issuer
 ```
 
@@ -756,8 +755,8 @@ Do not overwrite an existing OAuth drop-in without reviewing it. Create
 ```ini
 [Service]
 Environment=MCP_OAUTH_ENABLED=true
-Environment=MCP_OAUTH_ISSUER=https://PUBLIC_HOST/auth/realms/mcp
-Environment=MCP_RESOURCE_URL=https://PUBLIC_HOST/mcp
+Environment=MCP_OAUTH_ISSUER=https://{{SERVER_FQDN}}/auth/realms/mcp
+Environment=MCP_RESOURCE_URL=https://{{SERVER_FQDN}}/mcp
 Environment=MCP_OAUTH_JWKS_URL=http://127.0.0.1:8080/auth/realms/mcp/protocol/openid-connect/certs
 ```
 
@@ -783,14 +782,14 @@ Expected status is 401 with a `WWW-Authenticate` header whose
 `resource_metadata` is:
 
 ```text
-https://PUBLIC_HOST/.well-known/oauth-protected-resource/mcp
+https://{{SERVER_FQDN}}/.well-known/oauth-protected-resource/mcp
 ```
 
 Verify protected-resource metadata:
 
 ```bash
 curl -sS \
-  "https://${PUBLIC_HOST}/.well-known/oauth-protected-resource/mcp" |
+  "https://{{SERVER_FQDN}}/.well-known/oauth-protected-resource/mcp" |
 python3 -m json.tool
 ```
 
@@ -798,9 +797,9 @@ Expected values:
 
 ```json
 {
-  "resource": "https://PUBLIC_HOST/mcp",
+  "resource": "https://{{SERVER_FQDN}}/mcp",
   "authorization_servers": [
-    "https://PUBLIC_HOST/auth/realms/mcp"
+    "https://{{SERVER_FQDN}}/auth/realms/mcp"
   ],
   "scopes_supported": [
     "mcp:tools"
@@ -896,7 +895,7 @@ overwritten:
 
 ```bash
 hermes mcp add camera-new \
-  --url "https://PUBLIC_HOST/mcp" \
+  --url "https://{{SERVER_FQDN}}/mcp" \
   --auth oauth \
   --connect-timeout 30
 ```
@@ -908,7 +907,7 @@ enabled, and add:
 ```yaml
 mcp_servers:
   camera-new:
-    url: https://PUBLIC_HOST/mcp
+    url: https://{{SERVER_FQDN}}/mcp
     ssl_verify: /path/to/private-root-ca.crt.pem
     connect_timeout: 30.0
     auth: oauth
@@ -1100,7 +1099,7 @@ curl -sS -o /dev/null -w 'Keycloak discovery: %{http_code}\n' \
 curl -sS -D - -o /dev/null "${MCP_RESOURCE_URL}"
 
 curl -sS \
-  "https://${PUBLIC_HOST}/.well-known/oauth-protected-resource/mcp" |
+  "https://{{SERVER_FQDN}}/.well-known/oauth-protected-resource/mcp" |
 python3 -m json.tool
 ```
 
