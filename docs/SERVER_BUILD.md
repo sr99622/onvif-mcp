@@ -265,7 +265,7 @@ please show the ethernet port configuration on this machine, including Gateway a
 You will get back a listing of the ports. Pick out the one that is currently connected to your LAN and note the interface name, it will be something like `enp86s0` but will vary. Tell Hermes to configure that specific port to have a static IP address that you have chosen based on your network topology, and to use the current Gateway and DNS settings. This will work best if you explicitly state the Gateway and DNS values.
 
 ```
-set a static IP address on <adapter name> to be <static IP>, Gateway <existing gateway>, DNS <existing DNS>
+use nmcli to set a static IP address on <adapter name> to be <static IP>, Gateway <existing gateway>, DNS <existing DNS>
 ```
 
 ## Mount an SMB share for backups

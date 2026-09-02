@@ -298,7 +298,7 @@ sudo docker compose --project-directory /opt/keycloak exec keycloak \
   /opt/keycloak/bin/kcadm.sh add-roles \
   --config /tmp/kcadm.config \
   -r master \
-  --uusername "${KEYCLOAK_ADMIN_USER}" \
+  --username "${KEYCLOAK_ADMIN_USER}" \
   --rolename admin
 ```
 
