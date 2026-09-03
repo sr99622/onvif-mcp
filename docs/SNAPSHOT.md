@@ -69,12 +69,12 @@ The service source and unit file are version-controlled in the repo:
 `snapshot_proxy.py` is a standard-library-only HTTP server (no pip
 dependencies). Bind and credentials come from environment:
 
-| Variable          | Default   | Purpose                          |
-|-------------------|-----------|----------------------------------|
-| SNAPSHOT_PROXY_HOST | 127.0.0.1 | Bind address — keep loopback only |
-| SNAPSHOT_PROXY_PORT | 8891      | Bind port                        |
-| CAMERA_USERNAME   | admin     | Camera login                     |
-| CAMERA_PASSWORD   | {{PASSWORD}} | Camera login                 |
+| Variable          | Default      | Purpose                           |
+|-------------------|--------------|-----------------------------------|
+| SNAPSHOT_PROXY_HOST | 127.0.0.1  | Bind address — keep loopback only |
+| SNAPSHOT_PROXY_PORT | 8891       | Bind port                         |
+| CAMERA_USERNAME   | {{USERNAME}} | Camera login                      |
+| CAMERA_PASSWORD   | {{PASSWORD}} | Camera login                      |
 
 Do not edit credentials into the source file; the unit file passes them via
 `Environment=`.
@@ -83,24 +83,10 @@ Do not edit credentials into the source file; the unit file passes them via
 
 The snapshot endpoint is vendor-specific and may differ from any URL pattern
 you expect, so **never guess it** — read it from ONVIF. For every camera
-returned by `get_cameras`, use `get_camera` (or the library directly) and pull
-`profiles[].snapshot_uri` plus the profile tokens:
+returned by `get_cameras`, a list of profiles is returned, such that each 
+profile includes the token and the snapshot_uri.
 
-```bash
-cd {{REPO_PATH}}/onvif-mcp
-./.venv/bin/python - <<'EOF'
-import json
-from libonvif.devices.camera import get_camera_by_ip
-
-camera = get_camera_by_ip("<ip_address>", "{{USERNAME}}", "{{PASSWORD}}")
-d = json.loads(camera.to_json())
-serial = d["device_information"]["serial_number"]
-for p in d.get("profiles") or []:
-    print(serial + "/" + p["token"], "->", p.get("snapshot_uri"))
-EOF
-```
-
-Then **test every URI live** before trusting it. `curl --digest` handles both
+**Test every URI live** before trusting it. `curl --digest` handles both
 Basic and Digest automatically, so one test command covers all vendors:
 
 ```bash

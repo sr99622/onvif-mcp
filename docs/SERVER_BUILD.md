@@ -275,7 +275,7 @@ set a static IP address on <adapter name> to be <static IP>, Gateway <existing g
 The server will need a backup location for critical data. An SMB share is a good place to do this. Assuming you have an SMB server set up on your local network, Hermes can do this for you with the following prompt
 
 ```
-There is an SMB server on the local network located on <smb server name> and is named <smb share name>. Create a mount point <mount point> and permanently mount the SMB server share there. SMB username is <username> and password is <password>
+There is an SMB server on the local network located on <smb server name> and is named <smb share name>. Create a mount point <mount point> and permanently mount the SMB server share there. SMB username is <username> and password is <password>. Make sure that $USER has write access.
 ```
 
 ## Install nginx

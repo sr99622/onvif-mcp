@@ -879,45 +879,8 @@ test ! -e /tmp/keycloak-dcr-test.json && echo "DCR test artifacts removed"
 If Keycloak returns an internal UUID different from `clientId`, use the exact
 returned internal `id` in the delete path.
 
-## 13. Configure and verify Hermes Agent
 
-On the Hermes host, verify Hermes and the CA file:
-
-```bash
-hermes --version
-test -r /path/to/private-root-ca.crt.pem \
-  && echo "CA file readable" \
-  || echo "CA file missing"
-```
-
-Use a new server name during migration so an existing deployment is not
-overwritten:
-
-```bash
-hermes mcp add camera-new \
-  --url "https://{{SERVER_FQDN}}/mcp" \
-  --auth oauth \
-  --connect-timeout 30
-```
-
-The first connection can fail before the private CA path is configured. Save
-the entry if prompted. Edit `~/.hermes/config.yaml`, set the new entry to
-enabled, and add:
-
-```yaml
-mcp_servers:
-  camera-new:
-    url: https://{{SERVER_FQDN}}/mcp
-    ssl_verify: /path/to/private-root-ca.crt.pem
-    connect_timeout: 30.0
-    auth: oauth
-    enabled: true
-```
-
-Preserve unrelated server entries. Never display files under
-`~/.hermes/mcp-tokens/`.
-
-## 14. Configure manual PostgreSQL backups
+## 13. Configure manual PostgreSQL backups
 
 Create the protected backup directory:
 
@@ -1023,7 +986,7 @@ sudo sh -c \
 
 The file must be non-empty and mode `-rw-------`.
 
-## 15. Perform an isolated restore test
+## 14. Perform an isolated restore test
 
 Choose a unique database name and confirm it is absent:
 
@@ -1085,7 +1048,7 @@ fi
 After the real OAuth client completes DCR and login, create another manual
 backup so the active client registration is included.
 
-## 16. Final verification checklist
+## 15. Final verification checklist
 
 Run or confirm all of the following:
 
@@ -1117,35 +1080,6 @@ Required outcomes:
 - The MCP client discovers the expected tools.
 - A post-login database backup exists, its catalog is readable, and an
   isolated restore test has succeeded.
-
-
-## 17. User Confirmation
-
-Prompt the user to follow these instructions, then quit. Do not wait for the user to verify, they will contact you if anything is needed.
-
-Get user password:
-
-```bash
-sudo cat /opt/keycloak/mcp-user.pass
-```
-
-Start login:
-
-```bash
-hermes mcp login camera-new
-```
-
-Log in as the MCP login user and approve consent for `mcp:tools`. Then test
-saved OAuth state:
-
-```bash
-hermes mcp test camera-new
-```
-
-Success means Hermes reconnects without another browser login and discovers
-the expected MCP tools.
-
-This concludes this portion of the configuration.
 
 
 # Addendum
@@ -1213,4 +1147,77 @@ display the associated token file.
   PostgreSQL data stored in the named volume.
 - Same-host backups do not protect against disk or host loss. Copy important
   archives to a separately protected system.
+
+## 3. Verified deviations on the nuc.home.arpa deployment
+
+The following were observed and resolved during the verified `nuc.home.arpa`
+deployment (Ubuntu 26.04, Docker 29.1.3, Keycloak 26.7.0). They are deliberate
+corrections to this runbook's example values or commands.
+
+### 3.1 `kcadm.sh add-roles` uses `--uusername`, not `--username`
+
+Keycloak 26.7 rejects the Section 5 command as written:
+
+```text
+Unknown options: '--username', 'keycloak-admin'
+Possible solutions: --user
+```
+
+and `--user` is also not accepted for user targeting. The actual flag is
+`--uusername` (see `kcadm.sh add-roles --help`, whose synopsis reads
+`(--uusername USERNAME | --uid ID)`). Working form:
+
+```bash
+sudo docker compose --project-directory /opt/keycloak exec keycloak \
+  /opt/keycloak/bin/kcadm.sh add-roles \
+  --config /tmp/kcadm.config \
+  -r master \
+  --uusername "${KEYCLOAK_ADMIN_USER}" \
+  --rolename admin
+```
+
+### 3.2 Trusted-hosts must list the identities Keycloak actually sees, not assumed IPs
+
+Two facts are not obvious from this machine alone:
+
+- Docker compose port publishing rewrites loopback clients: a request to
+  `http://127.0.0.1:8080` arrives at Keycloak as the compose bridge gateway
+  IP (e.g. `172.18.0.1`), never as `127.0.0.1`. Read it from the network:
+
+  ```bash
+  sudo docker network inspect keycloak_default \
+    --format '{{range .IPAM.Config}}{{.Gateway}}{{end}}'
+  ```
+
+  (network name = compose project name + `_default`; the project name
+  defaults to the base name of `--project-directory`, hence `keycloak` here).
+  `localhost`/`127.0.0.1` alone therefore does not cover same-host DCR tests
+  via the published port.
+- A client running on the Keycloak host and connecting through the public
+  HTTPS vhost (`https://<server-fqdn>/...`) arrives at Keycloak as the
+  server's own LAN IP (e.g. `10.1.1.6`), because nginx sets
+  `X-Real-IP $remote_addr` for connections from the host itself.
+
+The runbook's example `CLIENT_SOURCE_IP=10.1.1.1` is installation-specific and
+was wrong on this deployment. The final working trusted-hosts set was:
+
+```json
+"trusted-hosts": ["localhost", "127.0.0.1", "172.18.0.1", "10.1.1.6"]
+```
+
+To determine the identities Keycloak actually sees before trusting an entry,
+either enable temporary `DEBUG` logging on
+`org.keycloak.services.clientregistration` and read the
+`KC-SERVICES0101: Failed to verify remote host : <ip>` lines, or watch the
+container log during a deliberately failing DCR attempt
+(`docker compose --project-directory /opt/keycloak logs --tail=20 keycloak`).
+
+### 3.3 The HTTPS vhost may live in conf.d, not sites-available
+
+Section 9's example `NGINX_SITE=/etc/nginx/sites-available/camera-mcp` did not
+match this host: the only file under `sites-enabled/` was a port-80 redirect,
+while the actual HTTPS server block was in `/etc/nginx/conf.d/nuc.home.arpa.conf`
+(both includes are active: `conf.d/*.conf` and `sites-enabled/*`). The
+Section 9 identification step (`sudo nginx -T | grep ...`) is what found it;
+treat the example path as an illustration only.
 
