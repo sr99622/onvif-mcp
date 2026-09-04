@@ -76,7 +76,7 @@ continuing; do not attempt DCR policy changes against a dead or restarting
 server.
 
 `{{CLIENT_SOURCE_IP}}` is supplied by the agent. If there is ambiguity around 
-this value, please refer to section 3 of the ADD_CLIENT.md document for details.
+this value, please refer to the CLIENT.md document for details.
 
 ```bash
 sudo grep 'clients-registrations/openid-connect' \

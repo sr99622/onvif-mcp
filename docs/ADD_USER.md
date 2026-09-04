@@ -7,7 +7,7 @@ This runbook adds one more enabled user in `{{MCP_REALM}}` with its own
 password, for a second person or installation that needs separate credentials.
 
 DCR is unaffected: each machine still registers its own public client per
-`ADD_CLIENT.md`. This account only supplies the identity used at browser
+`CLIENT.md`. This account only supplies the identity used at browser
 sign-in. The new user needs no roles — `{{MCP_LOGIN_USER}}` was created
 without any, and tokens get their claims from the `{{MCP_SCOPE}}` client
 scope and audience mapper (`KEYCLOAK.md` Section 7), not from user roles.
@@ -233,26 +233,17 @@ this procedure must have touched nothing else.
 
 ## 7. Hand back to the client machine
 
-The account works in the browser sign-in step of `ADD_CLIENT.md`. If this is
-a new machine:
-
-1. Run `ADD_CLIENT_ON_SERVER.md` end to end with that machine's observed
-   DCR source address (from the Nginx access log, not a guess).
-2. On the client machine run Steps 1–2 and Step 5 of `ADD_CLIENT.md`.
-3. Complete browser login as `{{NEW_LOGIN_USER}}` instead of
-   `{{MCP_LOGIN_USER}}`, approving `{{MCP_SCOPE}}`.
-4. Only enable the entry after `hermes mcp test` passes on saved state, per
-   `ADD_CLIENT.md` Step 7.
-
 Hand the password back exactly once, from the server, using the same pattern
-as the existing deployment (see `ADD_CLIENT.md`, Troubleshooting):
+as the existing deployment. The client is configured by following the instructions
+in `CLIENT.md`. The password may be accessed remotely from the client by using
+one of the methods below.
 
 ```bash
 sudo cat /opt/keycloak/{{NEW_LOGIN_USER}}.pass
 ```
 
 or from a local terminal over SSH (the remote command runs on the camera
-server, where `/opt/keycloak/` lives; same pattern as `ADD_CLIENT.md`,
+server, where `/opt/keycloak/` lives; same pattern as `CLIENT.md`,
 Troubleshooting — substitute `{{NEW_LOGIN_USER}}.pass` for the example):
 
 ```bash
