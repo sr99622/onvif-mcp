@@ -6,6 +6,8 @@ Later steps in the configuration may reference tools installed here, so be aware
 
 The first part of the document describes useful but not critical steps, the [**Essential Configrations**](#essential-configurations) section describes critical steps. 
 
+NOTE: The document assumes that all commands are run from the $HOME directory.
+
 ## Install git
 
 We will need git for next steps, so install and configure.
@@ -254,6 +256,12 @@ use the camera MCP server to get its version
 
 It should reply with both the MCP version and the libonvif version.
 
+Configuration of the system will require more turns than are configured by default. Edit the `.hermes/config.yaml` file to adjust
+
+```
+agent:
+  max_turns: 120
+```
 
 
 ## Set a static IP
