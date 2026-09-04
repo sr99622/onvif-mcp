@@ -132,6 +132,37 @@ sudo docker compose --project-directory /opt/keycloak exec keycloak \
 export NEW_USER_UUID="UUID_RETURNED_BY_KEYCLOAK"
 ```
 
+## 3a. Mark the email as verified (oauth2-proxy gate)
+
+Keycloak leaves the email field **empty** when a user is created without an
+explicit email — it assigns a placeholder address (`<username>@example.com`)
+only lazily, at first login. The browser sign-in flow then fails at
+`/oauth2/callback` with HTTP 500 — oauth2-proxy rejects the callback because
+"email in id_token ... isn't verified". The pre-existing login user has a
+verified email, which is why only new users hit this.
+
+Set `emailVerified=true`, and if `email` is still empty also set it to a
+nonempty placeholder (`<username>@example.com`), using the PUT-against-live
+representation idiom from `STREAM_AUTH.md` Section 2 (PATCH is rejected with
+HTTP 405 on Keycloak 26; PUT has replace semantics, so it must run against
+the freshly fetched body in the same bounded command):
+
+```bash
+# Mint a token first (same pattern as ADD_CLIENT_ON_SERVER.md).
+curl -sS -H "Authorization: Bearer $(cat $tfile)" \
+  "http://127.0.0.1:{{KEYCLOAK_PORT}}{{KEYCLOAK_PATH}}/admin/realms/{{MCP_REALM}}/users/${NEW_USER_UUID}" > /tmp/.kcuser.$$
+python3 -c "import json; u = json.load(open('/tmp/.kcuser.$$')); assert u['username'] == '{{NEW_LOGIN_USER}}'; u.setdefault('email', '{{NEW_LOGIN_USER}}@example.com'); u['emailVerified'] = True; json.dump(u, open('/tmp/.kcpayload.tmp', 'w'))"
+curl -sS -o /dev/null -w 'HTTP %{http_code}\n' -X PUT \
+  -H "Authorization: Bearer $(cat $tfile)" -H "Content-Type: application/json" \
+  --data @/tmp/.kcpayload.tmp \
+  "http://127.0.0.1:{{KEYCLOAK_PORT}}{{KEYCLOAK_PATH}}/admin/realms/{{MCP_REALM}}/users/${NEW_USER_UUID}"
+```
+
+Require HTTP 204, then re-retrieve directly by UUID and confirm: exact
+username, `enabled=true`, nonempty email, `emailVerified=true`. Delete
+`/tmp/.kcuser.$$` and `/tmp/.kcpayload.tmp` afterward. Never set the flag
+false.
+
 ## 4. Generate the password and store it as a root-owned secret
 
 Generate without displaying it:
@@ -183,7 +214,7 @@ returns the credential type but not the secret value:
 
 ```bash
 sudo docker compose --project-directory /opt/keycloak exec keycloak \
-  /opt/keycloak/bin/kcadm.sh get "users/${NEW_USER_UUID}/credential" \
+  /opt/keycloak/bin/kcadm.sh get "users/${NEW_USER_UUID}/credentials" \
   --config /tmp/kcadm.config -r "{{MCP_REALM}}" |
 python3 -c 'import sys,json; print([c.get("type") for c in json.load(sys.stdin)])'
 ```
@@ -239,6 +270,10 @@ from both.
   shows.
 - **Credential list missing `PASSWORD`** — re-run Section 5 from the top; it
   is idempotent (sets the password again) and never displays the value.
+- **Browser login returns HTTP 500 from `/oauth2/callback`** — the new user's
+  email is unverified; oauth2-proxy rejects the redeemed token ("email in
+  id_token ... isn't verified"). Check `emailVerified` on the user and run
+  Section 3a. The Keycloak login itself succeeds; the failure is downstream.
 - **Existing user disturbed** — stop and report it; restoring from the last
   verified backup (`keycloak-postgres-backup.service`) is the supported path,
   not manual edits.
