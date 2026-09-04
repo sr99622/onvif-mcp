@@ -12,6 +12,12 @@ server and Keycloak, and where Keycloak runs locally (native install or
 compose project). All calls are made from the server host against the
 loopback Keycloak listener; nothing here touches the network-facing stack.
 
+## Value supplied by the Agent
+
+| Symbol | Description |
+|--------|-------------|
+| `{{CLIENT_SOURCE_IP}}` | Client IP address as observed by the server. Note that clients running in a virtual machine or container may be observed by the server as coming from the client host computer. Attempt a login from the client prior to running these instructions to place the observed IP address in the server cache for verification. |
+
 Runbook values used by this document:
 
 | Symbol | Meaning | Typical value in this deployment |
@@ -78,7 +84,8 @@ sudo grep 'clients-registrations/openid-connect' \
 ```
 
 If no entry exists yet, the client has not attempted registration; the
-policy change is harmless but cannot be confirmed against traffic.
+policy change is harmless but cannot be confirmed against traffic. Echo back
+to the user the results of this observation.
 
 ## 2. Resolve the live anonymous Trusted Hosts component (preflight)
 
@@ -267,9 +274,9 @@ must be against the *second* direct fetch, after the PUT, in the same process.
 
 Confirm nothing matching the patterns remains in `/tmp` (no `.kctmp.*`,
 `.kctok.*`, `kc-components.json`, `kc-cid.txt`, or `kc-th-*` files), then tell
-the client to proceed with Step 5 of `ADD_CLIENT.md` (add the Hermes MCP entry)
-and let it run DCR. Confirm success by watching Nginx record a `201` for the
-`clients-registrations/openid-connect` POST from `{{CLIENT_SOURCE_IP}}`:
+the client to proceed with login and let it run DCR. Confirm success by watching 
+Nginx record a `201` for the `clients-registrations/openid-connect` POST from 
+`{{CLIENT_SOURCE_IP}}`:
 
 ```bash
 sudo grep 'clients-registrations/openid-connect' \

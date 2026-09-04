@@ -1,6 +1,6 @@
 {
   "description": "Camera registry - one entry per physical camera, main stream (switchboard) and substream (multiview)",
-  "generated": "2026-09-01T23:15:00Z",
+  "generated": "2026-09-04T14:50:47Z",
   "cameras": [
     {
       "hostname": "Hikvision",
@@ -57,6 +57,14 @@
       "model": "O4VD2",
       "media_player_url": "https://nuc.home.arpa/webrtc/5CF2075C9F49/profile1/",
       "substream_player_url": "https://nuc.home.arpa/webrtc/5CF2075C9F49/profile2/"
+    },
+    {
+      "hostname": "Reolink",
+      "ip_address": "192.168.68.252",
+      "manufacturer": "REOLINK",
+      "model": "E1 Zoom",
+      "media_player_url": "https://nuc.home.arpa/webrtc/19216868252/000/",
+      "substream_player_url": "https://nuc.home.arpa/webrtc/19216868252/001/"
     }
   ]
 }

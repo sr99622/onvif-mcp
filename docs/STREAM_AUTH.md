@@ -1,10 +1,10 @@
-# Keycloak Authentication for Camera Apps and WebRTC Streams
+# Keycloak Authentication for Camera Apps, WebRTC Streams, and Snapshots
 
 ## Purpose
 
 This runbook adds browser-session authorization to camera applications and
-WebRTC signaling while preserving the MCP server's independent OAuth bearer-
-token flow.
+WebRTC signaling and live JPEG snapshots while preserving the MCP server's
+independent OAuth bearer-token flow.
 
 The implementation uses:
 
@@ -13,7 +13,7 @@ The implementation uses:
 - Nginx `auth_request` for route enforcement
 - The existing MediaMTX service for WebRTC signaling and encrypted media
 - The existing MCP resource-server JWT validation for Hermes
-- The existing snapshot service for static images
+- The existing snapshot proxy for live JPEG images
 
 Protected browser routes:
 
@@ -60,7 +60,7 @@ Replace every symbolic value with the target environment's actual value.
 | `{{MCP_HTTP_PORT}}` | 8001 | Loopback MCP HTTP port, normally |
 | `{{MEDIAMTX_WEBRTC_PORT}}` | 8889 | Loopback MediaMTX signaling port, normally |
 | `{{MEDIAMTX_ICE_PORT}}` | 8189 | MediaMTX UDP ICE/media port, normally |
-| `{{SNAPSHOT_PORT}}` | 8891 | Snapshot media port, normally |
+| `{{SNAPSHOT_PORT}}` | 8891 | Loopback snapshot proxy HTTP port |
 | `{{COMPOSE_DIR}}` | /opt/keycloak | Keycloak Compose project directory |
 | `{{ACTIVE_SITE_LINK}}` | camera-apps | Enabled Nginx site symlink name |
 | `{{NGINX_SITE}}` | /etc/nginx/sites-enabled/camera-apps | Active Nginx site |
@@ -96,8 +96,12 @@ Nginx on {{SERVER_FQDN}}
   |-- /cameras/, /multiview/, /outputs/
   |       `-- auth_request /oauth2/auth, then static content
   |
-  `-- /webrtc/
-          `-- auth_request /oauth2/auth, then MediaMTX signaling
+  |-- /webrtc/
+  |       `-- auth_request /oauth2/auth, then MediaMTX signaling
+  |
+  `-- /snapshot/
+          `-- auth_request /oauth2/auth, then snapshot proxy 127.0.0.1:8891
+                  `-- camera snapshot endpoint (Basic/Digest authentication)
 
 Hermes
   `-- /mcp ----------------------------> MCP JWT validation
@@ -106,6 +110,16 @@ Hermes
 Nginx protects WebRTC HTTP signaling. MediaMTX's UDP ICE/DTLS/SRTP path
 remains a separate network flow. Keep the signaling listener on loopback and
 restrict the UDP port to the intended LAN or VPN networks with the firewall.
+
+Snapshot JPEGs travel entirely through Nginx and the loopback snapshot proxy;
+there is no separate UDP media path. Camera-side Basic/Digest authentication
+remains the snapshot proxy's responsibility. See SNAPSHOT.md for installation
+and camera/profile route coverage. This runbook adds the browser access gate
+to that existing service.
+
+The MCP `get_snapshot` tool uses the loopback snapshot proxy directly after
+MCP authentication. Public `web_snapshot_url` links use the browser gate.
+Hermes does not need a browser session cookie to call `get_snapshot`.
 
 ## Agent execution rules
 
@@ -159,10 +173,10 @@ Confirm the existing services and ports before making changes:
 
 ```bash
 sudo docker compose --project-directory "{{COMPOSE_DIR}}" ps
-sudo systemctl is-active nginx mediamtx onvif-mcp-http.service
+sudo systemctl is-active nginx mediamtx onvif-mcp-http.service snapshot-proxy.service
 
 sudo ss -ltnp | grep -E \
-  ':({{OAUTH2_PROXY_PORT}}|{{MCP_HTTP_PORT}}|{{KEYCLOAK_PORT}}|{{MEDIAMTX_WEBRTC_PORT}})\b' || true
+  ':({{OAUTH2_PROXY_PORT}}|{{MCP_HTTP_PORT}}|{{KEYCLOAK_PORT}}|{{MEDIAMTX_WEBRTC_PORT}}|{{SNAPSHOT_PORT}})\b' || true
 
 sudo ss -lunp | grep ':{{MEDIAMTX_ICE_PORT}}\b' || true
 ```
@@ -171,10 +185,11 @@ Require:
 
 - Keycloak and PostgreSQL running
 - PostgreSQL healthy
-- Nginx, MediaMTX, and MCP active
+- Nginx, MediaMTX, MCP, and snapshot-proxy active
 - oauth2-proxy port free
 - MediaMTX WebRTC signaling bound to loopback
 - MCP and Keycloak HTTP bound to loopback
+- Snapshot proxy HTTP bound only to `{{LOOPBACK_IP}}:{{SNAPSHOT_PORT}}`
 
 Inspect only deployment metadata and `.env` key names:
 
@@ -201,13 +216,34 @@ sudo nginx -t
 sudo nl -ba "{{NGINX_SITE}}"
 ```
 
-Require one HTTPS server containing the target static, MediaMTX, Keycloak, MCP,
-and protected-resource metadata locations.
+Require one HTTPS server containing the target static, MediaMTX, snapshot,
+Keycloak, MCP, and protected-resource metadata locations. Inspect the active
+HTTP server too: record any snapshot route that still serves an unprotected
+copy, and include its HTTPS redirect correction in Phase 7. If the snapshot location is absent from HTTPS,
+use the location in SNAPSHOT.md Step 6 as the basis for the protected block
+in Phase 7; do not reload an unprotected intermediate configuration.
+
+Resolve a known working camera serial/profile pair from the existing snapshot
+route table or camera registry. Use its exact spelling to set `SNAPSHOT_PATH`
+in the shell used for subsequent checks (replace both placeholders):
+
+```bash
+export SNAPSHOT_PATH="/snapshot/<serial_number>/<profile_token>/"
+curl --fail --silent --show-error --max-time 65 \
+  "http://{{LOOPBACK_IP}}:{{SNAPSHOT_PORT}}${SNAPSHOT_PATH}" \
+  -o /dev/null -w 'Snapshot upstream: HTTP %{http_code} type=%{content_type}\n'
+```
+
+Require `200 image/jpeg` and validate the body as a JPEG using SNAPSHOT.md
+Step 5 before proceeding. A missing or failing proxy is a prerequisite failure.
+Confirm route coverage for the camera profiles referenced by the applications.
+Record baseline public access for this same path in addition to the roots
+below; a root-only check does not prove a real snapshot can be retrieved.
 
 Record current unauthenticated behavior:
 
 ```bash
-for path in /cameras/ /multiview/ /outputs/ /webrtc/; do
+for path in /cameras/ /multiview/ /outputs/ /webrtc/ /snapshot/ "$SNAPSHOT_PATH"; do
   curl -sS -o /dev/null \
     -w "${path} HTTP %{http_code} redirect=%{redirect_url}\n" \
     "https://{{SERVER_FQDN}}${path}"
@@ -533,10 +569,10 @@ Validate before reload:
 sudo nginx -t
 ```
 
-## 7. Protect applications and WebRTC signaling
+## 7. Protect applications, WebRTC signaling, and snapshots
 
 Add the following exactly once at the beginning of each `/cameras/`,
-`/multiview/`, `/outputs/`, and `/webrtc/` location:
+`/multiview/`, `/outputs/`, `/webrtc/`, and `/snapshot/` location:
 
 ```nginx
 auth_request /oauth2/auth;
@@ -546,12 +582,37 @@ add_header Set-Cookie $auth_cookie always;
 ```
 
 Preserve all existing static-file, MediaMTX, WebSocket, redirect, proxy-header,
-and timeout directives.
+and timeout directives. Preserve the snapshot location's existing proxy
+headers, 30-second read/send timeouts, and cache controls. Its upstream must
+retain the snapshot path, as in SNAPSHOT.md:
+
+```nginx
+proxy_pass http://{{LOOPBACK_IP}}:{{SNAPSHOT_PORT}}/snapshot/;
+proxy_read_timeout 30s;
+proxy_send_timeout 30s;
+proxy_no_cache on;
+proxy_cache_bypass on;
+```
+
+During this phase, change any HTTP snapshot route identified in preflight to
+redirect to the same path on the public HTTPS origin. Preserve query strings.
+
+Keep these inside the protected `location /snapshot/` block; do not create a
+second competing location. Preserve the proxy's `Cache-Control: no-store`
+response header. The camera credentials and route table need no changes.
+
+Confirm `STREAM_SERVER_URL` on the MCP HTTP service is
+`https://{{SERVER_FQDN}}`, and that browser-facing snapshot links in the
+application registry use HTTPS on the same origin. If a value still uses HTTP,
+update its authoritative configuration and regenerate affected links before
+verification. Restart the MCP HTTP service only if its environment changed.
+Inspect only the relevant non-secret setting, not the complete environment.
 
 Do not add browser protection to Keycloak, oauth2-proxy, MCP, or protected-
 resource metadata routes.
 
-Show an incremental diff, require only the intended directive groups, then:
+Show an incremental diff, require only the intended authentication directives
+and any necessary snapshot routing, HTTPS redirect, or URL corrections, then:
 
 ```bash
 sudo nginx -t
@@ -562,7 +623,7 @@ sudo systemctl is-active nginx
 ## 8. Verify unauthenticated behavior
 
 ```bash
-for path in /cameras/ /multiview/ /outputs/ /webrtc/; do
+for path in /cameras/ /multiview/ /outputs/ /webrtc/ /snapshot/ "$SNAPSHOT_PATH"; do
   curl -sS -o /dev/null \
     -w "${path} HTTP %{http_code} redirect=%{redirect_url}\n" \
     "https://{{SERVER_FQDN}}${path}"
@@ -570,7 +631,20 @@ done
 ```
 
 Every route must return `302` to `/oauth2/start` with its original path in
-`rd=`.
+`rd=`. Test with no session cookie and do not follow the HTTPS login redirect.
+The known snapshot path must not return image content without authentication.
+Also check the old HTTP entry point:
+
+```bash
+curl -sS -o /dev/null \
+  -w 'Snapshot HTTP: %{http_code} redirect=%{redirect_url}\n' \
+  "http://{{SERVER_FQDN}}${SNAPSHOT_PATH}"
+```
+
+Require a redirect to the same path on `https://{{SERVER_FQDN}}`; follow that
+destination separately without cookies and require the login redirect above.
+No active HTTP virtual host or alternate snapshot location may serve an
+unprotected JPEG. Confirm the loopback proxy port is not publicly exposed.
 
 Also require:
 
@@ -593,6 +667,14 @@ alternative given after step 6). Either way, confirm:
 4. Open `/multiview/` in the same browser session.
 5. Open a known direct `/webrtc/.../` stream URL.
 6. Confirm no second login is required and live video plays.
+7. Open the known `https://{{SERVER_FQDN}}${SNAPSHOT_PATH}` URL in the same
+   browser session. Require no second login, HTTP 200,
+   `Content-Type: image/jpeg`, a valid JPEG body, and `Cache-Control: no-store`.
+   Confirm the
+   image displays, including snapshots embedded in the camera applications.
+8. In a separate unauthenticated browser session, open that direct snapshot
+   URL, complete login, and confirm the callback returns to the requested
+   snapshot and displays the image.
 
 If the user password was generated by the deployment agent, read it only
 inside one root-controlled process on the server (for example from
@@ -613,6 +695,20 @@ known direct stream URL under `/webrtc/.../` passes auth to MediaMTX without a
 login bounce (any non-302-to-sign-in outcome such as 200 is the expected
 signaling response). Live-video rendering remains a human confirmation only —
 UDP ICE/DTLS/SRTP cannot be asserted over HTTP checks.
+
+For snapshots, use an authenticated GET with the in-memory cookie jar and
+validate the actual JPEG response and no-store header described above. A
+redirect to an HTML login page or merely a non-302 response is not success.
+Use GET for the image check: the current snapshot proxy implements GET, not
+HEAD. Do not persist the session cookies.
+
+Once Hermes registration is complete, also call `get_cameras` and verify
+`web_snapshot_url` values use the expected HTTPS origin and exact profile
+paths. Call `get_snapshot` for the known camera/profile through authenticated
+MCP and require a valid image result without supplying browser cookies. Its
+`SNAPSHOT_PROXY_URL` must continue to target the loopback snapshot service,
+not the public browser-protected URL. Record this regression check as pending
+if REGISTER.md has not yet been completed.
 
 Finally verify Hermes MCP access remains independent:
 
@@ -692,9 +788,12 @@ been created. Resume with one command per step until context is stable.
 - Use exact redirect URIs and web origins; do not use broad wildcards.
 - Do not bypass the private CA.
 - Browser cookies and Hermes MCP tokens are independent credentials.
-- All authenticated browser users currently receive access to all four route
+- All authenticated browser users currently receive access to all five route
   families. Add Keycloak roles/groups and corresponding authorization policy
   if per-user or per-route access is required.
+- Keep the snapshot proxy bound to loopback; public snapshot access goes
+  through the protected HTTPS location. HTTP must redirect to HTTPS.
+- Preserve `Cache-Control: no-store` on JPEG responses.
 - Same-host backups do not protect against host or disk loss.
 
 ## Final checklist
@@ -705,10 +804,17 @@ been created. Resume with one command per step until context is stable.
 - oauth2-proxy is bound only to loopback and returns ping `200`.
 - Direct unauthenticated auth check returns `401`.
 - Nginx oauth2 support routes are active.
-- All four browser route families redirect unauthenticated users to login.
+- All five browser route families redirect unauthenticated users to login.
 - Keycloak login returns users to the requested route.
 - Static apps load after authentication.
 - Direct WebRTC playback works after authentication.
+- Snapshot proxy is active and bound only to loopback.
+- Known direct snapshot URL redirects to login without a browser session.
+- Authenticated snapshots return valid JPEGs with `Cache-Control: no-store`.
+- Direct snapshot login returns to the requested image.
+- HTTP snapshot access redirects to HTTPS; generated browser links use HTTPS.
+- After Hermes registration, MCP `get_snapshot` returns an image independently
+  of browser cookies.
 - MCP continues to return `401` without a bearer token.
 - Hermes reconnects independently with saved OAuth state.
 - Post-configuration backup exists and has a valid archive catalog.
