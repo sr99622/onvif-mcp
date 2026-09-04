@@ -9,8 +9,8 @@ and pull live streams from the MediaMTX server
 
 | Value Name | Description|
 |------------|------------|
-| {{SERVER_FQDN}} | Server Fully Qualified Domain Name e.g. camera.home.arpa |
-| {{REPO_PATH}} | Path Location of git repo, most likely $HOME |
+| `{{SERVER_FQDN}}` | Server Fully Qualified Domain Name e.g. camera.home.arpa |
+| `{{REPO_PATH}}` | Path Location of git repo, most likely $HOME |
 
 These values are required for operation. Stop and prompt the user if they are not provided.
 

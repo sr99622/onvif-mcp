@@ -5,7 +5,7 @@
 1. Camera must be connected to one of the server's network interfaces.
 2. Camera credentials are known (RTSP username and password, used for MediaMTX source URL construction).
 
-Values supplied by Agent
+## Values supplied by Agent
 
 | Value           | Description                                 |
 |-----------------|-----------------------------------------------|

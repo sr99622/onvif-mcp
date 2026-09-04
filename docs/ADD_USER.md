@@ -16,7 +16,15 @@ If the new account will be used from a machine that is not yet allowed by the
 anonymous DCR Trusted Hosts policy, run `ADD_CLIENT_ON_SERVER.md` first with
 that machine's observed source address, then continue here.
 
-Runbook values:
+## Values supplied by the Agent
+
+| Name | Description |
+|------|-------------|
+| `{{NEW_LOGIN_USER}}` | New login username supplied by agent, e.g. `mcp-user2` | — |
+| `{{SERVER_FQDN}}` | Server Fully Qualified Domain Name | `camera.home.arpa` |
+
+
+## Runbook values
 
 | Symbol | Meaning | Typical value in this deployment |
 |---|---|---|
@@ -24,8 +32,6 @@ Runbook values:
 | `{{KEYCLOAK_ADMIN_USER}}` | Permanent administrator in the `master` realm | `keycloak-admin` |
 | `{{KEYCLOAK_PORT}}` | Loopback TCP port of the Keycloak listener | `8080` |
 | `{{KEYCLOAK_PATH}}` | Keycloak relative path on loopback (`KC_HTTP_RELATIVE_PATH`) | `/auth` |
-| `{{NEW_LOGIN_USER}}` | New login username supplied by agent, e.g. `mcp-user2` | — |
-| `{{SERVER_FQDN}}` | Server Fully Qualified Domain Name | `camera.home.arpa` |
 | `{{SERVER_USER}}` | User account name on server | - |
 
 All calls are made from the server host against the loopback Keycloak

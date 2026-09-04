@@ -2,7 +2,9 @@
 
 ## Values supplied by agent
 
-{{SERVER_FQDN}} Server Fully Qualified Domain Name e.g. camera.home.arpa
+| Name | Description |
+|------|-------------|
+| `{{SERVER_FQDN}}` | Server Fully Qualified Domain Name e.g. camera.home.arpa |
 
 ## Purpose
 

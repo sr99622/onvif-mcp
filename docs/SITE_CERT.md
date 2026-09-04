@@ -19,7 +19,7 @@ Prerequisite: the private CA exists on this same host per CREATE_CA_CERT.md
 its passphrase in the local `pass` vault as `camera-ca/root-key-passphrase`, and a
 vault entry `camera-ca/age-archive-<DATE>` for the age archives).
 
-## Variables supplied by the Agent
+## Values supplied by the Agent
 
 | Name | Meaning |
 |---|---|

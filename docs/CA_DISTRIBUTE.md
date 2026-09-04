@@ -35,6 +35,13 @@ Authoritative CA workstation
 The copy under `/srv/camera-pki/public` is the deliberately managed client-distribution
 copy. The authoritative CA state remains at `{{CA_ROOT_PATH}}` and in its encrypted backups.
 
+## Values supplied by the Agent
+
+| Symbol | Required value |
+|---|---|
+| `{{SERVER_FQDN}}` | Canonical DNS name used by clients and the TLS certificate |
+| `{{SERVER_IP}}` | Server IP address hosting the distribution endpoint |
+
 ## Site-specific values
 
 | Purpose | Value |
@@ -50,11 +57,6 @@ copy. The authoritative CA state remains at `{{CA_ROOT_PATH}}` and in its encryp
 | Instructions URL | `http://{{SERVER_FQDN}}/ca/README.txt` |
 
 Replace every symbolic value before using this runbook:
-
-| Symbol | Required value |
-|---|---|
-| `{{SERVER_FQDN}}` | Canonical DNS name used by clients and the TLS certificate |
-| `{{SERVER_IP}}` | Server IP address hosting the distribution endpoint |
 
 Generated documents must not contain any unresolved `{{...}}` symbols.
 

@@ -1,14 +1,14 @@
 # ONVIF Camera MCP HTTP Server
 
-## Variables Supplied by the Agent
+## Values Supplied by the Agent
 
 | Config Variable | Description |
 | --- | --- |
-| {{SERVER_FQDN}} | Fully Qualified Domain Name of the Server |
-| {{USERNAME}}    | Camera Username                           |
-| {{PASSWORD}}    | Camera Password                           |
-| {{REPO_PATH}}   | Full Pathname of Repository Location      |
-| {{SERVER_USER}} | System user the service runs as (project owner) |
+| `{{SERVER_FQDN}}` | Fully Qualified Domain Name of the Server       |
+| `{{USERNAME}}`    | Camera Username                                 |
+| `{{PASSWORD}}`    | Camera Password                                 |
+| `{{REPO_PATH}}`   | Full Pathname of Repository Location            |
+| `{{SERVER_USER}}` | System user the service runs as (project owner) |
 
 These values are required for operation. Stop and prompt the user if they are not provided.
 
