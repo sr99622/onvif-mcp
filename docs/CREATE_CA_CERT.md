@@ -26,8 +26,8 @@ host, user account, GPG key, or prior session.
 | Name | Meaning |
 |---|---|
 | `{{CA_ROOT_PATH}}` | Private CA root directory (e.g. `/home/stephen/Private-CA`) |
-| `{{SMB_PATH}}` | Mounted SMB share path (e.g. `/mnt/taurus`) |
-| `{{DATE}}` | Current date for archive names (e.g. `2026-09-01`; never reuse a hardcoded value) |
+| `{{SMB_PATH}}`     | Mounted SMB share path (e.g. `/mnt/taurus`) |
+| `{{DATE}}`         | Current date for archive names (e.g. `2026-09-01`; never reuse a hardcoded value) |
 
 Passphrases are **not** supplied as variables and never echoed. Both live in the local
 `pass` vault under the store's GPG key:

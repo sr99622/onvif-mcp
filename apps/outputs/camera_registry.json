@@ -7,64 +7,56 @@
       "ip_address": "10.1.1.70",
       "manufacturer": "HIKVISION",
       "model": "DS-2CD2142FWD-IS",
-      "media_player_url": "https://nuc.home.arpa/webrtc/DS-2CD2142FWD-IS20171118BBWR129028868/Profile_1/",
-      "substream_player_url": "https://nuc.home.arpa/webrtc/DS-2CD2142FWD-IS20171118BBWR129028868/Profile_2/"
+      "media_player_url": "http://nuc.home.arpa/webrtc/DS-2CD2142FWD-IS20171118BBWR129028868/Profile_1/",
+      "substream_player_url": "http://nuc.home.arpa/webrtc/DS-2CD2142FWD-IS20171118BBWR129028868/Profile_2/"
     },
     {
       "hostname": "Kitchen",
       "ip_address": "10.1.1.72",
       "manufacturer": "LOREX",
       "model": "LNB8973B",
-      "media_player_url": "https://nuc.home.arpa/webrtc/ND021810001394/MediaProfile000/",
-      "substream_player_url": "https://nuc.home.arpa/webrtc/ND021810001394/MediaProfile001/"
+      "media_player_url": "http://nuc.home.arpa/webrtc/ND021810001394/MediaProfile000/",
+      "substream_player_url": "http://nuc.home.arpa/webrtc/ND021810001394/MediaProfile001/"
     },
     {
       "hostname": "Driveway",
       "ip_address": "10.1.1.68",
       "manufacturer": "Amcrest",
       "model": "IP3M-HX2W",
-      "media_player_url": "https://nuc.home.arpa/webrtc/AMC015906KDB241289/MediaProfile000/",
-      "substream_player_url": "https://nuc.home.arpa/webrtc/AMC015906KDB241289/MediaProfile001/"
+      "media_player_url": "http://nuc.home.arpa/webrtc/AMC015906KDB241289/MediaProfile000/",
+      "substream_player_url": "http://nuc.home.arpa/webrtc/AMC015906KDB241289/MediaProfile001/"
     },
     {
       "hostname": "Monopoly",
       "ip_address": "10.1.1.71",
       "manufacturer": "Amcrest",
       "model": "IP2M-841EB",
-      "media_player_url": "https://nuc.home.arpa/webrtc/AMC014641NE6L35AT8/MediaProfile000/",
-      "substream_player_url": "https://nuc.home.arpa/webrtc/AMC014641NE6L35AT8/MediaProfile001/"
+      "media_player_url": "http://nuc.home.arpa/webrtc/AMC014641NE6L35AT8/MediaProfile000/",
+      "substream_player_url": "http://nuc.home.arpa/webrtc/AMC014641NE6L35AT8/MediaProfile001/"
     },
     {
       "hostname": "Office",
       "ip_address": "10.1.1.67",
       "manufacturer": "AXIS",
       "model": "M1065-LW",
-      "media_player_url": "https://nuc.home.arpa/webrtc/ACCC8E99C915/profile1/",
-      "substream_player_url": "https://nuc.home.arpa/webrtc/ACCC8E99C915/profile0/"
+      "media_player_url": "http://nuc.home.arpa/webrtc/ACCC8E99C915/profile1/",
+      "substream_player_url": "http://nuc.home.arpa/webrtc/ACCC8E99C915/profile0/"
     },
     {
       "hostname": "Tester",
       "ip_address": "10.2.2.98",
       "manufacturer": "Dahua",
       "model": "IPC-HDW4631C-A",
-      "media_player_url": "https://nuc.home.arpa/webrtc/4B0013BPAABE264/MediaProfile000/",
-      "substream_player_url": "https://nuc.home.arpa/webrtc/4B0013BPAABE264/MediaProfile001/"
+      "media_player_url": "http://nuc.home.arpa/webrtc/4B0013BPAABE264/MediaProfile000/",
+      "substream_player_url": "http://nuc.home.arpa/webrtc/4B0013BPAABE264/MediaProfile001/"
     },
     {
       "hostname": "Speco",
       "ip_address": "10.2.2.101",
       "manufacturer": "Speco",
       "model": "O4VD2",
-      "media_player_url": "https://nuc.home.arpa/webrtc/5CF2075C9F49/profile1/",
-      "substream_player_url": "https://nuc.home.arpa/webrtc/5CF2075C9F49/profile2/"
-    },
-    {
-      "hostname": "Reolink",
-      "ip_address": "192.168.68.252",
-      "manufacturer": "REOLINK",
-      "model": "E1 Zoom",
-      "media_player_url": "https://nuc.home.arpa/webrtc/19216868252/000/",
-      "substream_player_url": "https://nuc.home.arpa/webrtc/19216868252/001/"
+      "media_player_url": "http://nuc.home.arpa/webrtc/5CF2075C9F49/profile1/",
+      "substream_player_url": "http://nuc.home.arpa/webrtc/5CF2075C9F49/profile2/"
     }
   ]
 }
