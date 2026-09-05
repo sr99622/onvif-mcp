@@ -22,6 +22,9 @@ that machine's observed source address, then continue here.
 |------|-------------|
 | `{{NEW_LOGIN_USER}}` | New login username supplied by agent, e.g. `mcp-user2` | — |
 | `{{SERVER_FQDN}}` | Server Fully Qualified Domain Name | `camera.home.arpa` |
+| `{{FIRST_NAME}}` | New login first name, supplied by agent; must be non-empty (the realm runs an active `update-profile` required action — see Section 3a). For a machine-only account, repeat `{{NEW_LOGIN_USER}}`. | `Joe` |
+| `{{LAST_NAME}}` | New login last name, supplied by agent; must be non-empty (see Section 3a). For a machine-only account, repeat `{{NEW_LOGIN_USER}}`. | `Blow` |
+| `{{USER_EMAIL}}` | New login email address, supplied by agent; must be non-empty. For a machine-only account use `{{NEW_LOGIN_USER}}@{{SERVER_FQDN}}` (same convention as `{{MCP_LOGIN_USER}}`). | `joe.blow@example.com` |
 
 
 ## Runbook values
@@ -147,27 +150,40 @@ only lazily, at first login. The browser sign-in flow then fails at
 "email in id_token ... isn't verified". The pre-existing login user has a
 verified email, which is why only new users hit this.
 
-Set `emailVerified=true`, and if `email` is still empty also set it to a
-nonempty placeholder (`<username>@example.com`), using the PUT-against-live
-representation idiom from `STREAM_AUTH.md` Section 2 (PATCH is rejected with
-HTTP 405 on Keycloak 26; PUT has replace semantics, so it must run against
-the freshly fetched body in the same bounded command):
+This realm runs an active `update-profile` (UPDATE_PROFILE) required action,
+so a fresh user bounces to `/login-actions/required-action` at first login
+until **all** of `email`, `firstName`, and `lastName` are nonempty *and*
+`emailVerified=true`. Set all four fields from the agent-supplied values —
+never an invented placeholder (for a machine-only account, repeat
+`{{NEW_LOGIN_USER}}` for the names and use `{{NEW_LOGIN_USER}}@{{SERVER_FQDN}}`
+for the email) — using the PUT-against-live representation idiom from
+`STREAM_AUTH.md` Section 2 (PATCH is rejected with HTTP 405 on Keycloak 26;
+PUT has replace semantics, so it must run against the freshly fetched body in
+the same bounded command):
 
 ```bash
-# Mint a token first (same pattern as ADD_CLIENT_ON_SERVER.md).
-curl -sS -H "Authorization: Bearer $(cat $tfile)" \
-  "http://127.0.0.1:{{KEYCLOAK_PORT}}{{KEYCLOAK_PATH}}/admin/realms/{{MCP_REALM}}/users/${NEW_USER_UUID}" > /tmp/.kcuser.$$
-python3 -c "import json; u = json.load(open('/tmp/.kcuser.$$')); assert u['username'] == '{{NEW_LOGIN_USER}}'; u.setdefault('email', '{{NEW_LOGIN_USER}}@example.com'); u['emailVerified'] = True; json.dump(u, open('/tmp/.kcpayload.tmp', 'w'))"
-curl -sS -o /dev/null -w 'HTTP %{http_code}\n' -X PUT \
-  -H "Authorization: Bearer $(cat $tfile)" -H "Content-Type: application/json" \
-  --data @/tmp/.kcpayload.tmp \
-  "http://127.0.0.1:{{KEYCLOAK_PORT}}{{KEYCLOAK_PATH}}/admin/realms/{{MCP_REALM}}/users/${NEW_USER_UUID}"
+sudo docker compose --project-directory /opt/keycloak exec keycloak \
+  /opt/keycloak/bin/kcadm.sh update "users/${NEW_USER_UUID}" \
+  --config /tmp/kcadm.config -r "{{MCP_REALM}}" \
+  -s email="{{USER_EMAIL}}" \
+  -s firstName="{{FIRST_NAME}}" \
+  -s lastName="{{LAST_NAME}}" \
+  -s emailVerified=true
 ```
 
-Require HTTP 204, then re-retrieve directly by UUID and confirm: exact
-username, `enabled=true`, nonempty email, `emailVerified=true`. Delete
-`/tmp/.kcuser.$$` and `/tmp/.kcpayload.tmp` afterward. Never set the flag
-false.
+Prefer this in-container `kcadm.sh` call over the raw Admin-REST PUT: it is
+one command, needs no token minting or bearer header, and cannot be tripped
+by the mangled-shell-substitution failure described in Troubleshooting. The
+raw REST route (fetch live representation → modify → `PUT`) remains valid —
+see `STREAM_AUTH.md` Section 2 for why it must run as a single bounded
+command (PATCH is rejected with HTTP 405 on Keycloak 26) — but the token must
+never be assembled from shell substitution over a credential file.
+
+Re-retrieve directly by UUID and confirm: exact username, `enabled=true`,
+nonempty `email`/`firstName`/`lastName` exactly as supplied,
+`emailVerified=true`. Never set the flag false. If first login later lands on
+`/login-actions/required-action` ("Update Account Information"), some field
+above is still empty — re-run this section from the top.
 
 ## 4. Generate the password and store it as a root-owned secret
 
@@ -261,12 +277,33 @@ from both.
   administrator created in `KEYCLOAK.md` Section 5 and that
   `/opt/keycloak/admin.pass` is the current one. Never retry with a realm
   other than `master`.
+- **`kcadm.sh` in-container succeeds but host-side Admin REST calls (e.g. the
+  Section 3a `curl` steps) return `401`** — do not chase Keycloak; the
+  asymmetry means the request itself is malformed, not the token or server.
+  Check what actually reached the wire: capture loopback port
+  `{{KEYCLOAK_PORT}}` with `tcpdump` during one mint plus a single admin GET
+  and read the Authorization line of the captured request. If it contains
+  literal asterisks followed by an unexpanded command stub (the header being
+  built as `Bearer $(cat tokenfile)` with the substitution mangled in transit
+  by the terminal's secret-protection layer), Keycloak rejects it — this looks
+  like a mysterious, intermittent `401` but is a corrupted header. Never build
+  a bearer header from shell substitution over a credential file: do the mint
+  and all Admin REST calls inside one `python3` process (read
+  `/opt/keycloak/admin.pass` directly with `open()`, set the header in
+  memory, no temp token file), or fall back to `kcadm.sh` inside the
+  container — Section 3a is fully expressible as a single `update users/... -s email=... -s emailVerified=true` call.
 - **Browser login says "User or client not found"** — typo'd username at
   sign-in, or the user was created disabled. Re-run Step 6 checks; fix with a
   single `-s enabled=true` update if (and only if) that is what the check
   shows.
 - **Credential list missing `PASSWORD`** — re-run Section 5 from the top; it
   is idempotent (sets the password again) and never displays the value.
+- **Browser login bounces to `/login-actions/required-action`
+  ("Update Account Information")** — the realm's `update-profile` required
+  action is unsatisfied: one of `email`, `firstName`, `lastName` is still
+  empty or `emailVerified` is false. The password was accepted (a wrong
+  credential re-lands on `/login-actions/authenticate` instead). Re-run
+  Section 3a; confirm all four fields with the user GET before retrying.
 - **Browser login returns HTTP 500 from `/oauth2/callback`** — the new user's
   email is unverified; oauth2-proxy rejects the redeemed token ("email in
   id_token ... isn't verified"). Check `emailVerified` on the user and run
@@ -281,6 +318,8 @@ from both.
   `{{KEYCLOAK_ADMIN_USER}}`.
 - `{{NEW_LOGIN_USER}}` was absent before creation; exactly one match exists
   after, in `{{MCP_REALM}}`, enabled.
+- `email`, `firstName`, `lastName` are nonempty and `emailVerified=true`
+  (Section 3a); the `update-profile` required action is satisfied.
 - Secret file exists at `/opt/keycloak/{{NEW_LOGIN_USER}}.pass`, root-owned,
   mode `0600`; the password was never printed except during hand-back.
 - Credential check lists a `PASSWORD` entry.

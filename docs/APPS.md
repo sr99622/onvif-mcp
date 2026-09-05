@@ -51,13 +51,18 @@ system nginx user, not under a per-user `python -m http.server` process.
 ## Step 1: Fix the camera registry URLs
 
 `apps/outputs/camera_registry.json` is the single source of truth for
-stream URLs. Every `media_player_url` / `substream_player_url` must point at
+stream URLs. The initial state of the file contains no camera data, it
+is your job to populate the fields. Required camera fields can be found
+in the data returned from the camera MCP server get_data tool call.
+Every `media_player_url` / `substream_player_url` must point at
 the **MediaMTX WebRTC player URL** — not directly at a camera RTSP URI and
 not at HTTPS (this host has no TLS):
 
 ```
 http://{{SERVER_FQDN}}/webrtc/<SERIAL_NUMBER>/<PROFILE_TOKEN>/
 ```
+
+Populate the "cameras": [] section of the file with each camera's data.
 
 - `<SERIAL_NUMBER>` = the camera `serial_number` from `get_cameras`
   (camera MCP server).

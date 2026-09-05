@@ -83,7 +83,7 @@ certutil -d "sql:$HOME/.pki/nssdb" -N
 
 #### 4. Import the certificate
 ```
-certutil -d "sql:$HOME/.pki/nssdb" -A -t "CP,CP," -n "Camera CA Certificate" -i /usr/local/ca-certificates/camera-system-root-ca.crt.pem
+certutil -d "sql:$HOME/.pki/nssdb" -A -t "CP,CP," -n "Camera CA Certificate" -i /usr/local/share/ca-certificates/camera-system-root-ca.crt.pem
 ```
 
 ### Alternate manual certificate configuration

@@ -1223,3 +1223,35 @@ while the actual HTTPS server block was in `/etc/nginx/conf.d/nuc.home.arpa.conf
 Section 9 identification step (`sudo nginx -T | grep ...`) is what found it;
 treat the example path as an illustration only.
 
+### 3.4 Section 6 misses a Keycloak required-action trap on first login
+
+Keycloak's profile policy marks `email` as *required*. The login user created
+in Section 6 has no email, so its **first** browser login is interrupted by a
+`VERIFY_PROFILE` required action (Email field, mandatory) that the runbook
+never addresses. Headless verification proved this blocks every first login —
+the actual client's authorization flow stalls on the profile form.
+
+Fix applied before any client connects: set an email on the login user via
+Admin API:
+
+```bash
+sudo docker compose --project-directory /opt/keycloak exec keycloak \
+  /opt/keycloak/bin/kcadm.sh update "users/<LOGIN_USER_UUID>" \
+  --config /tmp/kcadm.config -r "${MCP_REALM}" \
+  -s email="mcp-user@<server-fqdn-without-tld-prefix>"
+```
+
+Verified working flow after the fix: anonymous DCR (201) → browser login →
+consent screen (`scope_consent` for `mcp:tools`) → authorization code with
+S256 PKCE → token endpoint returns a Bearer access token whose claims are
+exactly `iss=https://nuc.home.arpa/auth/realms/mcp`,
+`aud=https://nuc.home.arpa/mcp`, `scope=mcp:tools`. An authenticated request
+to `/mcp` then passes authentication (a bare GET without MCP protocol headers
+returns 406, not 401 — the token is accepted).
+
+Also note for headless testing: Keycloak's consent form action URL is
+*relative* (`/auth/realms/...`), and after the final POST it redirects to the
+loopback callback URI. A script must resolve the relative action against the
+page URL and run a local listener on the redirect port (e.g. 8765) instead of
+following that redirect itself.
+
