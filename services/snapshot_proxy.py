@@ -51,34 +51,6 @@ UPSTREAM_TIMEOUT_S = 20
 #   * Reolink 19216868252 — only channel=0 yields a JPEG; map both tokens to it.
 #   * Speco 5CF2075C9F49 — all profile tokens share one /snapshot.JPG endpoint.
 ROUTES: dict[str, str] = {
-    "4B0013BPAABE264/MediaProfile000": "http://10.2.2.98/onvifsnapshot/media_service/snapshot?channel=1&subtype=0",
-    "4B0013BPAABE264/MediaProfile001": "http://10.2.2.98/onvifsnapshot/media_service/snapshot?channel=1&subtype=1",
-
-    "5CF2075C9F49/profile1": "http://10.2.2.101/snapshot.JPG",
-    "5CF2075C9F49/profile2": "http://10.2.2.101/snapshot.JPG",
-    "5CF2075C9F49/profile3": "http://10.2.2.101/snapshot.JPG",  # shared upstream for all Speco tokens
-
-    "DS-2CD2142FWD-IS20171118BBWR129028868/Profile_1": "http://10.1.1.70/onvif-http/snapshot?Profile_1",
-    "DS-2CD2142FWD-IS20171118BBWR129028868/Profile_2": "http://10.1.1.70/onvif-http/snapshot?Profile_2",
-
-    "ND021810001394/MediaProfile000": "http://10.1.1.72/onvifsnapshot/media_service/snapshot?channel=1&subtype=0",
-    "ND021810001394/MediaProfile001": "http://10.1.1.72/onvifsnapshot/media_service/snapshot?channel=1&subtype=1",
-
-    "AMC015906KDB241289/MediaProfile000": "http://10.1.1.68/onvifsnapshot/media_service/snapshot?channel=1&subtype=0",
-    "AMC015906KDB241289/MediaProfile001": "http://10.1.1.68/onvifsnapshot/media_service/snapshot?channel=1&subtype=1",
-
-    "AMC014641NE6L35AT8/MediaProfile000": "http://10.1.1.71/onvifsnapshot/media_service/snapshot?channel=1&subtype=0",
-    "AMC014641NE6L35AT8/MediaProfile001": "http://10.1.1.71/onvifsnapshot/media_service/snapshot?channel=1&subtype=1",
-
-    # Axis M1065-LW is buggy about its image.cgi resolution parameters; these
-    # two endpoints are the ones reliably returning a JPEG.
-    "ACCC8E99C915/profile_1_h264": "http://10.1.1.67/onvif-cgi/jpg/image.cgi",
-    "ACCC8E99C915/profile_1_jpeg": "http://10.1.1.67/onvif-cgi/jpg/image.cgi?resolution=1920x1080&compression=30",
-    "ACCC8E99C915/profile0": "http://10.1.1.67/onvif-cgi/jpg/image.cgi",
-    "ACCC8E99C915/profile1": "http://10.1.1.67/onvif-cgi/jpg/image.cgi?resolution=1920x1080&compression=30",
-
-    "19216868252/000": "http://192.168.68.252/cgi-bin/api.cgi?cmd=onvifSnapPic&channel=0",
-    "19216868252/001": "http://192.168.68.252/cgi-bin/api.cgi?cmd=onvifSnapPic&channel=0",
 }
 
 # Match the external shape: optionally-prefixed /snapshot/<serial>/<profile>/

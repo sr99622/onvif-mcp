@@ -239,6 +239,13 @@ mcp_servers:
       STREAM_SERVER_URL: {{SERVER_FQDN}}
 ```
 
+Configuration of the system will require more turns than are configured by default. Edit the `.hermes/config.yaml` file to adjust
+
+```
+agent:
+  max_turns: 120
+```
+
 Launch hermes and inspect the header. The first launch will show connecting to the MCP server, the second launch will stabilize the header. Look for the mcp servers section it should look something like:
 
 ```
@@ -256,26 +263,19 @@ use the camera MCP server to get its version
 
 It should reply with both the MCP version and the libonvif version.
 
-Configuration of the system will require more turns than are configured by default. Edit the `.hermes/config.yaml` file to adjust
-
-```
-agent:
-  max_turns: 120
-```
-
 
 ## Set a static IP
 
 use these commands in the Hermes prompt to tell it what to do.
 
 ```
-please show the ethernet port configuration on this machine, including Gateway and DNS information
+please show the ethernet port configuration on this machine, including Gateway, DNS and netmask information
 ```
 
 You will get back a listing of the ports. Pick out the one that is currently connected to your LAN and note the interface name, it will be something like `enp86s0` but will vary. Tell Hermes to configure that specific port to have a static IP address that you have chosen based on your network topology, and to use the current Gateway and DNS settings. This will work best if you explicitly state the Gateway and DNS values.
 
 ```
-set a static IP address on <adapter name> to be <static IP>, Gateway <existing gateway>, DNS <existing DNS>
+you have sudo privileges enabled, set a static IP address on <adapter name> to be <static IP>, Gateway <existing gateway>, DNS <existing DNS>, Netmask <netmask>
 ```
 
 ## Mount an SMB share for backups

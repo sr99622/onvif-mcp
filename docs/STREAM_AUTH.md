@@ -648,7 +648,7 @@ unprotected JPEG. Confirm the loopback proxy port is not publicly exposed.
 
 Also require:
 
-- `/oauth2/ping` returns `200`.
+- Unauthenticated `/oauth2/ping` redirects to sign-in; an authenticated session answers HTTP `202` with body `Authenticated` (oauth2-proxy 7.15.x semantics — see the Phase 9 note below).
 - `/oauth2/start?rd=/cameras/` redirects to the Keycloak authorization path.
 - The redirect includes client ID, callback, response type, scope, state, and
   S256 challenge parameter names. Do not print their values.

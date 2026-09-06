@@ -300,7 +300,7 @@ sudo docker compose --project-directory /opt/keycloak exec keycloak \
   /opt/keycloak/bin/kcadm.sh add-roles \
   --config /tmp/kcadm.config \
   -r master \
-  --username "${KEYCLOAK_ADMIN_USER}" \
+  --uusername "${KEYCLOAK_ADMIN_USER}" \
   --rolename admin
 ```
 
@@ -429,6 +429,10 @@ sudo docker compose --project-directory /opt/keycloak exec keycloak \
   --config /tmp/kcadm.config \
   -r "${MCP_REALM}" \
   -s username="${MCP_LOGIN_USER}" \
+  -s email="mcp-user@example.com" \
+  -s firstName="Sample" \
+  -s lastName="User" \
+  -s emailVerified=true \
   -s enabled=true
 ```
 
@@ -1254,4 +1258,90 @@ Also note for headless testing: Keycloak's consent form action URL is
 loopback callback URI. A script must resolve the relative action against the
 page URL and run a local listener on the redirect port (e.g. 8765) instead of
 following that redirect itself.
+
+### 3.5 Hermes MCP login verification: what actually works on this host
+
+Verified with Hermes Agent v0.21.0 on `nuc.home.arpa`. Four facts are not
+obvious from the main body and cost real time to discover; follow this path.
+
+**1. `hermes mcp add` cannot be driven non-interactively.**
+The URL+OAuth path is fully prompt-driven (TTY-bound). Write the entry
+directly into `~/.hermes/config.yaml` under `mcp_servers:` instead — the same
+shape the CLI would save:
+
+```yaml
+  camera-new:
+    url: https://nuc.home.arpa/mcp
+    auth: oauth
+    ssl_verify: /etc/ssl/certs/camera-system-root-ca.pem
+    connect_timeout: 600
+    enabled: false
+```
+
+**2. `ssl_verify` is mandatory for the private CA — not optional.**
+The MCP client stack verifies against its own bundled trust store (certifi),
+not the system capath, even after Section 10 correctly installs the CA into
+`/usr/local/share/ca-certificates`. Verified empirically: default verification
+fails with `self-signed certificate in certificate chain`; pointing
+`ssl_verify` at the installed CA file succeeds. This confirms the addendum-2
+pitfall: never save the entry without the CA path and explicitly enabled TLS.
+
+**3. No other Hermes process may have this server loaded while
+`hermes mcp login` runs.**
+With the entry present in an agent session's config, that session's MCP
+machinery (config-change auto-reload / background discovery) launches a second
+concurrent OAuth flow inside the login process. Symptoms: two authorization
+URLs printed for the same DCR client, then
+`OAuth callback port 27890 is already in use`, and no browser step can ever
+land a token. Observed repeatedly on v0.21.0. Mitigations (any one suffices;
+this deployment uses the first two):
+
+- set `mcp.auto_reload_on_config_change: false` under `mcp:` in config.yaml,
+  and keep the entry `enabled: false` until its token file exists;
+- run the login under an isolated home: `HERMES_HOME=<dir> hermes mcp login <name>`
+  (copy the `mcp_servers:` block into `<dir>/config.yaml`), then copy
+  `<dir>/mcp-tokens/<name>.{json,client.json,meta.json}` back to
+  `~/.hermes/mcp-tokens/`;
+- or guarantee no concurrent session has the server loaded at all.
+
+**4. The browser step can be completed headlessly against the live login.**
+`hermes mcp login <name>` force-marks itself interactive, so its loopback
+callback listener binds on 27890 even without a TTY — *provided* no display
+variables are set (`env -u DISPLAY -u WAYLAND_DISPLAY ...`), which is also what
+prevents Hermes from auto-opening a competing browser tab. Then drive the
+Keycloak side with the verified script
+[`docs/kc-headless-login-driver.py`](kc-headless-login-driver.py):
+
+```bash
+# terminal A (isolated home, no display vars; single flow expected):
+cd <dir> && env -u DISPLAY -u WAYLAND_DISPLAY HERMES_HOME=<dir> \
+  hermes mcp login camera-new
+
+# terminal B: read the printed auth URL, confirm exactly ONE flow and that a
+# listener owns 127.0.0.1:27890 (ss -ltnp | grep 27890), then:
+python3 docs/kc-headless-login-driver.py "<printed-auth-url>"
+```
+
+The script walks login form → consent screen through the HTTPS vhost (cookies,
+relative action URLs resolved against the page URL) and delivers the final
+`?code=&state=` redirect into the running Hermes listener. Expected output:
+`callback delivered: 127.0.0.1:27890/callback | params: ['state', ... 'code']`,
+then in terminal A `✓ Authenticated — N tool(s) available`.
+
+Post-verification checklist for the login itself (the ambiguous part of this
+runbook):
+
+- token files exist at `~/.hermes/mcp-tokens/<name>.{json,client.json,meta.json}`,
+  all mode `-rw-------`; **never display their contents**;
+- `hermes mcp test <name>` reconnects using saved state and lists the expected
+  tools (verified: 29 tools);
+- enable the entry (`enabled: true`) only after the test passes;
+- each login attempt registers a fresh public DCR client ("Hermes Agent");
+  failed attempts orphan them. Periodically list clients in the realm by name,
+  match against the active `client_id` stored in
+  `<name>.client.json`, and delete only confirmed-orphan internal IDs (kcadm
+  consumes stdin on exec — redirect `</dev/null` for batch deletes).
+- take another manual backup after the real client registration exists so it
+  is included in an archive (Section 14's note); verify the new archive with
+  `pg_restore --list`.
 
