@@ -52,19 +52,23 @@ location, the proxy's route table keys, and that scheme must all agree.
 
 | Value           | Description                                    |
 |-----------------|------------------------------------------------|
-| {{SERVER_FQDN}} | Server Fully Qualified Domain Name             |
-| {{REPO_PATH}}   | Parent directory containing the onvif-mcp repository (repo lives at `{{REPO_PATH}}/onvif-mcp`) |
-| {{USERNAME}}    | Camera username                                |
-| {{PASSWORD}}    | Camera password                                |
+| {{SERVER_FQDN}}  | Server Fully Qualified Domain Name            |
+| {{REPO_PATH}}    | Parent directory containing the onvif-mcp repository (repo lives at `{{REPO_PATH}}/onvif-mcp`) |
+| {{SERVICE_USER}} | System user the proxy runs as (owner of `{{REPO_PATH}}`, so it can read the repo source and its venv) |
+| {{USERNAME}}     | Camera username                                |
+| {{PASSWORD}}     | Camera password                                |
 
-## Step 1 — Confirm the Service Files Exist in the Repository
+## Step 1 — Confirm the Service Source Exists in the Repository
 
-The service source and unit file are version-controlled in the repo:
+The service source is version-controlled in the repo:
 
 ```bash
 {{REPO_PATH}}/onvif-mcp/services/snapshot_proxy.py
-{{REPO_PATH}}/onvif-mcp/configs/systemd/snapshot-proxy.service
 ```
+
+The systemd unit file is **not** committed; it is generated on the fly in
+Step 4 (the deployment details vary per host — service user, repo path, and
+venv location).
 
 `snapshot_proxy.py` is a standard-library-only HTTP server (no pip
 dependencies). Bind and credentials come from environment:
@@ -135,10 +139,43 @@ the proxy does exact string lookup, no normalization.
 Add explanatory comments for any non-obvious entry (shared-URI cameras,
 quirky endpoints).
 
-## Step 4 — Install and Start the Service
+## Step 4 — Generate, Install, and Start the Service
+
+Generate the unit file on the fly from the template below (deployment details
+vary per host, so it is not committed to the repo). Substitute `{{SERVICE_USER}}`
+with the user who owns `{{REPO_PATH}}`, and the other braces with the values
+supplied by the Agent:
 
 ```bash
-sudo cp {{REPO_PATH}}/onvif-mcp/configs/systemd/snapshot-proxy.service /etc/systemd/system/
+sudo tee /etc/systemd/system/snapshot-proxy.service >/dev/null <<'EOF'
+[Unit]
+Description=Loopback-only camera snapshot proxy (services/snapshot_proxy.py)
+Documentation=file:{{REPO_PATH}}/onvif-mcp/services/snapshot_proxy.py
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{SERVICE_USER}}
+WorkingDirectory={{REPO_PATH}}/onvif-mcp
+# Loopback-only bind: the proxy is reached only through nginx, which handles
+# client authentication (keycloak). Credentials for the cameras are supplied
+# via environment so they are not embedded in the unit file on disk.
+Environment=SNAPSHOT_PROXY_HOST=127.0.0.1
+Environment=SNAPSHOT_PROXY_PORT=8891
+Environment=CAMERA_USERNAME={{USERNAME}}
+Environment=CAMERA_PASSWORD={{PASSWORD}}
+ExecStart={{REPO_PATH}}/onvif-mcp/.venv/bin/python {{REPO_PATH}}/onvif-mcp/services/snapshot_proxy.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+
+Installation steps:
+```bash
 sudo systemctl daemon-reload
 sudo systemctl enable snapshot-proxy --now
 systemctl is-active snapshot-proxy          # expect: active

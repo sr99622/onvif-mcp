@@ -1160,29 +1160,7 @@ The following were observed and resolved during the verified `nuc.home.arpa`
 deployment (Ubuntu 26.04, Docker 29.1.3, Keycloak 26.7.0). They are deliberate
 corrections to this runbook's example values or commands.
 
-### 3.1 `kcadm.sh add-roles` uses `--uusername`, not `--username`
-
-Keycloak 26.7 rejects the Section 5 command as written:
-
-```text
-Unknown options: '--username', 'keycloak-admin'
-Possible solutions: --user
-```
-
-and `--user` is also not accepted for user targeting. The actual flag is
-`--uusername` (see `kcadm.sh add-roles --help`, whose synopsis reads
-`(--uusername USERNAME | --uid ID)`). Working form:
-
-```bash
-sudo docker compose --project-directory /opt/keycloak exec keycloak \
-  /opt/keycloak/bin/kcadm.sh add-roles \
-  --config /tmp/kcadm.config \
-  -r master \
-  --uusername "${KEYCLOAK_ADMIN_USER}" \
-  --rolename admin
-```
-
-### 3.2 Trusted-hosts must list the identities Keycloak actually sees, not assumed IPs
+### 3.1 Trusted-hosts must list the identities Keycloak actually sees, not assumed IPs
 
 Two facts are not obvious from this machine alone:
 
@@ -1218,7 +1196,7 @@ either enable temporary `DEBUG` logging on
 container log during a deliberately failing DCR attempt
 (`docker compose --project-directory /opt/keycloak logs --tail=20 keycloak`).
 
-### 3.3 The HTTPS vhost may live in conf.d, not sites-available
+### 3.2 The HTTPS vhost may live in conf.d, not sites-available
 
 Section 9's example `NGINX_SITE=/etc/nginx/sites-available/camera-mcp` did not
 match this host: the only file under `sites-enabled/` was a port-80 redirect,
@@ -1227,7 +1205,7 @@ while the actual HTTPS server block was in `/etc/nginx/conf.d/nuc.home.arpa.conf
 Section 9 identification step (`sudo nginx -T | grep ...`) is what found it;
 treat the example path as an illustration only.
 
-### 3.4 Section 6 misses a Keycloak required-action trap on first login
+### 3.3 Section 6 misses a Keycloak required-action trap on first login
 
 Keycloak's profile policy marks `email` as *required*. The login user created
 in Section 6 has no email, so its **first** browser login is interrupted by a
@@ -1259,7 +1237,7 @@ loopback callback URI. A script must resolve the relative action against the
 page URL and run a local listener on the redirect port (e.g. 8765) instead of
 following that redirect itself.
 
-### 3.5 Hermes MCP login verification: what actually works on this host
+### 3.4 Hermes MCP login verification: what actually works on this host
 
 Verified with Hermes Agent v0.21.0 on `nuc.home.arpa`. Four facts are not
 obvious from the main body and cost real time to discover; follow this path.
