@@ -6,24 +6,7 @@ uniform, authenticated URL.
 
 ## Why this service exists
 
-Two facts drove the design — verify both before changing anything:
-
-1. **MediaMTX v1.20.x has no still-image endpoint.** Its `hls: true` HTTP
-   server (port 8888) only serves HLS playlists, video segments, and its
-   embedded player page. Confirmed by reading the v1.20.1 source
-   (`internal/servers/hls/http_server.go`) — there is no `/snapshot/...jpg`
-   route, and no release through v1.20.1 adds one. Do not attempt to proxy
-   snapshot requests to MediaMTX; they will never return an image.
-
-2. **Nginx cannot do the camera-side authentication.** A majority of cameras
-   in this fleet (Dahua, LoReX/Amcrest, AXIS, Reolink) require **HTTP Digest**
-   on their snapshot endpoints. They reject plain `Authorization: Basic` with
-   401, and the digest handshake is per-request (the camera issues a fresh
-   nonce in each `WWW-Authenticate` challenge). Nginx can only inject static
-   headers; it cannot perform the client side of a digest exchange, and this
-   stock nginx build has no Lua module.
-
-So an intermediate service sits between nginx and the cameras:
+Set up an intermediate service that sits between nginx and the cameras:
 
 ```
 browser/agent
@@ -84,6 +67,14 @@ Do not edit credentials into the source file; the unit file passes them via
 `Environment=`.
 
 ## Step 2 — Collect Each Camera's Real Snapshot URI
+
+NOTE: Not all cameras will support Digest Authentication. Some cameras will
+only support Basic Authentication. Digest is preferred, use Basic as the
+fallback. Also, some cameras do not implement either protocol correctly and
+may produce garbage output. If a curl to a camera snapshot does not respond
+properly to repeated attempts, abandon the url and move on. It is possible 
+that the camera has some endpoints that work and others that do not, so
+don't give up entirely on the camera, give up on an individual endpoint.
 
 The snapshot endpoint is vendor-specific and may differ from any URL pattern
 you expect, so **never guess it** — read it from ONVIF. For every camera

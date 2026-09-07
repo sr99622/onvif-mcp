@@ -35,7 +35,7 @@ gh auth login
 You can run the rest of the configuration from remote. We want to install an editor that will work from the remote terminal. We will be installing LazyVim. The first step is to install the latest version of neovim.
 
 ```
-sudo apt install curl
+sudo apt install curl tar xz-utils
 curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.tar.gz
 sudo rm -rf /opt/nvim-linux-x86_64
 sudo tar -C /opt -xzf nvim-linux-x86_64.tar.gz
@@ -186,7 +186,7 @@ sudo apt install ./Downloads/<code.....deb>
 
 ## Set a static IP
 
-Use the GUI tool in the Settings app. Go to Network and find your Adapter. Assuming that you are on the wired network (you should be), click the gear wheel in the panel, which will pop up a dialog. **Remove Connection Profile...** This is important, as the interface is buggy and if you do not do this, the connection will sour, its the only way to get rid of the DHCP setting. After removing the profile, Click the '+' to get a new profile. Click the IPv4 tab to get the settings tab and Select the Manual radio button. Set your Address, Netmask, Gateway and DNS, the click Apply. Reboot to make sure the settings took hold, do not take anything on faith, this mechanism is buggy and will cause significant problems if not set properly, shame on Ubuntu :/
+Use the GUI tool in the Settings app. Go to Network and find your Adapter. Assuming that you are on the wired network (you should be), click the gear wheel in the panel, which will pop up a dialog. **Remove Connection Profile...** to get rid of the default DHCP setting. After removing the profile, Click the '+' for Ethernet to get a new profile. Click the IPv4 tab to get the settings tab and Select the Manual radio button. Set your Address, Netmask, Gateway and DNS, the click Apply. Reboot to make sure the settings took hold, do not take anything on faith.
 
 ## Enable Remote Access
 
