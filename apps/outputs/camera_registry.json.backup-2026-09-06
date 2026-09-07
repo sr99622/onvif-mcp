@@ -8,8 +8,8 @@
       "manufacturer": "Dahua",
       "model": "IPC-HDW4631C-A",
       "serial_number": "4B0013BPAABE264",
-      "media_player_url": "https://nuc.home.arpa/webrtc/4B0013BPAABE264/MediaProfile000/",
-      "substream_player_url": "https://nuc.home.arpa/webrtc/4B0013BPAABE264/MediaProfile001/"
+      "media_player_url": "http://nuc.home.arpa/webrtc/4B0013BPAABE264/MediaProfile000/",
+      "substream_player_url": "http://nuc.home.arpa/webrtc/4B0013BPAABE264/MediaProfile001/"
     },
     {
       "hostname": "Speco",
@@ -17,8 +17,8 @@
       "manufacturer": "Speco",
       "model": "O4VD2",
       "serial_number": "5CF2075C9F49",
-      "media_player_url": "https://nuc.home.arpa/webrtc/5CF2075C9F49/profile1/",
-      "substream_player_url": "https://nuc.home.arpa/webrtc/5CF2075C9F49/profile3/"
+      "media_player_url": "http://nuc.home.arpa/webrtc/5CF2075C9F49/profile1/",
+      "substream_player_url": "http://nuc.home.arpa/webrtc/5CF2075C9F49/profile3/"
     },
     {
       "hostname": "HIKVISION",
@@ -26,8 +26,8 @@
       "manufacturer": "HIKVISION",
       "model": "DS-2CD2142FWD-IS",
       "serial_number": "DS-2CD2142FWD-IS20171118BBWR129028868",
-      "media_player_url": "https://nuc.home.arpa/webrtc/DS-2CD2142FWD-IS20171118BBWR129028868/Profile_1/",
-      "substream_player_url": "https://nuc.home.arpa/webrtc/DS-2CD2142FWD-IS20171118BBWR129028868/Profile_2/"
+      "media_player_url": "http://nuc.home.arpa/webrtc/DS-2CD2142FWD-IS20171118BBWR129028868/Profile_1/",
+      "substream_player_url": "http://nuc.home.arpa/webrtc/DS-2CD2142FWD-IS20171118BBWR129028868/Profile_2/"
     },
     {
       "hostname": "LOREX",
@@ -35,8 +35,8 @@
       "manufacturer": "LOREX",
       "model": "LNB8973B",
       "serial_number": "ND021810001394",
-      "media_player_url": "https://nuc.home.arpa/webrtc/ND021810001394/MediaProfile000/",
-      "substream_player_url": "https://nuc.home.arpa/webrtc/ND021810001394/MediaProfile001/"
+      "media_player_url": "http://nuc.home.arpa/webrtc/ND021810001394/MediaProfile000/",
+      "substream_player_url": "http://nuc.home.arpa/webrtc/ND021810001394/MediaProfile001/"
     },
     {
       "hostname": "Amcrest",
@@ -44,8 +44,8 @@
       "manufacturer": "Amcrest",
       "model": "IP3M-HX2W",
       "serial_number": "AMC015906KDB241289",
-      "media_player_url": "https://nuc.home.arpa/webrtc/AMC015906KDB241289/MediaProfile000/",
-      "substream_player_url": "https://nuc.home.arpa/webrtc/AMC015906KDB241289/MediaProfile001/"
+      "media_player_url": "http://nuc.home.arpa/webrtc/AMC015906KDB241289/MediaProfile000/",
+      "substream_player_url": "http://nuc.home.arpa/webrtc/AMC015906KDB241289/MediaProfile001/"
     },
     {
       "hostname": "Amcrest",
@@ -53,8 +53,8 @@
       "manufacturer": "Amcrest",
       "model": "IP2M-841EB",
       "serial_number": "AMC014641NE6L35AT8",
-      "media_player_url": "https://nuc.home.arpa/webrtc/AMC014641NE6L35AT8/MediaProfile000/",
-      "substream_player_url": "https://nuc.home.arpa/webrtc/AMC014641NE6L35AT8/MediaProfile001/"
+      "media_player_url": "http://nuc.home.arpa/webrtc/AMC014641NE6L35AT8/MediaProfile000/",
+      "substream_player_url": "http://nuc.home.arpa/webrtc/AMC014641NE6L35AT8/MediaProfile001/"
     },
     {
       "hostname": "AXIS",
@@ -62,8 +62,8 @@
       "manufacturer": "AXIS",
       "model": "AXIS M1065-LW",
       "serial_number": "ACCC8E99C915",
-      "media_player_url": "https://nuc.home.arpa/webrtc/ACCC8E99C915/profile1/",
-      "substream_player_url": "https://nuc.home.arpa/webrtc/ACCC8E99C915/profile0/"
+      "media_player_url": "http://nuc.home.arpa/webrtc/ACCC8E99C915/profile1/",
+      "substream_player_url": "http://nuc.home.arpa/webrtc/ACCC8E99C915/profile0/"
     }
   ]
 }

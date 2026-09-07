@@ -36,7 +36,7 @@ From the output, identify your new camera and note:
 Edit `{{REPO_PATH}}/onvif-mcp/apps/outputs/camera_registry.json`.
 
 Add a new object inside the `"cameras"` array. Each entry requires:
-- `hostname`, `ip_address`, `manufacturer`, `model` — descriptive metadata
+- `hostname`, `ip_address`, `manufacturer`, `model` — descriptive metadata taken directly from the results of the get_camera query, use the literal camera field names when populating the json fields.
 - `media_player_url` — **required**: HTTPS URL to the MediaMTX WebRTC player for the main stream, using serial_number as path component
 - `substream_player_url` — **required**: same format as media_player_url, using the substream profile
 
@@ -44,10 +44,10 @@ Format:
 
 ```json
 {
-  "hostname": "CameraName",
-  "ip_address": "10.x.x.x",
-  "manufacturer": "Maker",
-  "model": "Model",
+  "hostname": "<hostname>",
+  "ip_address": "<ip_address>",
+  "manufacturer": "<manufacturer>",
+  "model": "<model>",
   "media_player_url": "https://{{SERVER_FQDN}}/webrtc/<serial_number>/<stream_token>/",
   "substream_player_url": "https://{{SERVER_FQDN}}/webrtc/<serial_number>/<substream_token>/"
 }

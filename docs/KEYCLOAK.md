@@ -253,13 +253,31 @@ sudo docker compose --project-directory /opt/keycloak exec keycloak \
     --password "$KC_BOOTSTRAP_ADMIN_PASSWORD"'
 ```
 
-If this docker build lacks `-T`/`--no-tty` (check `docker exec --help`; some
-builds remove both), the pipe idiom used later in this document
-(`sudo cat FILE | sudo docker compose ... exec -T keycloak sh -c 'IFS= read -r ...'`)
-is not available as written: substitute `-i` for `-T`. Piped stdin still feeds
-the inner `IFS= read`, and TTY allocation is not required for a non-interactive
-read. The host-side Admin REST token pattern in STREAM_AUTH.md is the other
-supported path.
+**Container exec flags — why every command here uses `exec -i`, not `-t` or `-T`.**
+TTY allocation in `docker exec` is *opt-in*: a pseudo-TTY is only created if you
+pass `-t/--tty`. For a non-interactive read piped from the host
+(`sudo cat secret | ... sh -c 'IFS= read -r v; kcadm.sh ...'`) you do not want a
+TTY, so the correct flag is simply none — keep STDIN open with `-i` and let it
+feed the inner `read`. That is why all container commands in this document use
+`exec -i`; for these scripted reads no TTY flag is needed at all.
+
+Do not reach for `-T`/`--no-tty` to "make it explicit." On this deployment's
+Docker build (Ubuntu `docker.io`) that shorthand has been removed entirely and
+hard-fails before running anything:
+
+```bash
+$ docker exec --help | grep -i tty          # only the opt-in -t/--tty is listed
+  -t, --tty      Allocate a pseudo-TTY
+$ docker exec -T keycloak-keycloak-1 true
+unknown shorthand flag: 'T' in -T           # exit 125 — command never runs
+```
+
+`exec -i` is portable across Docker builds and behaves identically for these
+reads (verified: `printf 'hello\n' | ... exec -i keycloak sh -c 'IFS= read -r v;
+echo $v'` prints `hello`). If you ever need an *interactive* terminal inside the
+container (hand-tuning `psql`, etc.), pass `-t -i` explicitly rather than relying
+on any default. The host-side Admin REST token pattern in STREAM_AUTH.md is the
+other supported path for container-internal secret reads.
 
 ## 5. Create and verify the permanent administrator
 
@@ -278,7 +296,7 @@ Set the password from the root-owned secret file (generated in Section 3):
 
 ```bash
 sudo cat /opt/keycloak/admin.pass |
-  sudo docker compose --project-directory /opt/keycloak exec -T keycloak \
+  sudo docker compose --project-directory /opt/keycloak exec -i keycloak \
     sh -c 'IFS= read -r new_password
       /opt/keycloak/bin/kcadm.sh set-password \
         --config /tmp/kcadm.config \
@@ -293,7 +311,7 @@ automatically available inside the container.
 
 Grant the realm-level `admin` role in `master`. This is the full server
 administrator role, not the delegated `realm-management/realm-admin` client
-role:
+role. Please note that `--uusername` is not a typo, that is the actual command:
 
 ```bash
 sudo docker compose --project-directory /opt/keycloak exec keycloak \
@@ -309,7 +327,7 @@ from the root-owned secret:
 
 ```bash
 sudo cat /opt/keycloak/admin.pass |
-  sudo docker compose --project-directory /opt/keycloak exec -T keycloak \
+  sudo docker compose --project-directory /opt/keycloak exec -i keycloak \
     sh -c 'IFS= read -r admin_password
       /opt/keycloak/bin/kcadm.sh config credentials \
         --config /tmp/kcadm-permanent.config \
@@ -382,7 +400,7 @@ Wait for `HTTP 200` again, then recreate the CLI configuration, reading the pass
 
 ```bash
 sudo cat /opt/keycloak/admin.pass |
-  sudo docker compose --project-directory /opt/keycloak exec -T keycloak \
+  sudo docker compose --project-directory /opt/keycloak exec -i keycloak \
     sh -c 'IFS= read -r admin_password
       /opt/keycloak/bin/kcadm.sh config credentials \
         --config /tmp/kcadm.config \
@@ -436,6 +454,24 @@ sudo docker compose --project-directory /opt/keycloak exec keycloak \
   -s enabled=true
 ```
 
+The `email` value is not cosmetic: Keycloak's profile policy marks `email` as
+*required*, so a user without one has its **first** browser login interrupted
+by a `VERIFY_PROFILE` required action (Email field, mandatory) that stalls any
+authorization flow on the profile form. Set a valid email at creation time; if
+the user already exists without one, set it before any client connects:
+
+```bash
+LOGIN_USER_UUID="$(sudo docker compose --project-directory /opt/keycloak exec keycloak \
+  /opt/keycloak/bin/kcadm.sh get users \
+  --config /tmp/kcadm.config -r "${MCP_REALM}" -q exact=true -q username="${MCP_LOGIN_USER}" \
+  --fields id | sed 's/.*"id"[[:space:]]*:[[:space:]]*"\(.*\)".*/\1/')"
+
+sudo docker compose --project-directory /opt/keycloak exec keycloak \
+  /opt/keycloak/bin/kcadm.sh update "users/${LOGIN_USER_UUID}" \
+  --config /tmp/kcadm.config -r "${MCP_REALM}" \
+  -s email="mcp-user@$(hostname --fqdn)"
+```
+
 Generate the login user password and store it in a root-owned secret file:
 
 ```bash
@@ -449,7 +485,7 @@ Set its password from the root-owned secret file:
 
 ```bash
 sudo cat /opt/keycloak/mcp-user.pass |
-  sudo docker compose --project-directory /opt/keycloak exec -T keycloak \
+  sudo docker compose --project-directory /opt/keycloak exec -i keycloak \
     sh -c 'IFS= read -r user_password
       /opt/keycloak/bin/kcadm.sh set-password \
         --config /tmp/kcadm.config \
@@ -568,19 +604,47 @@ sudo docker compose --project-directory /opt/keycloak exec keycloak \
   -s "config={\"allowed-client-scopes\":[\"${MCP_SCOPE}\"],\"allow-default-scopes\":[\"true\"]}"
 ```
 
-Choose trusted hosts based on actual network topology. In the verified setup,
-the OAuth client appeared to the server as `10.1.1.1`, and Hermes used a
-loopback callback. Replace `CLIENT_SOURCE_IP` accordingly:
+Choose trusted hosts based on the identities Keycloak actually sees. Two of
+them are not obvious from the host alone:
+
+- Docker Compose port publishing rewrites loopback clients: a request to
+  `http://127.0.0.1:8080` arrives at Keycloak as the Compose bridge gateway
+  IP, never as `127.0.0.1`. Read it from the network (network name = Compose
+  project name + `_default`; the project name defaults to the base name of
+  `--project-directory`, hence `keycloak` here):
 
 ```bash
-export CLIENT_SOURCE_IP="10.1.1.1"
+export COMPOSE_GATEWAY_IP="$(sudo docker network inspect keycloak_default \
+  --format '{{range .IPAM.Config}}{{.Gateway}}{{end}}')"
+```
 
+  `localhost`/`127.0.0.1` alone therefore does not cover same-host DCR tests
+  via the published port.
+
+- A client running on the Keycloak host and connecting through the public
+  HTTPS vhost (`https://{{SERVER_FQDN}}/...`) arrives at Keycloak as the
+  server's own LAN IP, because nginx sets `X-Real-IP $remote_addr` for
+  connections from the host itself:
+
+```bash
+export SERVER_LAN_IP="$(hostname -I | awk '{print $1}')"
+```
+
+Verify the identities before trusting entries: enable temporary `DEBUG`
+logging on `org.keycloak.services.clientregistration` and read the
+`KC-SERVICES0101: Failed to verify remote host : <ip>` lines, or watch the
+container log during a deliberately failing DCR attempt (`docker compose
+--project-directory /opt/keycloak logs --tail=20 keycloak`).
+
+Set trusted hosts to `localhost`, `127.0.0.1`, and both observed IPs:
+
+```bash
 sudo docker compose --project-directory /opt/keycloak exec keycloak \
   /opt/keycloak/bin/kcadm.sh update \
   "components/${TRUSTED_HOSTS_POLICY_UUID}" \
   --config /tmp/kcadm.config \
   -r "${MCP_REALM}" \
-  -s "config={\"trusted-hosts\":[\"${CLIENT_SOURCE_IP}\",\"localhost\",\"127.0.0.1\"],\"host-sending-registration-request-must-match\":[\"true\"],\"client-uris-must-match\":[\"true\"]}"
+  -s "config={\"trusted-hosts\":[\"localhost\",\"127.0.0.1\",\"${COMPOSE_GATEWAY_IP}\",\"${SERVER_LAN_IP}\"],\"host-sending-registration-request-must-match\":[\"true\"],\"client-uris-must-match\":[\"true\"]}"
 ```
 
 Limit anonymous registrations:
@@ -621,21 +685,29 @@ Expected DCR policy state:
 
 ## 9. Configure Nginx
 
-Identify the active HTTPS virtual host rather than assuming its filename:
+Identify the active HTTPS virtual host rather than assuming its filename or
+directory. The vhost may live in `sites-enabled/` *or* in `conf.d/`; on some
+deployments `sites-enabled/` holds only a port-80 redirect while the real
+HTTPS server block is under `conf.d/`. Both includes are commonly active, so
+search both:
 
 ```bash
 sudo ls -l /etc/nginx/sites-enabled
+sudo ls -l /etc/nginx/conf.d
 sudo nginx -T 2>/dev/null | \
   grep -nE 'server_name|listen .*443|ssl_certificate|location (=? )?/mcp'
 ```
 
-Inspect the selected site file, then create a backup outside `sites-enabled`:
+The `nginx -T` output prints each included file before its content; read the
+preceding `# configuration file:` markers to map the HTTPS `server` block
+back to its actual file. Inspect that file, then create a backup outside any
+included directory (e.g. `/etc/nginx/backups/`):
 
 ```bash
-export NGINX_SITE="/etc/nginx/sites-available/camera-mcp"
+export NGINX_SITE="<path found above, e.g. /etc/nginx/conf.d/{{SERVER_FQDN}}.conf>"
 sudo install -d -m 750 -o root -g root /etc/nginx/backups
-sudo cp --update=none "$NGINX_SITE" /etc/nginx/backups/camera-mcp.pre-keycloak
-sudo chmod 640 /etc/nginx/backups/camera-mcp.pre-keycloak
+sudo cp "$NGINX_SITE" "/etc/nginx/backups/$(basename "$NGINX_SITE").pre-keycloak"
+sudo chmod 640 "/etc/nginx/backups/$(basename "$NGINX_SITE").pre-keycloak"
 ```
 
 Add these locations inside the HTTPS `server` block:
@@ -886,7 +958,106 @@ If Keycloak returns an internal UUID different from `clientId`, use the exact
 returned internal `id` in the delete path.
 
 
-## 13. Configure manual PostgreSQL backups
+## 13. Verify the Hermes login end-to-end
+
+This section verifies the real OAuth client (Hermes Agent) against the
+finished deployment, including the browser authorization step of
+`hermes mcp login`, which can be completed headlessly and therefore verified
+autonomously. The procedure was verified with Hermes Agent v0.21.0; the
+concurrent-flow behavior in 13.2 has been observed repeatedly on that version.
+
+### 13.1 Add the server entry directly to the Hermes config
+
+`hermes mcp add` cannot be driven non-interactively: the URL+OAuth path is
+fully prompt-driven (TTY-bound). Write the entry directly into
+`~/.hermes/config.yaml` under `mcp_servers:` instead — the same shape the CLI
+would save:
+
+```yaml
+  <name>:
+    url: https://{{SERVER_FQDN}}/mcp
+    auth: oauth
+    ssl_verify: /etc/ssl/certs/<ca-name>.pem
+    connect_timeout: 600
+    enabled: false
+```
+
+`ssl_verify` is mandatory for the private CA — not optional. The MCP client
+stack verifies against its own bundled trust store (certifi), not the system
+capath, even after Section 10 correctly installs the CA into
+`/usr/local/share/ca-certificates`. Verified empirically: default verification
+fails with `self-signed certificate in certificate chain`; pointing
+`ssl_verify` at the installed CA file succeeds. Never save an entry without
+the CA path and an explicit enable — saving it before setting `ssl_verify`
+can leave the entry disabled.
+
+### 13.2 Prevent concurrent login flows
+
+No other Hermes process may have this server loaded while `hermes mcp login`
+runs. With the entry present in an agent session's config, that session's MCP
+machinery (config-change auto-reload / background discovery) launches a second
+concurrent OAuth flow inside the login process. Symptoms: two authorization
+URLs printed for the same DCR client, then `OAuth callback port 27890 is
+already in use`, and no browser step can ever land a token.
+
+Mitigations (any one suffices; this deployment uses the first two):
+
+- set `mcp.auto_reload_on_config_change: false` under `mcp:` in config.yaml,
+  and keep the entry `enabled: false` until its token files exist;
+- run the login under an isolated home: `HERMES_HOME=<dir> hermes mcp login <name>`
+  (copy the `mcp_servers:` block into `<dir>/config.yaml`), then copy
+  `<dir>/mcp-tokens/<name>.{json,client.json,meta.json}` back to
+  `~/.hermes/mcp-tokens/`;
+- or guarantee no concurrent session has the server loaded at all.
+
+### 13.3 Complete the browser step headlessly
+
+The browser step can be completed headlessly against the live login.
+`hermes mcp login <name>` force-marks itself interactive, so its loopback
+callback listener binds on port 27890 even without a TTY — *provided* no
+display variables are set (`env -u DISPLAY -u WAYLAND_DISPLAY ...`), which is
+also what prevents Hermes from auto-opening a competing browser tab. Then drive
+the Keycloak side with the verified driver script
+[`docs/kc-headless-login-driver.py`](kc-headless-login-driver.py) (it reads
+the login user password from `/opt/keycloak/mcp-user.pass` via `sudo cat`; it
+never prints credentials or token values):
+
+```bash
+# terminal A (isolated home, no display vars; a single flow is expected):
+cd <dir> && env -u DISPLAY -u WAYLAND_DISPLAY HERMES_HOME=<dir> \
+  hermes mcp login <name>
+
+# terminal B: read the printed auth URL, confirm exactly ONE flow and that a
+# listener owns 127.0.0.1:27890 (ss -ltnp | grep 27890), then:
+python3 docs/kc-headless-login-driver.py "<printed-auth-url>"
+```
+
+The script walks login form → consent screen through the HTTPS vhost (cookies;
+Keycloak's relative action URLs resolved against the page URL) and delivers the
+final `?code=&state=` redirect into the running Hermes listener — it must not
+follow that redirect itself, which binds the loopback callback port. Expected
+output: `callback delivered: 127.0.0.1:27890/callback | params: ['state', ... 'code']`,
+then in terminal A `✓ Authenticated — N tool(s) available`.
+
+### 13.4 Post-verification checklist for the login
+
+The ambiguous part of this runbook, verified point by point:
+
+- token files exist at `~/.hermes/mcp-tokens/<name>.{json,client.json,meta.json}`,
+  all mode `-rw-------`; **never display their contents**;
+- `hermes mcp test <name>` reconnects using saved state and lists the expected
+  tools;
+- enable the entry (`enabled: true`) only after the test passes;
+- each login attempt registers a fresh public DCR client ("Hermes Agent");
+  failed attempts orphan them. Periodically list clients in the realm by name,
+  match against the active `client_id` stored in `<name>.client.json`, and
+  delete only confirmed-orphan internal IDs (kcadm consumes stdin on exec —
+  redirect `</dev/null` for batch deletes);
+- take another manual backup after the real client registration exists so it
+  is included in an archive (Section 15's note), and verify the new archive
+  with `pg_restore --list`.
+
+## 14. Configure manual PostgreSQL backups
 
 Create the protected backup directory:
 
@@ -910,7 +1081,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-docker compose --project-directory /opt/keycloak exec -T postgres \
+docker compose --project-directory /opt/keycloak exec -i postgres \
     pg_dump \
     --username=keycloak \
     --dbname=keycloak \
@@ -984,7 +1155,7 @@ backup_file="$(sudo find /var/backups/keycloak-postgres \
   -printf '%f\n' | sort | tail -n 1)"
 
 sudo sh -c \
-  "docker compose --project-directory /opt/keycloak exec -T postgres \
+  "docker compose --project-directory /opt/keycloak exec -i postgres \
    pg_restore --list \
    < '/var/backups/keycloak-postgres/${backup_file}' \
    >/dev/null"
@@ -992,14 +1163,14 @@ sudo sh -c \
 
 The file must be non-empty and mode `-rw-------`.
 
-## 14. Perform an isolated restore test
+## 15. Perform an isolated restore test
 
 Choose a unique database name and confirm it is absent:
 
 ```bash
 restore_db="keycloak_restore_test_YYYYMMDD"
 
-sudo docker compose --project-directory /opt/keycloak exec -T postgres \
+sudo docker compose --project-directory /opt/keycloak exec -i postgres \
   psql --username=keycloak --dbname=postgres \
   --tuples-only --no-align \
   --command="SELECT datname FROM pg_database WHERE datname = '${restore_db}';"
@@ -1010,7 +1181,7 @@ database:
 
 ```bash
 echo "restore target: ${restore_db}"
-sudo docker compose --project-directory /opt/keycloak exec -T postgres \
+sudo docker compose --project-directory /opt/keycloak exec -i postgres \
   createdb --username=keycloak "${restore_db}"
 
 backup_file="$(sudo find /var/backups/keycloak-postgres \
@@ -1018,7 +1189,7 @@ backup_file="$(sudo find /var/backups/keycloak-postgres \
   -printf '%f\n' | sort | tail -n 1)"
 
 sudo sh -c \
-  "docker compose --project-directory /opt/keycloak exec -T postgres \
+  "docker compose --project-directory /opt/keycloak exec -i postgres \
    pg_restore --username=keycloak --dbname='${restore_db}' --exit-on-error \
    < '/var/backups/keycloak-postgres/${backup_file}'"
 ```
@@ -1026,7 +1197,7 @@ sudo sh -c \
 Validate important row counts:
 
 ```bash
-sudo docker compose --project-directory /opt/keycloak exec -T postgres \
+sudo docker compose --project-directory /opt/keycloak exec -i postgres \
   psql --username=keycloak --dbname="${restore_db}" \
   --tuples-only --no-align \
   --command="SELECT 'realms=' || count(*) FROM realm
@@ -1046,7 +1217,7 @@ if [[ "$restore_db" != keycloak_restore_test_* ]] ||
   exit 1
 else
   echo "dropping restore-test database: $restore_db"
-  sudo docker compose --project-directory /opt/keycloak exec -T postgres \
+  sudo docker compose --project-directory /opt/keycloak exec -i postgres \
     dropdb --username=keycloak "$restore_db"
 fi
 ```
@@ -1054,7 +1225,7 @@ fi
 After the real OAuth client completes DCR and login, create another manual
 backup so the active client registration is included.
 
-## 15. Final verification checklist
+## 16. Final verification checklist
 
 Run or confirm all of the following:
 
@@ -1153,173 +1324,3 @@ display the associated token file.
   PostgreSQL data stored in the named volume.
 - Same-host backups do not protect against disk or host loss. Copy important
   archives to a separately protected system.
-
-## 3. Verified deviations on the nuc.home.arpa deployment
-
-The following were observed and resolved during the verified `nuc.home.arpa`
-deployment (Ubuntu 26.04, Docker 29.1.3, Keycloak 26.7.0). They are deliberate
-corrections to this runbook's example values or commands.
-
-### 3.1 Trusted-hosts must list the identities Keycloak actually sees, not assumed IPs
-
-Two facts are not obvious from this machine alone:
-
-- Docker compose port publishing rewrites loopback clients: a request to
-  `http://127.0.0.1:8080` arrives at Keycloak as the compose bridge gateway
-  IP (e.g. `172.18.0.1`), never as `127.0.0.1`. Read it from the network:
-
-  ```bash
-  sudo docker network inspect keycloak_default \
-    --format '{{range .IPAM.Config}}{{.Gateway}}{{end}}'
-  ```
-
-  (network name = compose project name + `_default`; the project name
-  defaults to the base name of `--project-directory`, hence `keycloak` here).
-  `localhost`/`127.0.0.1` alone therefore does not cover same-host DCR tests
-  via the published port.
-- A client running on the Keycloak host and connecting through the public
-  HTTPS vhost (`https://<server-fqdn>/...`) arrives at Keycloak as the
-  server's own LAN IP (e.g. `10.1.1.6`), because nginx sets
-  `X-Real-IP $remote_addr` for connections from the host itself.
-
-The runbook's example `CLIENT_SOURCE_IP=10.1.1.1` is installation-specific and
-was wrong on this deployment. The final working trusted-hosts set was:
-
-```json
-"trusted-hosts": ["localhost", "127.0.0.1", "172.18.0.1", "10.1.1.6"]
-```
-
-To determine the identities Keycloak actually sees before trusting an entry,
-either enable temporary `DEBUG` logging on
-`org.keycloak.services.clientregistration` and read the
-`KC-SERVICES0101: Failed to verify remote host : <ip>` lines, or watch the
-container log during a deliberately failing DCR attempt
-(`docker compose --project-directory /opt/keycloak logs --tail=20 keycloak`).
-
-### 3.2 The HTTPS vhost may live in conf.d, not sites-available
-
-Section 9's example `NGINX_SITE=/etc/nginx/sites-available/camera-mcp` did not
-match this host: the only file under `sites-enabled/` was a port-80 redirect,
-while the actual HTTPS server block was in `/etc/nginx/conf.d/nuc.home.arpa.conf`
-(both includes are active: `conf.d/*.conf` and `sites-enabled/*`). The
-Section 9 identification step (`sudo nginx -T | grep ...`) is what found it;
-treat the example path as an illustration only.
-
-### 3.3 Section 6 misses a Keycloak required-action trap on first login
-
-Keycloak's profile policy marks `email` as *required*. The login user created
-in Section 6 has no email, so its **first** browser login is interrupted by a
-`VERIFY_PROFILE` required action (Email field, mandatory) that the runbook
-never addresses. Headless verification proved this blocks every first login —
-the actual client's authorization flow stalls on the profile form.
-
-Fix applied before any client connects: set an email on the login user via
-Admin API:
-
-```bash
-sudo docker compose --project-directory /opt/keycloak exec keycloak \
-  /opt/keycloak/bin/kcadm.sh update "users/<LOGIN_USER_UUID>" \
-  --config /tmp/kcadm.config -r "${MCP_REALM}" \
-  -s email="mcp-user@<server-fqdn-without-tld-prefix>"
-```
-
-Verified working flow after the fix: anonymous DCR (201) → browser login →
-consent screen (`scope_consent` for `mcp:tools`) → authorization code with
-S256 PKCE → token endpoint returns a Bearer access token whose claims are
-exactly `iss=https://nuc.home.arpa/auth/realms/mcp`,
-`aud=https://nuc.home.arpa/mcp`, `scope=mcp:tools`. An authenticated request
-to `/mcp` then passes authentication (a bare GET without MCP protocol headers
-returns 406, not 401 — the token is accepted).
-
-Also note for headless testing: Keycloak's consent form action URL is
-*relative* (`/auth/realms/...`), and after the final POST it redirects to the
-loopback callback URI. A script must resolve the relative action against the
-page URL and run a local listener on the redirect port (e.g. 8765) instead of
-following that redirect itself.
-
-### 3.4 Hermes MCP login verification: what actually works on this host
-
-Verified with Hermes Agent v0.21.0 on `nuc.home.arpa`. Four facts are not
-obvious from the main body and cost real time to discover; follow this path.
-
-**1. `hermes mcp add` cannot be driven non-interactively.**
-The URL+OAuth path is fully prompt-driven (TTY-bound). Write the entry
-directly into `~/.hermes/config.yaml` under `mcp_servers:` instead — the same
-shape the CLI would save:
-
-```yaml
-  camera-new:
-    url: https://nuc.home.arpa/mcp
-    auth: oauth
-    ssl_verify: /etc/ssl/certs/camera-system-root-ca.pem
-    connect_timeout: 600
-    enabled: false
-```
-
-**2. `ssl_verify` is mandatory for the private CA — not optional.**
-The MCP client stack verifies against its own bundled trust store (certifi),
-not the system capath, even after Section 10 correctly installs the CA into
-`/usr/local/share/ca-certificates`. Verified empirically: default verification
-fails with `self-signed certificate in certificate chain`; pointing
-`ssl_verify` at the installed CA file succeeds. This confirms the addendum-2
-pitfall: never save the entry without the CA path and explicitly enabled TLS.
-
-**3. No other Hermes process may have this server loaded while
-`hermes mcp login` runs.**
-With the entry present in an agent session's config, that session's MCP
-machinery (config-change auto-reload / background discovery) launches a second
-concurrent OAuth flow inside the login process. Symptoms: two authorization
-URLs printed for the same DCR client, then
-`OAuth callback port 27890 is already in use`, and no browser step can ever
-land a token. Observed repeatedly on v0.21.0. Mitigations (any one suffices;
-this deployment uses the first two):
-
-- set `mcp.auto_reload_on_config_change: false` under `mcp:` in config.yaml,
-  and keep the entry `enabled: false` until its token file exists;
-- run the login under an isolated home: `HERMES_HOME=<dir> hermes mcp login <name>`
-  (copy the `mcp_servers:` block into `<dir>/config.yaml`), then copy
-  `<dir>/mcp-tokens/<name>.{json,client.json,meta.json}` back to
-  `~/.hermes/mcp-tokens/`;
-- or guarantee no concurrent session has the server loaded at all.
-
-**4. The browser step can be completed headlessly against the live login.**
-`hermes mcp login <name>` force-marks itself interactive, so its loopback
-callback listener binds on 27890 even without a TTY — *provided* no display
-variables are set (`env -u DISPLAY -u WAYLAND_DISPLAY ...`), which is also what
-prevents Hermes from auto-opening a competing browser tab. Then drive the
-Keycloak side with the verified script
-[`docs/kc-headless-login-driver.py`](kc-headless-login-driver.py):
-
-```bash
-# terminal A (isolated home, no display vars; single flow expected):
-cd <dir> && env -u DISPLAY -u WAYLAND_DISPLAY HERMES_HOME=<dir> \
-  hermes mcp login camera-new
-
-# terminal B: read the printed auth URL, confirm exactly ONE flow and that a
-# listener owns 127.0.0.1:27890 (ss -ltnp | grep 27890), then:
-python3 docs/kc-headless-login-driver.py "<printed-auth-url>"
-```
-
-The script walks login form → consent screen through the HTTPS vhost (cookies,
-relative action URLs resolved against the page URL) and delivers the final
-`?code=&state=` redirect into the running Hermes listener. Expected output:
-`callback delivered: 127.0.0.1:27890/callback | params: ['state', ... 'code']`,
-then in terminal A `✓ Authenticated — N tool(s) available`.
-
-Post-verification checklist for the login itself (the ambiguous part of this
-runbook):
-
-- token files exist at `~/.hermes/mcp-tokens/<name>.{json,client.json,meta.json}`,
-  all mode `-rw-------`; **never display their contents**;
-- `hermes mcp test <name>` reconnects using saved state and lists the expected
-  tools (verified: 29 tools);
-- enable the entry (`enabled: true`) only after the test passes;
-- each login attempt registers a fresh public DCR client ("Hermes Agent");
-  failed attempts orphan them. Periodically list clients in the realm by name,
-  match against the active `client_id` stored in
-  `<name>.client.json`, and delete only confirmed-orphan internal IDs (kcadm
-  consumes stdin on exec — redirect `</dev/null` for batch deletes).
-- take another manual backup after the real client registration exists so it
-  is included in an archive (Section 14's note); verify the new archive with
-  `pg_restore --list`.
-

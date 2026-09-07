@@ -184,6 +184,10 @@ sudo apt install ./Downloads/<code.....deb>
 
 # Essential Configurations
 
+## Set a static IP
+
+Use the GUI tool in the Settings app. Go to Network and find your Adapter. Assuming that you are on the wired network (you should be), click the gear wheel in the panel, which will pop up a dialog. **Remove Connection Profile...** This is important, as the interface is buggy and if you do not do this, the connection will sour, its the only way to get rid of the DHCP setting. After removing the profile, Click the '+' to get a new profile. Click the IPv4 tab to get the settings tab and Select the Manual radio button. Set your Address, Netmask, Gateway and DNS, the click Apply. Reboot to make sure the settings took hold, do not take anything on faith, this mechanism is buggy and will cause significant problems if not set properly, shame on Ubuntu :/
+
 ## Enable Remote Access
 
 ```
@@ -264,26 +268,12 @@ use the camera MCP server to get its version
 It should reply with both the MCP version and the libonvif version.
 
 
-## Set a static IP
-
-use these commands in the Hermes prompt to tell it what to do.
-
-```
-please show the ethernet port configuration on this machine, including Gateway, DNS and netmask information
-```
-
-You will get back a listing of the ports. Pick out the one that is currently connected to your LAN and note the interface name, it will be something like `enp86s0` but will vary. Tell Hermes to configure that specific port to have a static IP address that you have chosen based on your network topology, and to use the current Gateway and DNS settings. This will work best if you explicitly state the Gateway and DNS values.
-
-```
-you have sudo privileges enabled, set a static IP address on <adapter name> to be <static IP>, Gateway <existing gateway>, DNS <existing DNS>, Netmask <netmask>
-```
-
 ## Mount an SMB share for backups
 
 The server will need a backup location for critical data. An SMB share is a good place to do this. Assuming you have an SMB server set up on your local network, Hermes can do this for you with the following prompt
 
 ```
-There is an SMB server on the local network located on <smb server name> and is named <smb share name>. Create a mount point <mount point> and permanently mount the SMB server share there. SMB username is <username> and password is <password>. Make sure that $USER has write access.
+You have sudo privileges. There is an SMB server on the local network located on <smb server name> and is named <smb share name>. Create a mount point <mount point> and permanently mount the SMB server share there. SMB username is <username> and password is <password>. Make sure that $USER has write access.
 ```
 
 ## Install nginx
