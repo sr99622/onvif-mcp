@@ -154,54 +154,6 @@ sudo docker compose --project-directory /opt/keycloak exec keycloak \
 export NEW_USER_UUID="UUID_RETURNED_BY_KEYCLOAK"
 ```
 
-## 3a. Verify identity fields (remediate only if one is missing)
-
-Section 3 sets `email`, `firstName`, `lastName`, and `emailVerified=true` at
-creation time, so this section is normally pure verification — no mutation
-required. Why these fields matter: when Keycloak creates a user without an
-explicit email it leaves the field **empty** (a placeholder address,
-`<username>@example.com`, is assigned only lazily at first login). The browser
-sign-in flow then fails at `/oauth2/callback` with HTTP 500 — oauth2-proxy
-rejects the callback because "email in id_token ... isn't verified". The
-pre-existing login user has a verified email, which is why only new users hit
-this.
-
-This realm runs an active `update-profile` (UPDATE_PROFILE) required action,
-so a fresh user bounces to `/login-actions/required-action` at first login
-until **all** of `email`, `firstName`, and `lastName` are nonempty *and*
-`emailVerified=true`.
-
-Re-retrieve directly by UUID and confirm: exact username, `enabled=true`,
-nonempty `email`/`firstName`/`lastName` exactly as supplied,
-`emailVerified=true`. Never set the flag false. If the re-retrieval shows a
-missing or incorrect field — e.g. the account predates Section 3's expanded
-create statement, or a `-s` flag was lost — remediate with the update below,
-setting all four fields from the agent-supplied values (idempotent for fields
-already correct); never an invented placeholder (for a machine-only account,
-repeat `{{NEW_LOGIN_USER}}` for the names and use `{{NEW_LOGIN_USER}}@{{SERVER_FQDN}}`
-for the email). Prefer this in-container `kcadm.sh` call over the raw
-Admin-REST PUT: it is one command, needs no token minting or bearer header,
-and cannot be tripped by the mangled-shell-substitution failure described in
-Troubleshooting. The raw REST route (fetch live representation → modify →
-`PUT`) remains valid — see `STREAM_AUTH.md` Section 2 for why it must run as a
-single bounded command (PATCH is rejected with HTTP 405 on Keycloak 26) — but
-the token must never be assembled from shell substitution over a credential file.
-
-```bash
-sudo docker compose --project-directory /opt/keycloak exec keycloak \
-  /opt/keycloak/bin/kcadm.sh update "users/${NEW_USER_UUID}" \
-  --config /tmp/kcadm.config -r "{{MCP_REALM}}" \
-  -s email="{{USER_EMAIL}}" \
-  -s firstName="{{FIRST_NAME}}" \
-  -s lastName="{{LAST_NAME}}" \
-  -s emailVerified=true
-```
-
-After any remediation, re-retrieve directly by UUID and confirm every field
-again — a successful update alone does not prove the fields are correct. If
-first login later lands on `/login-actions/required-action` ("Update Account
-Information"), some field is still empty — re-run this section from the top.
-
 ## 4. Generate the password and store it as a root-owned secret
 
 Generate without displaying it:
