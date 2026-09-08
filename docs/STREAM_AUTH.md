@@ -303,54 +303,6 @@ requiredActions = []
 If the address was verified outside Keycloak but the flag is false, stop and
 prompt the user to enter an email account.
 
-============================================================
-
-NOT NEEDED
-
- update
-only `emailVerified=true` and retrieve the user directly afterward. Do not
-change the password, email, enabled state, or required actions.
-
-To update `emailVerified`, use PUT, not PATCH. Partial updates via
-`PATCH /auth/admin/realms/{realm}/users/{uuid}` are rejected with HTTP 405 on
-Keycloak 26 even though OPTIONS on the same endpoint returns 200. PUT is the
-accepted mutation verb and carries replace semantics, so it must be performed
-against the current live representation — never a hand-built or stale body.
-
-Within one root-controlled process, using the admin token from the pattern
-above (`{uuid}` = internal UUID resolved by the Phase 2 list query, not the
-username):
-
-```bash
-umask 077
-curl -sS -H "Authorization: Bearer ***" \
-  "http://127.0.0.1:{{KEYCLOAK_PORT}}/auth/admin/realms/{{MCP_REALM}}/users/{uuid}" > /tmp/.kcuser.$$
-# Change exactly one field in the retrieved JSON object: emailVerified -> true.
-# Touch no other field and discard the result of any other source.
-python3 -c "import json; u = json.load(open(\"/tmp/.kcuser.$$\")); u[\"emailVerified\"] = True; json.dump(u, open(\"/tmp/.kcpayload.tmp\", \"w\"))"
-curl -sS -o /dev/null -w 'HTTP %{http_code}\n' -X PUT \
-  -H "Authorization: Bearer ***" -H "Content-Type: application/json" \
-  --data @/tmp/.kcpayload.tmp \
-  "http://127.0.0.1:{{KEYCLOAK_PORT}}/auth/admin/realms/{{MCP_REALM}}/users/{uuid}"
-```
-
-Send the edited payload file (`/tmp/.kcpayload.tmp`), not the original
-retrieved representation. An earlier version of this runbook pointed `--data`
-at `/tmp/.kcuser.$$`, which returned HTTP 204 but silently left every field
-unchanged — a no-op PUT that only the post-PUT re-retrieval could detect.
-
-Require HTTP 204, then re-retrieve directly by UUID and re-verify every Phase 2
-invariant: exact username, enabled=true, nonempty email, emailVerified=true,
-requiredActions=[]. Delete `/tmp/.kcuser.$$` and `/tmp/.kcpayload.tmp`
-afterward. A successful PUT alone does not prove unchanged fields survived;
-the re-retrieval is what closes this step. Do not set `emailVerified` to
-false under any circumstances: with it false, every browser login fails at
-`/oauth2/callback` (HTTP 500 from oauth2-proxy) before any session exists.
-
-EOF
-
-=====================================================
-
 ## 3. Create the confidential browser client
 
 Require zero clients with exact client ID `{{BROWSER_CLIENT_ID}}`, then create

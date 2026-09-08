@@ -454,32 +454,6 @@ sudo docker compose --project-directory /opt/keycloak exec keycloak \
   -s enabled=true
 ```
 
-=====================================================
-
-### THIS STEP IS PROBABLY UNNECESSARY
-
-The `email` value is not cosmetic: Keycloak's profile policy marks `email` as
-*required*, so a user without one has its **first** browser login interrupted
-by a `VERIFY_PROFILE` required action (Email field, mandatory) that stalls any
-authorization flow on the profile form. Set a valid email at creation time; if
-the user already exists without one, set it before any client connects:
-
-```bash
-LOGIN_USER_UUID="$(sudo docker compose --project-directory /opt/keycloak exec keycloak \
-  /opt/keycloak/bin/kcadm.sh get users \
-  --config /tmp/kcadm.config -r "${MCP_REALM}" -q exact=true -q username="${MCP_LOGIN_USER}" \
-  --fields id | sed 's/.*"id"[[:space:]]*:[[:space:]]*"\(.*\)".*/\1/')"
-
-sudo docker compose --project-directory /opt/keycloak exec keycloak \
-  /opt/keycloak/bin/kcadm.sh update "users/${LOGIN_USER_UUID}" \
-  --config /tmp/kcadm.config -r "${MCP_REALM}" \
-  -s email="mcp-user@$(hostname --fqdn)"
-```
-
-### EOF
-
-=======================================================
-
 Generate the login user password and store it in a root-owned secret file:
 
 ```bash
