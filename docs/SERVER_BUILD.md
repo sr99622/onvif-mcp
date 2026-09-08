@@ -186,7 +186,7 @@ sudo apt install ./Downloads/<code.....deb>
 
 ## Set a static IP
 
-Use the GUI tool in the Settings app. Go to Network and find your Adapter. Assuming that you are on the wired network (you should be), click the gear wheel in the panel, which will pop up a dialog. **Remove Connection Profile...** to get rid of the default DHCP setting. After removing the profile, Click the '+' for Ethernet to get a new profile. Click the IPv4 tab to get the settings tab and Select the Manual radio button. Set your Address, Netmask, Gateway and DNS, the click Apply. Reboot to make sure the settings took hold, do not take anything on faith.
+Use the GUI tool in the Settings app. Go to Network and find your Adapter. Assuming that you are on the wired network (you should be), click the gear wheel in the panel, which will pop up a dialog. **Remove Connection Profile...** to get rid of the default DHCP setting. After removing the profile, Click the '+' for Wired to get a new profile. Click the IPv4 tab to get the settings tab and Select the Manual radio button. Set your Address, Netmask, Gateway and DNS, the click Apply. Reboot to make sure the settings took hold, do not take anything on faith.
 
 ## Enable Remote Access
 

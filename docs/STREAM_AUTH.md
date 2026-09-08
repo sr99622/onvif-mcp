@@ -44,6 +44,9 @@ Routes that must remain independent and must not receive browser
 
 These values are required for operation. Stop and prompt the user if they are not provided.
 
+Resolved in this deployment (verified by the 2026-09-08 preflight):
+`{{SERVER_FQDN}} = nuc.home.arpa`, `{{SERVER_IP}} = 10.1.1.6`.
+
 ## Symbolic deployment values
 
 Replace every symbolic value with the target environment's actual value.
@@ -62,8 +65,8 @@ Replace every symbolic value with the target environment's actual value.
 | `{{MEDIAMTX_ICE_PORT}}` | 8189 | MediaMTX UDP ICE/media port, normally |
 | `{{SNAPSHOT_PORT}}` | 8891 | Loopback snapshot proxy HTTP port |
 | `{{COMPOSE_DIR}}` | /opt/keycloak | Keycloak Compose project directory |
-| `{{ACTIVE_SITE_LINK}}` | camera-apps | Enabled Nginx site symlink name |
-| `{{NGINX_SITE}}` | /etc/nginx/sites-enabled/camera-apps | Active Nginx site |
+| `{{ACTIVE_SITE_LINK}}` | — (no symlink; see preflight note) | Enabled Nginx site name; in this deployment the live config is a plain file in `/etc/nginx/conf.d/`, not a symlink |
+| `{{NGINX_SITE}}` | /etc/nginx/conf.d/nuc.home.arpa.conf | Active Nginx site for this deployment |
 | `{{PRIVATE_CA_FILE}}` | /etc/nginx/tls/camera-system-root-ca.crt.pem | Public private-CA root certificate on the server |
 | `{{HERMES_SERVER_NAME}}` | camera-new | Existing Hermes MCP entry used for regression testing (resolve via `hermes mcp list`: the entry whose transport is `https://{{SERVER_FQDN}}/mcp`) |
 
@@ -207,10 +210,22 @@ sudo docker compose --project-directory "{{COMPOSE_DIR}}" config --services
 Never run expanded Compose configuration in shared output because it resolves
 secret variables.
 
-Resolve the active Nginx site and inspect it before assuming its filename:
+Resolve the active Nginx site and inspect it before assuming its filename.
+In this deployment `/etc/nginx/sites-enabled/` is empty; the live site is a
+single file, `/etc/nginx/conf.d/nuc.home.arpa.conf`, included via
+`include /etc/nginx/conf.d/*.conf;`. Its HTTPS server listens on
+`10.1.1.6:443 ssl` with `server_name nuc.home.arpa` and contains all target
+locations (static apps, `/webrtc/`, `/snapshot/`, `/auth/`, `= /mcp`,
+`= /.well-known/oauth-protected-resource/mcp`). The port-80 server for the
+same name has no unprotected snapshot location — it redirects every path to
+`https://nuc.home.arpa$request_uri`, so Phase 7's HTTP-to-HTTPS snapshot
+redirect is already in place.
+
+Note: `readlink -f` cannot fail on a nonexistent target — it returns the
+argument itself. Do not use that command alone as an existence check.
 
 ```bash
-sudo ls -l /etc/nginx/sites-enabled
+sudo ls -l /etc/nginx/sites-enabled /etc/nginx/conf.d
 sudo readlink -f /etc/nginx/sites-enabled/{{ACTIVE_SITE_LINK}}
 sudo nginx -t
 sudo nl -ba "{{NGINX_SITE}}"
@@ -219,16 +234,20 @@ sudo nl -ba "{{NGINX_SITE}}"
 Require one HTTPS server containing the target static, MediaMTX, snapshot,
 Keycloak, MCP, and protected-resource metadata locations. Inspect the active
 HTTP server too: record any snapshot route that still serves an unprotected
-copy, and include its HTTPS redirect correction in Phase 7. If the snapshot location is absent from HTTPS,
+copy, and include its HTTPS redirect correction in Phase 7. In this
+deployment the port-80 server redirects all paths to HTTPS, so no correction
+is needed. If the snapshot location is absent from HTTPS,
 use the location in SNAPSHOT.md Step 6 as the basis for the protected block
 in Phase 7; do not reload an unprotected intermediate configuration.
 
 Resolve a known working camera serial/profile pair from the existing snapshot
 route table or camera registry. Use its exact spelling to set `SNAPSHOT_PATH`
-in the shell used for subsequent checks (replace both placeholders):
+in the shell used for subsequent checks (replace both placeholders). In this
+deployment: `4B0013BPAABE264` / `MediaProfile000` also answers 200 alongside
+`5CF2075C9F49/profile1` and `/profile2` (verified in the 2026-09-08 preflight).
 
 ```bash
-export SNAPSHOT_PATH="/snapshot/<serial_number>/<profile_token>/"
+export SNAPSHOT_PATH="/snapshot/4B0013BPAABE264/MediaProfile000/"
 curl --fail --silent --show-error --max-time 65 \
   "http://{{LOOPBACK_IP}}:{{SNAPSHOT_PORT}}${SNAPSHOT_PATH}" \
   -o /dev/null -w 'Snapshot upstream: HTTP %{http_code} type=%{content_type}\n'
@@ -255,9 +274,19 @@ curl -sS -D - -o /dev/null "https://{{SERVER_FQDN}}/mcp"
 A `404` at the bare `/outputs/` and `/webrtc/` root paths is an acceptable
 baseline before protection exists: content in those families lives at deeper
 paths, and Phase 7's location-level `auth_request` covers all of them
-regardless.
+regardless. Observed preflight baseline (2026-09-08): `/cameras/` 200,
+`/multiview/` 200, `/outputs/` **403** (no index file at the bare root),
+`/webrtc/` 404, `/snapshot/` 400, the known snapshot path 200 with a JPEG
+body, and `/mcp` 401.
 
 ## 2. Prepare the browser login user
+
+Resolved in this deployment (2026-09-08 preflight): `mcp-user` exists exactly
+once in realm `mcp` and already satisfies every invariant — enabled, nonempty
+email, `emailVerified=true`, `requiredActions=[]` (UUID
+`7bc475f0-d001-40d7-9cbb-3d9f00761ce5`). Reuse it; no user mutation is needed.
+Re-run the resolution query if this section is re-executed later, and apply the
+update below only if `emailVerified` is false.
 
 Resolve `{{MCP_LOGIN_USER}}` by exact username in `{{MCP_REALM}}`. Require
 exactly one enabled user with a nonempty email address. Resolve via the list
@@ -271,8 +300,14 @@ oauth2-proxy requests the `email` scope. Require:
 emailVerified = true
 requiredActions = []
 ```
+If the address was verified outside Keycloak but the flag is false, stop and
+prompt the user to enter an email account.
 
-If the address was verified outside Keycloak but the flag is false, update
+============================================================
+
+NOT NEEDED
+
+ update
 only `emailVerified=true` and retrieve the user directly afterward. Do not
 change the password, email, enabled state, or required actions.
 
@@ -295,9 +330,14 @@ curl -sS -H "Authorization: Bearer ***" \
 python3 -c "import json; u = json.load(open(\"/tmp/.kcuser.$$\")); u[\"emailVerified\"] = True; json.dump(u, open(\"/tmp/.kcpayload.tmp\", \"w\"))"
 curl -sS -o /dev/null -w 'HTTP %{http_code}\n' -X PUT \
   -H "Authorization: Bearer ***" -H "Content-Type: application/json" \
-  --data @/tmp/.kcuser.$$ \
+  --data @/tmp/.kcpayload.tmp \
   "http://127.0.0.1:{{KEYCLOAK_PORT}}/auth/admin/realms/{{MCP_REALM}}/users/{uuid}"
 ```
+
+Send the edited payload file (`/tmp/.kcpayload.tmp`), not the original
+retrieved representation. An earlier version of this runbook pointed `--data`
+at `/tmp/.kcuser.$$`, which returned HTTP 204 but silently left every field
+unchanged — a no-op PUT that only the post-PUT re-retrieval could detect.
 
 Require HTTP 204, then re-retrieve directly by UUID and re-verify every Phase 2
 invariant: exact username, enabled=true, nonempty email, emailVerified=true,
@@ -306,6 +346,10 @@ afterward. A successful PUT alone does not prove unchanged fields survived;
 the re-retrieval is what closes this step. Do not set `emailVerified` to
 false under any circumstances: with it false, every browser login fails at
 `/oauth2/callback` (HTTP 500 from oauth2-proxy) before any session exists.
+
+EOF
+
+=====================================================
 
 ## 3. Create the confidential browser client
 
@@ -379,6 +423,20 @@ During verification, treat an omitted optional boolean as false only when the
 Keycloak representation documents that behavior. Do not broadly normalize
 missing values without checking the field.
 
+client's top-level representation might not return `authorizationServicesEnabled`
+That is the documented default-false omission; it is consistent
+with the `false` sent at creation, so no action was required.
+
+The client secret is carried in the top-level field **`secret`**, not
+`clientSecret` (which is absent from this representation). Keycloak 26 also
+exposes a dedicated endpoint:
+`GET /auth/admin/realms/{realm}/clients/{uuid}/client-secret`, returning an
+object with `type` and `value` keys. Fetch the secret via either path without
+printing it.
+
+A re-run of this phase must first find the existing client and stop — do not 
+create a second.
+
 ### Keycloak 26 client-creation compatibility
 
 In the verified environment:
@@ -410,7 +468,12 @@ Before mutation:
 
 Within one root-controlled process:
 
-1. Retrieve the generated client secret without printing it.
+1. Retrieve the generated client secret without printing it — from the
+   representation's top-level `secret` field (not `clientSecret`, which is
+   absent), or via the dedicated
+   `/auth/admin/realms/{{MCP_REALM}}/clients/{uuid}/client-secret` endpoint
+   (object with `type` and `value` keys). Compare for equality using a byte
+   buffer, never string interpolation into a command line.
 2. Append `OAUTH2_PROXY_CLIENT_SECRET=<value>`.
 3. Generate 32 random bytes.
 4. Encode them as URL-safe Base64.
@@ -516,12 +579,16 @@ bound only to `{{LOOPBACK_IP}}`.
 
 ## 6. Add Nginx oauth2-proxy routes
 
-Back up the active site outside `sites-enabled`. Every regular file beneath
-`sites-enabled` can become active configuration.
+Back up the active site outside its include directory — every regular file
+beneath `sites-enabled/` or `conf.d/` becomes active configuration. In this
+deployment the live file is `{{NGINX_SITE}}` under `/etc/nginx/conf.d/`; copy
+the backup to a path outside both directories (e.g. under
+`/opt/keycloak/`).
 
 Add these blocks inside the HTTPS server before protected application routes.
-Canonical insertion anchor in the verified deployment: immediately before the
-`location /cameras/ {` line — the first protected application route; verify
+Canonical insertion anchor in this deployment: immediately before the
+`location /cameras/ {` line at line 19 of `/etc/nginx/conf.d/nuc.home.arpa.conf`
+— the first protected application route; verify
 each new block sits after the `listen ... 443 ssl;` line and occurs exactly
 once. Do not reload Nginx after this phase: the single reload happens in
 Phase 7, after auth_request protection lands, so the site never runs with
@@ -596,6 +663,8 @@ proxy_cache_bypass on;
 
 During this phase, change any HTTP snapshot route identified in preflight to
 redirect to the same path on the public HTTPS origin. Preserve query strings.
+In this deployment the port-80 server already redirects all paths to HTTPS, so
+no new redirect is required — verify that behavior instead of editing it.
 
 Keep these inside the protected `location /snapshot/` block; do not create a
 second competing location. Preserve the proxy's `Cache-Control: no-store`
@@ -658,63 +727,94 @@ Also require:
 
 ## 9. Verify browser behavior
 
-Use a private/incognito browser session (or the scripted headless
-alternative given after step 6). Either way, confirm:
+This phase is agent-driven: there is no manual browser step. The scripted
+headless driver `docs/stream_auth_step9_driver.py` performs the whole flow in
+one process using in-memory cookie jars (never persisted to disk) and asserts
+status codes, parameter *names* only, and landing paths — never values.
 
-1. Open `https://{{SERVER_FQDN}}/cameras/`.
-2. Authenticate as `{{MCP_LOGIN_USER}}`.
-3. Confirm the requested page appears after callback.
-4. Open `/multiview/` in the same browser session.
-5. Open a known direct `/webrtc/.../` stream URL.
-6. Confirm no second login is required and live video plays.
-7. Open the known `https://{{SERVER_FQDN}}${SNAPSHOT_PATH}` URL in the same
-   browser session. Require no second login, HTTP 200,
-   `Content-Type: image/jpeg`, a valid JPEG body, and `Cache-Control: no-store`.
-   Confirm the
-   image displays, including snapshots embedded in the camera applications.
-8. In a separate unauthenticated browser session, open that direct snapshot
-   URL, complete login, and confirm the callback returns to the requested
-   snapshot and displays the image.
+Run it from the repository root:
 
-If the user password was generated by the deployment agent, read it only
-inside one root-controlled process on the server (for example from
-`/opt/keycloak/mcp-user.pass`). Do not copy it into chat, documentation, or a
-command line; never persist browser cookies to disk in a scripted run — use an
-in-memory cookie jar.
+```bash
+python3 docs/stream_auth_step9_driver.py
+```
 
-Agent-executable alternative: a scripted headless flow with an in-memory
-cookie jar verifies steps 1-4 and the WebRTC pass-through without a human.
-Expected status sequence: unauthenticated `302` chain to the Keycloak
-authorization endpoint (PKCE parameter names present), login form with fields
-`credentialId`, `username`, `password`; after POST, callback parameters
-`code`, `iss`, `session_state`, `state`; then a `302` landing exactly on the
-requested path with HTTP 200 — not the site root. In oauth2-proxy 7.15.x an
-authenticated `/oauth2/ping` answers HTTP 202 with body `Authenticated`;
-unauthenticated it redirects to sign-in. The WebRTC check asserts that a
-known direct stream URL under `/webrtc/.../` passes auth to MediaMTX without a
-login bounce (any non-302-to-sign-in outcome such as 200 is the expected
-signaling response). Live-video rendering remains a human confirmation only —
-UDP ICE/DTLS/SRTP cannot be asserted over HTTP checks.
+All deployment-specific values are CLI parameters (`--origin`, `--target`,
+`--second-route`, `--snapshot-path`, `--webrtc-url`, `--realm`, `--username`,
+`--password-file`) that default to this deployment's verified values; override
+them for other deployments rather than editing the script.
 
-For snapshots, use an authenticated GET with the in-memory cookie jar and
-validate the actual JPEG response and no-store header described above. A
-redirect to an HTML login page or merely a non-302 response is not success.
-Use GET for the image check: the current snapshot proxy implements GET, not
-HEAD. Do not persist the session cookies.
+The driver reads `{{MCP_LOGIN_USER}}`'s password by itself, inside that one
+root-capable process (default source `/opt/keycloak/mcp-user.pass`). The
+password must not be copied into chat, documentation, or a command line.
+Driver implementation notes that a re-run must preserve:
 
-Once Hermes registration is complete, also call `get_cameras` and verify
-`web_snapshot_url` values use the expected HTTPS origin and exact profile
-paths. Call `get_snapshot` for the known camera/profile through authenticated
-MCP and require a valid image result without supplying browser cookies. Its
-`SNAPSHOT_PROXY_URL` must continue to target the loopback snapshot service,
-not the public browser-protected URL. Record this regression check as pending
-if REGISTER.md has not yet been completed.
+- Hidden form inputs without a `value` attribute exist in the login form;
+  parsers must default them to an empty string (naive group fallbacks crash
+  on the first one).
+- All cookie jars stay in memory; do not add any file-backed jar.
+- Snapshot image checks use GET: the snapshot proxy implements GET, not HEAD.
+
+Assertions performed (all must pass):
+
+1. Unauthenticated `https://{{SERVER_FQDN}}/cameras/` returns `302` to
+   `/oauth2/start?rd=/cameras/`, preserving the requested path.
+2. One hop from `/oauth2/start` reaches the Keycloak authorization endpoint
+   (`/auth/realms/{{MCP_REALM}}/protocol/openid-connect/auth`) carrying the
+   parameter names `client_id`, `redirect_uri`, `response_type`, `scope`,
+   `state`, `code_challenge`, and `code_challenge_method=S256`. Values are
+   never inspected or printed.
+3. The login form presents fields named exactly `credentialId`, `username`,
+   and `password`; after a single authenticated POST (no consent screen — the
+   client has `consentRequired=false`), the session lands **exactly** on the
+   requested path `/cameras/` with HTTP 200 HTML — not the site root.
+4. An authenticated `GET /oauth2/ping` answers HTTP 202 with body
+   `Authenticated` (oauth2-proxy 7.15.x semantics).
+5. `/multiview/` in the same session returns 200 HTML with no second login.
+6. A known direct WebRTC stream URL under `/webrtc/.../` passes authentication
+   without a sign-in bounce (any non-302-to-sign-in outcome, such as the 200
+   signaling page, is the expected pass-through result).
+7. The known `https://{{SERVER_FQDN}}${SNAPSHOT_PATH}` in the same session
+   returns 200 with `Content-Type: image/jpeg`, a body starting with the JPEG
+   magic bytes (`FF D8 FF`), and `Cache-Control: no-store`; no second login.
+8. In a **fresh** unauthenticated session, the direct snapshot URL redirects
+   to `/oauth2/start?rd=<snapshot path>`; completing login in that session
+   returns to the requested snapshot itself (not the site root) and serves a
+   valid JPEG with `no-store`. A redirect to an HTML login page or merely a
+   non-302 response is not success.
+
+Out of scope for this phase by design: live video rendering (UDP ICE/DTLS/SRTP
+cannot be asserted over HTTP checks) and confirming images display inside the
+camera applications — both remain human confirmations, recorded separately.
+
+Then run the MCP regression checks (record them as pending if REGISTER.md has
+not yet been completed):
+
+- Call `get_cameras` through authenticated MCP and verify every
+  `web_snapshot_url` uses the expected HTTPS origin and exact profile paths.
+- Call `get_snapshot` for the known camera/profile and require a valid image
+  result **without supplying browser cookies** (server-to-server path).
+- Verify the snapshot proxy target is loopback: on the MCP HTTP service,
+  `SNAPSHOT_PROXY_URL` must be unset or explicitly `http://{{LOOPBACK_IP}}:{{SNAPSHOT_PORT}}`,
+  never the public browser-protected URL. The code default when the variable
+  is unset is loopback (`_SNAPSHOT_PROXY_DEFAULT = "http://127.0.0.1:8891"` in
+  `packages/core/src/onvif_mcp_core/streaming.py`).
 
 Finally verify Hermes MCP access remains independent:
 
 ```bash
 hermes mcp test {{HERMES_SERVER_NAME}}
 ```
+
+Verified execution (2026-09-08, all assertions passed): the login form
+presented exactly `credentialId`/`username`/`password`; landing was exactly on
+the requested path; authenticated ping returned 202 `Authenticated`; WebRTC
+pass-through answered 200 with no bounce; both snapshot checks (in-session and
+fresh-session) served real JPEGs with `no-store`. `get_cameras` returned all
+seven cameras with HTTPS-origin `web_snapshot_url` values; `get_snapshot` for
+`4B0013BPAABE264`/`MediaProfile000` returned a valid 181 KB JPEG without
+browser cookies; `SNAPSHOT_PROXY_URL` is unset on the MCP service, so the
+loopback default applies; `hermes mcp test camera-new` connected via saved
+OAuth state.
 
 ## 10. Backup checkpoint
 
@@ -745,6 +845,14 @@ sudo bash -c 'cat /var/backups/keycloak-postgres/DUMP_FILE.dump | \
 - all services healthy afterward
 
 ## Troubleshooting
+
+### `curl --cacert {{PRIVATE_CA_FILE}}` reports "file does not exist"
+
+The CA file exists and is world-readable, but direct curl use of it failed
+intermittently during the 2026-09-08 preflight ("badly used here") while a
+byte-identical copy (md5-verified) in a temporary path worked. If this
+recurs, copy the CA to a temporary file for verification commands and remove
+the copy afterward. Do not treat the failure as certificate invalidity.
 
 ### oauth2-proxy restarts with unknown CA
 

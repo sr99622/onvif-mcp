@@ -23,15 +23,14 @@ UPSTREAM_TIMEOUT_S = 20
 
 # Route table: "<serial>/<profile>" -> upstream snapshot URI (no credentials).
 # Sourced from each camera's ONVIF GetProfiles snapshot_uri, verified live.
-# Notes on the non-obvious entries:
-#   * Dahua 4B0013BPAABE264 (IPC-HDW4631C-A) — snapshot endpoint requires
-#     HTTP Digest; handled transparently by `curl --digest` below.
-#   * Speco 5CF2075C9F49 (O4VD2) — all three profile tokens share one
-#     /snapshot.JPG endpoint, so every token maps to the same URI.
-#   * AXIS ACCC8E99C915 (M1065-LW) — buggy about image.cgi resolution
-#     parameters: 1280x720 and 640x360 return 503 persistently; only the
-#     default endpoint and resolution=1920x1080 reliably return a JPEG, so
-#     all four AXIS tokens map to one of those two.
+# Important Notes:
+# Many cameras do not have proper interfaces on some api calls and may display 
+# erroneous data. Some cameras may only support Basic Authentication, but also 
+# have a faulty Digest Algorithm that returns garbage. In fact, any call a camera 
+# has may behave erratically or out of spec. These are exceptions to Match
+# out for. Most cameras will work most of the time, so try to optimaize 
+# for utility without obsessing over making absolutely everything conform.
+#
 ROUTES: dict[str, str] = {
 }
 
