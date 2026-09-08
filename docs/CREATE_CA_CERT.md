@@ -304,6 +304,22 @@ ls -la ~/.password-store/camera-ca/   # per-entry .gpg files, mode 600
 the user has typed it a few times (e.g. when they set it in their terminal), later `pass
 show` calls work headless within the same session.
 
+If the cache window must be longer than the agent's default 60 s (e.g. the user primes
+the cache in their own terminal, then hands off to an agent that cannot prompt — see
+§14), extend it in `~/.gnupg/gpg-agent.conf`:
+
+```ini
+default-cache-ttl 7200
+max-cache-ttl 7200
+```
+
+then restart the agent (`gpgconf --homedir ~/.gnupg --launch gpg-agent`) and prime it
+with a single sign in the user's terminal. Note the conf keys are `default-cache-ttl`
+and `max-cache-ttl` — bare `cache-ttl` is *not* a valid config directive (it is only the
+long option form of `--default-cache-ttl`), and an invalid line makes gpgconf report
+"Configuration file of component GPG Agent is broken" and refuse to start the agent at
+all, blocking every headless sign until the line is fixed.
+
 Both stored values are 28 characters (`pass show … | wc -c` → 29 bytes, value + newline).
 
 ## 6. Generate the encrypted CA private key (passphrase supplied from the vault)
@@ -565,6 +581,14 @@ In order:
   pattern, and keep it outside-in so the one-shot wrapper can't hang (§10). In interactive
   use `age -p` prompts twice ("Enter passphrase" + "Confirm passphrase") — that is expected,
   not an error.
+- **GPG-agent PIN cache blocks headless `pass` work.** gpg-agent holds your key's PIN for
+  only ~60 s by default. An agent session with no tty cannot prompt, so all `pass
+  insert`/`show` must happen while the cache is warm. If the handoff window can't be kept
+  inside 60 s, extend it in `~/.gnupg/gpg-agent.conf` (`default-cache-ttl 7200` +
+  `max-cache-ttl 7200`, then restart the agent and prime with one sign in the user's
+  terminal — §5). Do NOT use `cache-ttl` as a conf line: it is not a valid directive, and
+  the resulting "Configuration file of component GPG Agent is broken" state prevents the
+  agent from starting at all, breaking every subsequent headless sign.
 - **Wipe every intermediate secret file with `shred -u` in the same command chain** that used
   it; a single stray copy survived a cleanup sweep once and had to be hunted down.
 - The GPG key guards the vault and CA passphrases permanently; treat it as long-lived

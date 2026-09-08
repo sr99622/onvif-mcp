@@ -33,49 +33,6 @@ UPSTREAM_TIMEOUT_S = 20
 #     default endpoint and resolution=1920x1080 reliably return a JPEG, so
 #     all four AXIS tokens map to one of those two.
 ROUTES: dict[str, str] = {
-    # --- Hikvision DS-2CD2142FWD-IS (10.1.1.70) ---
-    "DS-2CD2142FWD-IS20171118BBWR129028868/Profile_1":
-        "http://10.1.1.70/onvif-http/snapshot?Profile_1",
-    "DS-2CD2142FWD-IS20171118BBWR129028868/Profile_2":
-        "http://10.1.1.70/onvif-http/snapshot?Profile_2",
-    # --- LOREX LNB8973B / Kitchen (10.1.1.72) --- HTTP Digest required
-    "ND021810001394/MediaProfile000":
-        "http://10.1.1.72/onvifsnapshot/media_service/snapshot?channel=1&subtype=0",
-    "ND021810001394/MediaProfile001":
-        "http://10.1.1.72/onvifsnapshot/media_service/snapshot?channel=1&subtype=1",
-    # --- Amcrest IP3M-HX2W / Driveway (10.1.1.68) --- HTTP Digest required
-    "AMC015906KDB241289/MediaProfile000":
-        "http://10.1.1.68/onvifsnapshot/media_service/snapshot?channel=1&subtype=0",
-    "AMC015906KDB241289/MediaProfile001":
-        "http://10.1.1.68/onvifsnapshot/media_service/snapshot?channel=1&subtype=1",
-    # --- Amcrest IP2M-841EB / Monopoly (10.1.1.71) --- HTTP Digest required
-    "AMC014641NE6L35AT8/MediaProfile000":
-        "http://10.1.1.71/onvifsnapshot/media_service/snapshot?channel=1&subtype=0",
-    "AMC014641NE6L35AT8/MediaProfile001":
-        "http://10.1.1.71/onvifsnapshot/media_service/snapshot?channel=1&subtype=1",
-    # --- AXIS M1065-LW / Office (10.1.1.67) --- image.cgi resolution quirk:
-    # 1280x720 and 640x360 return 503 persistently; only the default endpoint
-    # and resolution=1920x1080 reliably return a JPEG (verified live).
-    "ACCC8E99C915/profile_1_h264":
-        "http://10.1.1.67/onvif-cgi/jpg/image.cgi?resolution=1920x1080&compression=30",
-    "ACCC8E99C915/profile_1_jpeg":
-        "http://10.1.1.67/onvif-cgi/jpg/image.cgi?resolution=1920x1080&compression=30",
-    "ACCC8E99C915/profile0":
-        "http://10.1.1.67/onvif-cgi/jpg/image.cgi",
-    "ACCC8E99C915/profile1":
-        "http://10.1.1.67/onvif-cgi/jpg/image.cgi?resolution=1920x1080&compression=30",
-    # --- Dahua IPC-HDW4631C-A / Tester (10.2.2.98, isolated) --- HTTP Digest required
-    "4B0013BPAABE264/MediaProfile000":
-        "http://10.2.2.98/onvifsnapshot/media_service/snapshot?channel=1&subtype=0",
-    "4B0013BPAABE264/MediaProfile001":
-        "http://10.2.2.98/onvifsnapshot/media_service/snapshot?channel=1&subtype=1",
-    # --- Speco O4VD2 (10.2.2.101, isolated) --- all three tokens share one /snapshot.JPG
-    "5CF2075C9F49/profile1":
-        "http://10.2.2.101:80/snapshot.JPG",
-    "5CF2075C9F49/profile2":
-        "http://10.2.2.101:80/snapshot.JPG",
-    "5CF2075C9F49/profile3":
-        "http://10.2.2.101:80/snapshot.JPG",
 }
 
 # Match the external shape: optionally-prefixed /snapshot/<serial>/<profile>/
