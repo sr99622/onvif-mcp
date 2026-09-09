@@ -15,7 +15,7 @@ Wired clients
 {{SERVER_FQDN}} / dnsmasq
     |-- {{SERVER_FQDN}} -> {{SERVER_IP}}
     |-- {{SERVER_IP}} -> {{SERVER_FQDN}}
-    `-- other queries -> 192.168.68.1
+    `-- other queries -> {{UPSTREAM_DNS}}
 ```
 
 ## Value supplied by the Agent
@@ -25,7 +25,7 @@ Wired clients
 | {{SERVER_FQDN}} | Fully Qualified Domain Name of the server | camera.home.arpa |
 | {{SERVER_IP}} | IP Address of the server | 10.1.1.3 |
 | {{RVRS_SRV_IP}} | Reverse IP address of the server for DNS Lookup | 3.1.1.10 |
-| {{UPSTREAM}} | Upstream DNS resolver | 192.168.68.1 |
+| {{UPSTREAM_DNS}} | Upstream DNS resolver | 192.168.68.1 |
 
 ## Important design decisions
 
@@ -33,6 +33,7 @@ Wired clients
 - dnsmasq provides DNS only. It does not provide DHCP on `{{SERVER_FQDN}}`.
 - dnsmasq listens only on `{{SERVER_IP}}`, not on the camera interface, Wi-Fi interface, wildcard address, or loopback.
 - `systemd-resolved` remains the Ubuntu host resolver on `127.0.0.53` and `127.0.0.54`.
+- backups of dnsmasq.d configs must live outside the conf-dir glob, or rename them .bak
 
 ## Client configurations
 
@@ -121,7 +122,7 @@ address=/{{SERVER_FQDN}}/{{SERVER_IP}}
 
 # Explicit upstream resolver
 no-resolv
-server={{UPSTREAM}}
+server={{UPSTREAM_DNS}}
 
 domain-needed
 bogus-priv
@@ -189,7 +190,7 @@ systemctl cat dnsmasq.service
 
 ## 6. Stop the package helper from supplying a resolver file
 
-Because the camera configuration uses `no-resolv` and an explicit `server={{UPSTREAM}}`, enable the package-supported setting in `/etc/default/dnsmasq`:
+Because the camera configuration uses `no-resolv` and an explicit `server={{UPSTREAM_DNS}}`, enable the package-supported setting in `/etc/default/dnsmasq`:
 
 ```ini
 IGNORE_RESOLVCONF=yes
