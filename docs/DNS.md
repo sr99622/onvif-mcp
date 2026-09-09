@@ -18,28 +18,14 @@ Wired clients
     `-- other queries -> 192.168.68.1
 ```
 
-Symbolic values used in this file:
+## Value supplied by the Agent
 
-| Symbol | Example Value | Description |
+| Symbol | Description | Example Value |
 |---|---|---|
-| {{SERVER_FQDN}} | camera.home.arpa | Fully Qualified Domain Name of the server |
-| {{SERVER_IP}} | 10.1.1.3 | IP Address of the server |
-| {{RVRS_SRV_IP}} | 3.1.1.10 | Reverse IP address of the server for DNS Lookup |
-
-## Site-specific values
-
-| Role | Value |
-|---|---|
-| Camera server hostname | `{{SERVER_FQDN}}` |
-| Camera server wired address | `{{SERVER_IP}}/24` |
-| Private DNS name | `{{SERVER_FQDN}}` |
-| Wired DHCP server | macOS `bootpd` at `10.1.1.1` |
-| Wired default gateway | `10.1.1.16` |
-| DHCP range | `10.1.1.64` through `10.1.1.242` |
-| Upstream DNS resolver | `192.168.68.1` |
-| Camera-only interface | `10.2.2.1/24` |
-
-When adapting this procedure elsewhere, replace these values deliberately. Do not copy addresses without checking the destination network.
+| {{SERVER_FQDN}} | Fully Qualified Domain Name of the server | camera.home.arpa |
+| {{SERVER_IP}} | IP Address of the server | 10.1.1.3 |
+| {{RVRS_SRV_IP}} | Reverse IP address of the server for DNS Lookup | 3.1.1.10 |
+| {{UPSTREAM}} | Upstream DNS resolver | 192.168.68.1 |
 
 ## Important design decisions
 
@@ -47,8 +33,12 @@ When adapting this procedure elsewhere, replace these values deliberately. Do no
 - dnsmasq provides DNS only. It does not provide DHCP on `{{SERVER_FQDN}}`.
 - dnsmasq listens only on `{{SERVER_IP}}`, not on the camera interface, Wi-Fi interface, wildcard address, or loopback.
 - `systemd-resolved` remains the Ubuntu host resolver on `127.0.0.53` and `127.0.0.54`.
-- The macOS `bootpd` server advertises `{{SERVER_IP}}` to wired DHCP clients.
-- No public resolver is advertised as a secondary DNS server because clients might bypass the private resolver and fail to resolve `{{SERVER_FQDN}}`.
+
+## Client configurations
+
+- The LAN DHCP server should be edited to advertise `{{SERVER_IP}}` to wired DHCP clients, or clients may edit their local hosts file for name resolution
+- No public resolver is advertised by the DHCP server as a secondary DNS server because clients might bypass the private resolver and fail to resolve `{{SERVER_FQDN}}`.
+- Clients using static IP will need to be edited individually
 
 ## 1. Preflight checks on Ubuntu
 
@@ -131,7 +121,7 @@ address=/{{SERVER_FQDN}}/{{SERVER_IP}}
 
 # Explicit upstream resolver
 no-resolv
-server=192.168.68.1
+server={{UPSTREAM}}
 
 domain-needed
 bogus-priv
@@ -199,7 +189,7 @@ systemctl cat dnsmasq.service
 
 ## 6. Stop the package helper from supplying a resolver file
 
-Because the camera configuration uses `no-resolv` and an explicit `server=192.168.68.1`, enable the package-supported setting in `/etc/default/dnsmasq`:
+Because the camera configuration uses `no-resolv` and an explicit `server={{UPSTREAM}}`, enable the package-supported setting in `/etc/default/dnsmasq`:
 
 ```ini
 IGNORE_RESOLVCONF=yes
