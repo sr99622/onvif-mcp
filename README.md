@@ -26,13 +26,17 @@ The system employs a Hermes Agent with elevated privileges to build and manage t
 
 The documentation includes instructions for creating and maintaining a private Certificate Authority in order to provide certificates for HTTPS encrytption. Keycloak is used for the OAuth server and provides short-lived JWT token authentication for both the camera MCP server and the camera stream apps. Cameras are isolated on a private network accessible only by proxy behind the protected server. Per-user credentials are securely stored and can be revoked at any time.
 
+Clients using only the camera apps do not require any additional configuration. Clients that intend to use MCP services need to be registered with the server by IP address, which implies that they will need to have a static IP. If this requirement is overly strict, the authentication can be set to looser restriction by IP subnet, allowing a range of device IPs from the designated subnet.
+
 ## Building the Server
 
-The server is built in four stages, Server host preparation, Plain HTTP that sets up the services without encryption, HTTPS that creates the certificate and maps the endpoints for protection, and Authentication that implements the Keycloak server for login credential requirements.
+The server is built in four stages, Server host preparation, Plain HTTP that sets up the services without encryption, HTTPS that creates the certificate and maps the endpoints for protection, and Authentication that implements the Keycloak server for login credential requirements. A firewall can be added at the conclusion of the configuration for additional protection.
 
 1. ### Server Preparation
 
     Follow the SERVER_PREP.md document in the docs folder after installing Ubuntu 26.04 on the host. The top section of the document installs several quality of life features that help manage the server, but are not strictly required for operation. The Essential Configurations section describes critical installations required for operation.
+
+    ---
 
 2. ### HTTP Services
 
@@ -61,6 +65,7 @@ The server is built in four stages, Server host preparation, Plain HTTP that set
     APPS.md
     MCP_HTTP.md
     ```
+    ---
 
 3. ### HTTPS Encryption
 
@@ -88,6 +93,7 @@ The server is built in four stages, Server host preparation, Plain HTTP that set
     SITE_CERT.md
     CA_DISTRIBUTE.md
     ```
+    ---
 
 4. ### Install the Chrome Browser
 
@@ -118,6 +124,8 @@ The server is built in four stages, Server host preparation, Plain HTTP that set
 
     Launch the Chrome Browser and navigate to the cameras page at https://{{SERVER_FQDN}}/cameras to verify the working installation.
 
+    ---
+
 5. ### Keycloak installation
 
     The Keycloak server provides authentication services for the site. During installation a default user is created that can be used for testing the configuration. 
@@ -133,6 +141,7 @@ The server is built in four stages, Server host preparation, Plain HTTP that set
     ```
     KEYCLOAK.md
     ```
+    ---
 
 6. ### Layer authentication on the rest of the site endpoints
 
@@ -148,6 +157,8 @@ The server is built in four stages, Server host preparation, Plain HTTP that set
     ```
     STREAM_AUTH.md
     ```
+    ---
+
 7. ### Add user
 
     **Required Values**
@@ -166,12 +177,21 @@ The server is built in four stages, Server host preparation, Plain HTTP that set
     ```
     ADD_USER.md
     ```
+    ---
 
-## Building the Client
+8. ### Firewall Protection
 
-Clients are configured using the CLIENT.md doc. Configurations have been mapped for major Linux distros, Windows and MacOS. Limited configuration for Android mobile devices gives access to the camera stream apps. Once the client has been configured and tested, you can optimize performance with the following prompt
+    The document FIREWALL.md shows how to configure a firewall for this system using the built in ufw utility in Ubuntu.
+
+    ---
+
+## Configuring the Client
+
+Clients are configured using the CLIENT.md doc. Configurations have been mapped for major Linux distros, Windows and MacOS. Limited configuration for Android mobile devices gives access to the camera stream apps.
+
+If the client is using MCP services, you can optimize performance with the following prompt, which should be applied after testing the client in situ.
 
 ```
-It is not necessary to verify that any of the commands have completed successfully. The camera
-communications library is very reliable and will pretty much alays work properly. If something has gone wrong, the user will ask explicitly for you to check. This may go against your training to always check things, but it is important that we optimize the system to be as responsive as possible, and the post command checking slows things down considerably. If the tool call returns a success message, assume that the call succeeded and do not re-query the cameras or take a snapshot without being explicitly asked by the user. One important exception here is the appearance of the 500 error message. The tool call will return success, but the server shows 500. You should check for the 500 message in the title of the browser when asked to view a camera stream, and if it appears, all you need to do is refresh the browser.
+It is not necessary to verify that any of the commands have completed successfully beyond checking the return code from the tool call. The camera communications library is very reliable and will pretty much always work properly. If something has gone wrong, the user will ask explicitly for you to check. This may go against your training to always verify things, but it is important that we optimize the system to be as responsive as possible, and the post command checking slows things down considerably. If the tool call returns a success message, assume that the call succeeded and do not re-query the cameras or take a snapshot without being explicitly asked by the user. One important exception here is the appearance of the 500 error message in the browser when viewing a camera stream. The tool call will return success, but the server may show 500 due to auth token timeout. You should check for the 500 message in the title of the browser when asked to view a camera stream, and if it appears, all you need to do is refresh the browser.
 ```
+---
