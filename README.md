@@ -8,7 +8,7 @@ The system employs a Hermes Agent with elevated privileges to build and manage t
 
 * Server
 
-    The system requires a server with dual network interface adapters. A LAN facing adapter connects to the local network and is accessible by other computers on the LAN. A second interface is configured as the DHCP controller providing a private isolated network hosting the cameras. The documentation has been developed and tested against an Ubuntu 26.04 Operating System installed on the server. A freshly installed, dedicated bare metal server is recommended. Computing requirements for the server are modest, a reasonably powered mini pc is ideal for the application. Reference SERVER_BUILD.md in the docs folder for the recommended server configuration.
+    The system requires a server with dual network interface adapters. A LAN facing adapter connects to the local network and is accessible by other computers on the LAN. A second interface is configured as the DHCP controller providing a private isolated network hosting the cameras. The documentation has been developed and tested against an Ubuntu 26.04 Operating System installed on the server. A freshly installed, dedicated bare metal server is recommended. Computing requirements for the server are modest, a reasonably powered mini pc is ideal for the application. Reference SERVER_PREP.md in the docs folder for the recommended server configuration.
 
 * AI Provider
 
@@ -28,17 +28,17 @@ The documentation includes instructions for creating and maintaining a private C
 
 ## Building the Server
 
-The server is built in four stages, Server host configuratiom, Plain HTTP that sets up the services without encryption, HTTPS that creates the certificate and maps the endpoints for protection, and Authentication that implements the Keycloak server for login credential requirements.
+The server is built in four stages, Server host preparation, Plain HTTP that sets up the services without encryption, HTTPS that creates the certificate and maps the endpoints for protection, and Authentication that implements the Keycloak server for login credential requirements.
 
-1. ### Server Configuration
+1. ### Server Preparation
 
-    Follow the SERVER_BUILD.md document in the docs folder after installing Ubuntu 26.04 on the host. The top section of the document installs several quality of life features that help manage the server, but are not strictly required for operation. The Essential Configurations section describes critical installations required for operation.
+    Follow the SERVER_PREP.md document in the docs folder after installing Ubuntu 26.04 on the host. The top section of the document installs several quality of life features that help manage the server, but are not strictly required for operation. The Essential Configurations section describes critical installations required for operation.
 
 2. ### HTTP Services
 
     This is a baseline configuration required before layering encryption and authentication on the server. All essential services are initially configured here without encyption. This could theoretically be considered a fully functional unsecured system. The Hermes agent is used to perform the configuration and can be prompted to follow this document and implement the steps as described in the runbook referenced below. Values required for implementation are listed in the table, edit this document with your own site values and Hermes can implement the configuration autonomously.
 
-    After following the instructions in SERVER_BUILD.md, attach the cameras to the second ethernet adapter. Prompt the agent with the required values and the list of runbooks to make the build. The runbooks to implement the configuration are found in the `{{REPO_PATH}}/onvif-mcp/docs` directory. The runbooks are intended to be executed in the order listed.
+    After following the instructions in SERVER_PREP.md, attach the cameras to the second ethernet adapter. Prompt the agent with the required values and the list of runbooks to make the build. The runbooks to implement the configuration are found in the `{{REPO_PATH}}/onvif-mcp/docs` directory. The runbooks are intended to be executed in the order listed.
 
 
     **Required Values**
@@ -166,3 +166,12 @@ The server is built in four stages, Server host configuratiom, Plain HTTP that s
     ```
     ADD_USER.md
     ```
+
+## Building the Client
+
+Clients are configured using the CLIENT.md doc. Configurations have been mapped for major Linux distros, Windows and MacOS. Limited configuration for Android mobile devices gives access to the camera stream apps. Once the client has been configured and tested, you can optimize performance with the following prompt
+
+```
+It is not necessary to verify that any of the commands have completed successfully. The camera
+communications library is very reliable and will pretty much alays work properly. If something has gone wrong, the user will ask explicitly for you to check. This may go against your training to always check things, but it is important that we optimize the system to be as responsive as possible, and the post command checking slows things down considerably. If the tool call returns a success message, assume that the call succeeded and do not re-query the cameras or take a snapshot without being explicitly asked by the user. One important exception here is the appearance of the 500 error message. The tool call will return success, but the server shows 500. You should check for the 500 message in the title of the browser when asked to view a camera stream, and if it appears, all you need to do is refresh the browser.
+```
