@@ -29,6 +29,8 @@ Authoritative CA workstation
 └── /srv/camera-pki/public/
     ├── camera-system-root-ca.crt.pem
     ├── camera-system-root-ca.crt.pem.sha256
+    ├── camera-system-root-ca.crt
+    ├── camera-system-root-ca.crt.sha256
     └── README.txt
 ```
 
@@ -53,7 +55,9 @@ copy. The authoritative CA state remains at `{{CA_ROOT_PATH}}` and in its encryp
 | Wireless client network | `192.168.68.0/22` |
 | Distribution directory | `/srv/camera-pki/public` |
 | Certificate URL | `http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt.pem` |
+| Certificate URL (.crt alias) | `http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt` |
 | Checksum URL | `http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt.pem.sha256` |
+| Checksum URL (.crt alias) | `http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt.sha256` |
 | Instructions URL | `http://{{SERVER_FQDN}}/ca/README.txt` |
 
 Replace every symbolic value before using this runbook:
@@ -101,6 +105,13 @@ sudo install \
   -m 644 \
   /etc/nginx/tls/camera-system-root-ca.crt.pem \
   /srv/camera-pki/public/camera-system-root-ca.crt.pem
+
+sudo install \
+  -o root \
+  -g root \
+  -m 644 \
+  /etc/nginx/tls/camera-system-root-ca.crt.pem \
+  /srv/camera-pki/public/camera-system-root-ca.crt
 ```
 
 Verify its subject, issuer, and certificate fingerprint:
@@ -113,6 +124,10 @@ openssl x509 \
   -issuer \
   -fingerprint \
   -sha256
+
+cmp -s \
+  /srv/camera-pki/public/camera-system-root-ca.crt.pem \
+  /srv/camera-pki/public/camera-system-root-ca.crt
 ```
 
 Tested result:
@@ -123,34 +138,44 @@ issuer=CN=Camera System Root CA
 sha256 Fingerprint={{GENERATED VALUE}}
 ```
 
-## 3. Create and verify the PEM file checksum
+## 3. Create and verify both certificate file checksums
 
-Create a checksum for the exact bytes of the distributed PEM file:
+Create checksums for the exact bytes of both distributed certificate filenames. The `.crt` file is the same PEM-encoded certificate bytes as the `.crt.pem` file, exposed under the shorter extension for clients/tools that expect it:
 
 ```bash
 cd /srv/camera-pki/public &&
 sha256sum camera-system-root-ca.crt.pem |
 sudo tee camera-system-root-ca.crt.pem.sha256
+
+cd /srv/camera-pki/public &&
+sha256sum camera-system-root-ca.crt |
+sudo tee camera-system-root-ca.crt.sha256
 ```
 
-Tested file checksum:
+Tested file checksums:
 
 ```text
 {{GENERATED VALUE}}
   camera-system-root-ca.crt.pem
+{{SAME GENERATED VALUE}}
+  camera-system-root-ca.crt
 ```
 
-Verify the checksum file:
+Verify both checksum files:
 
 ```bash
 cd /srv/camera-pki/public &&
 sha256sum --check camera-system-root-ca.crt.pem.sha256
+
+cd /srv/camera-pki/public &&
+sha256sum --check camera-system-root-ca.crt.sha256
 ```
 
 Expected:
 
 ```text
 camera-system-root-ca.crt.pem: OK
+camera-system-root-ca.crt: OK
 ```
 
 ## File checksum versus certificate fingerprint
@@ -174,11 +199,13 @@ Camera System Root CA
 
 Certificate download:
 http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt.pem
+http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt
 
-PEM checksum file:
+Checksum files:
 http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt.pem.sha256
+http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt.sha256
 
-PEM file SHA-256:
+File SHA-256 for both certificate downloads:
 {{GENERATED VALUE}}
 
 Certificate SHA-256 fingerprint:
@@ -188,15 +215,20 @@ Verify the downloaded PEM file:
 
 macOS:
   shasum -a 256 camera-system-root-ca.crt.pem
+  shasum -a 256 camera-system-root-ca.crt
 
 Linux:
   sha256sum camera-system-root-ca.crt.pem
+  sha256sum camera-system-root-ca.crt
 
 Windows:
   certutil -hashfile camera-system-root-ca.crt.pem SHA256
+  certutil -hashfile camera-system-root-ca.crt SHA256
 
 Inspect the certificate fingerprint with OpenSSL:
   openssl x509 -in camera-system-root-ca.crt.pem \
+    -noout -fingerprint -sha256
+  openssl x509 -in camera-system-root-ca.crt \
     -noout -fingerprint -sha256
 
 Install this certificate only as a trusted root for websites.
@@ -293,6 +325,15 @@ curl \
   http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt.pem
 ```
 
+Test the `.crt` alias endpoint:
+
+```bash
+curl \
+  --resolve {{SERVER_FQDN}}:80:{{SERVER_IP}} \
+  --head \
+  http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt
+```
+
 Expected:
 
 ```text
@@ -308,6 +349,16 @@ curl \
   --silent \
   --show-error \
   http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt.pem.sha256
+```
+
+Test the `.crt` checksum endpoint:
+
+```bash
+curl \
+  --resolve {{SERVER_FQDN}}:80:{{SERVER_IP}} \
+  --silent \
+  --show-error \
+  http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt.sha256
 ```
 
 Test the instructions endpoint:
@@ -326,11 +377,12 @@ When the root CA certificate changes:
 
 1. Verify the new public certificate against the authoritative CA workspace at `{{CA_ROOT_PATH}}`.
 2. Install the new public certificate under `/srv/camera-pki/public`.
-3. Recalculate the PEM file checksum.
-4. Update `README.txt` with both the new file checksum and certificate fingerprint.
-5. Run `nginx -t` if the URL or Nginx mapping changes.
-6. Test all three HTTP endpoints locally.
-7. Test download and verification from Windows, macOS, and Linux clients as applicable.
+3. Recreate both distributed filenames and verify their bytes match.
+4. Recalculate both checksum files.
+5. Update `README.txt` with both download URLs, both checksum URLs, the new file checksum, and certificate fingerprint.
+6. Run `nginx -t` if the URL or Nginx mapping changes.
+7. Test all five HTTP endpoints locally.
+8. Test download and verification from Windows, macOS, and Linux clients as applicable.
 
 Do not place any of the following under `/srv/camera-pki/public`:
 

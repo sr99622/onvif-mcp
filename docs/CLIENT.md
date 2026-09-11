@@ -10,6 +10,7 @@ Hermes has a built in Chrome browser MCP controller that is used by the system a
 * [CachyOS](#cachyos)
 * [MacOS](#mac-os)
 * [Windows](#windows)
+* [Android](#android)
 
 ## Fedora
 
@@ -166,26 +167,8 @@ iex (irm https://raw.githubusercontent.com/NousResearch/hermes-agent/main/script
 ### Install the ceritificate
 
 ```powershell
-curl -O http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt.pem 
-openssl x509 -outform der -in camera-system-root-ca.crt.pem -out camera-system-root-ca.crt
+curl -O http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt 
 ```
-
-* ### If you don't have openssl installed:
-
-  ```powershell
-  winget install ShiningLight.OpenSSL.Light
-
-  $opensslBin = "C:\Program Files\OpenSSL-Win64\bin"
-  $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
-
-  if (($userPath -split ";") -notcontains $opensslBin) {
-      [Environment]::SetEnvironmentVariable(
-          "Path",
-          ($userPath.TrimEnd(";") + ";" + $opensslBin),
-          "User"
-      )
-  }
-  ```
 
 #### Open the Certificate Manager
 Press Windows + R, type:
@@ -226,11 +209,77 @@ In the left pane, expand Trusted Root Certification Authorities.
 
 * Some applications may require a restart to recognize the new trusted CA.
 
+## Android
+
+Mobile devices can access the camera web apps if configured as shown below. Hermes and MCP configurations are not supported. The following instructions are based on Samsung, yours may differ slightly.
+
+### Configure DNS on device
+
+To set the DNS on the Android device, change the IP address assignment to static. You will need to know the range of allowed static addresses from your WiFi router and double check that the address is not in use by pinging it.
+
+Settings -> Connections -> WiFi -> (click the gear icon next to your WiFi provider) -> (Scroll to the bottom and select `View More`) -> IP Settings
+
+Make note of your Netmask and Gateway settings, and use those same values in the next step.
+
+Change the address type from DHCP to static. Set the IP address, Netmask, Gateway and DNS.
+
+### Download and trust the certificate
+
+After checking to make sure your IP settings are correct by visiting some known good web sites, type the camera server address for the certificate into the browser address box. {{SERVER_FQDN}} is your host name on the local network e.g. camera.home.arpa
+
+```
+{{SERVER_FQDN}}/ca/camera-system-root-ca.crt
+```
+
+The certificate will download to phone internal storage. Navigate settings
+
+Settings -> Security and privacy -> more security settings -> Install from device storage -> CA Certificate
+
+Install the trusted certifcate. Open the cameras app in the web browser by visiting {{SERVER_FQDN}}/cameras
+
 &nbsp;
 
 # Common Hermes Instructions
 
-### Login to the camera server
+### Retrieve the password from the server if necessary
+
+You will need your password to access the site. If the password was system generated, it will be stored in a root protected file on the server. You can copy the password from the server into your local clipboard so you can paste the password into the dialog box when challenged. Use the instructions below for your operating system. You will need ssh access to the server to complete this step.
+
+If you already know your password, skip this section.
+
+* Linux
+
+  If you're running Linux with Wayland, which is likely on new systems, use:
+
+  ```bash
+  ssh user@server 'sudo cat /opt/keycloak/{{LOGIN_USERNAME}}.pass' | wl-copy
+  ```
+
+  The password is now in your local clipboard; just paste it into the browser with Ctrl+V. If you don't have wl-copy, note that all major package installers (pacman, apt, dnf) use the same wl-clipboard name:
+
+  ```bash
+  sudo pacman -S wl-clipboard
+  ```
+
+  For X11 instead:
+
+  ```bash
+  ssh user@server 'sudo cat /opt/keycloak/{{LOGIN_USERNAME}}.pass' | xclip -selection clipboard
+  ```
+
+* macOS
+
+  ```bash
+  ssh user@server 'sudo cat /opt/keycloak/{{LOGIN_USERNAME}}.pass' | pbcopy
+  ```
+
+* Windows PowerShell
+
+  ```bash
+  ssh user@server "sudo cat /opt/keycloak/{{LOGIN_USERNAME}}.pass" | Set-Clipboard
+  ```
+
+### Open the camera app
 
 Open the chrome browser and navigate to the cameras page on the server
 
@@ -238,11 +287,7 @@ Open the chrome browser and navigate to the cameras page on the server
 https://{{SERVER_FQDN}}/cameras
 ```
 
-You will be presented a login screen. Sign in using the {{MCP_LOGIN_USER}} credentials, which will be the username {{MCP_LOGIN_USER}}, and the password which can be retrieved using the command 
-
-```
-ssh -t {{SERVER_USER}}@{{SERVER_FQDN}} 'sudo cat /opt/keycloak/{{MCP_LOGIN_USER}}.pass
-```
+A login dialog box will appear asking for your credentials. Enter your username and password. If you have used the instructions above to retrieve your password from the server, the password will be in the clipboard and you can paste it into the box using ctl+V or command+V on macOS.
 
 This will register and save the credentials in the browser, and you should be able to observe the camera streams.
 
@@ -252,13 +297,15 @@ Edit `~/.hermes/config.yaml` and add the following towards the end of the file a
 
 ```yaml
 mcp_servers:
-  {{HERMES_SERVER_NAME}}:
+  camera:
     url: https://{{SERVER_FQDN}}/mcp
     ssl_verify: {{CA_CERT_PATH}}
     connect_timeout: 30.0
     auth: oauth
     enabled: true
 ```
+
+You will need to know the {{CA_CERT_PATH}} for your system. If you have installed it using the instructions above, the path can be found on Linux from the instructions for your distro. On MacOS or Windows, download the certificate and store it somewhere safe.
 
 Get your IP address using the appropriate command for your operating system. Note that if you are using a Virtual Machine, the host IP address is the correct choince, not the VM address.
 
@@ -283,13 +330,13 @@ Get your IP address using the appropriate command for your operating system. Not
 Attempt a login which will fail. This creates an entry on the server side that can be used to verify the IP address you are using.
 
 ```bash
-hermes mcp login {{HERMES_SERVER_NAME}}
+hermes mcp login camera
 ```
 
-The command will fail with a 403 error. Go to the server machine, log in and start a hermes instance and prompt
+The command will fail with a 403 error. Go to the server machine, log in and start a hermes instance and prompt. In this prompt the {{CLIENT_SOURCE_IP}} is a literal placeholder for the agent to substitute in the model call, you should replace {{REPO_PATH}} with your installation location.  
 
 ```
-execute /home/{{SERVER_USER}}/onvif-mcp/docs/ADD_CLIENT_ON_SERVER.md using {{CLIENT_SOURCE_IP}} <ip-address>
+execute {{REPO_PATH}}/onvif-mcp/docs/ADD_CLIENT_ON_SERVER.md using `{{CLIENT_SOURCE_IP}}` <ip-address>
 ```
 
 This will register your IP address with the server to allow access. You should see confirmation that the IP address attempted to access.
@@ -297,16 +344,14 @@ This will register your IP address with the server to allow access. You should s
 Back on the client machine, run the login command again, this time it should launch a browser that you have already used to login to the cameras web page and ask you to allow Hermes agent to authenticate to which you should reply yes. You may need the password again, if so use the ssh command shown above to retrieve it from the server.
 
 ```bash
-hermes mcp login {{HERMES_SERVER_NAME}}
+hermes mcp login camera
 ```
 
 You can get the list of available tools from the server
 
 ```bash
-hermes mcp test {{HERMES_SERVER_NAME}}
+hermes mcp test camera
 ```
-
-Keep this command handy, you may need it to login to the server when you start a new hermes session.
 
 ## Configure the browser CLI
 
@@ -318,10 +363,10 @@ hermes config set browser.allow_private_urls true
 
 ## Prompt the agent 
 
-Start hermes and check the header to see the http {{HERMES_SERVER_NAME}} mcp server enabled. You can verify the installation using a simple no-op prompt
+Start hermes and check the header to see the http camera mcp server enabled. You can verify the installation using a simple no-op prompt
 
 ```
-use the {{HERMES_SERVER_NAME}} mcp server to get its version
+use the camera mcp server to get its version
 ```
 
 Which should display the version of the server the libonvif dependency. You can get a list of cameras

@@ -37,7 +37,7 @@ location, the proxy's route table keys, and that scheme must all agree.
 |-----------------|------------------------------------------------|
 | {{SERVER_FQDN}}  | Server Fully Qualified Domain Name            |
 | {{REPO_PATH}}    | Parent directory containing the onvif-mcp repository (repo lives at `{{REPO_PATH}}/onvif-mcp`) |
-| {{SERVICE_USER}} | System user the proxy runs as (owner of `{{REPO_PATH}}`, so it can read the repo source and its venv) |
+| {{SERVER_USER}} | System user the proxy runs as (owner of `{{REPO_PATH}}`, so it can read the repo source and its venv) |
 | {{USERNAME}}     | Camera username                                |
 | {{PASSWORD}}     | Camera password                                |
 
@@ -133,9 +133,8 @@ quirky endpoints).
 ## Step 4 — Generate, Install, and Start the Service
 
 Generate the unit file on the fly from the template below (deployment details
-vary per host, so it is not committed to the repo). Substitute `{{SERVICE_USER}}`
-with the user who owns `{{REPO_PATH}}`, and the other braces with the values
-supplied by the Agent:
+vary per host). Substitute `{{SERVER_USER}}` with the user who owns `{{REPO_PATH}}`, 
+and the other braces with the values supplied by the Agent:
 
 ```bash
 sudo tee /etc/systemd/system/snapshot-proxy.service >/dev/null <<'EOF'
@@ -147,7 +146,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User={{SERVICE_USER}}
+User={{SERVER_USER}}
 WorkingDirectory={{REPO_PATH}}/onvif-mcp
 # Loopback-only bind: the proxy is reached only through nginx, which handles
 # client authentication (keycloak). Credentials for the cameras are supplied

@@ -1,18 +1,18 @@
-# Server Configuration
+# Server Preparation
 
 This is a suggested configuration for the server. The best way to build this system is to start with a fresh Ubuntu installation on a dedicated machine. Update the system after installation to get the latest versions of tools.
 
-Later steps in the configuration may reference tools installed here, so be aware that skipping steps may require workarounds. One important feature is the passwordless sudo which Hermes needs to complete many tasks, and removing that step will make the configurations that follow very difficult. 
+Later steps in the configuration may reference nvim as installed here, so be aware that skipping steps may require workarounds. One important feature is the passwordless sudo which Hermes needs to complete many tasks, and removing that step will make the configurations that follow very difficult. 
 
 The first part of the document describes useful but not critical steps, the [**Essential Configrations**](#essential-configurations) section describes critical steps. 
 
-NOTE: The document assumes that all commands are run from the $HOME directory.
+**NOTE**: The document assumes that all commands are run from the $HOME directory.
 
 ## Install git
 
 We will need git for next steps, so install and configure.
 
-```
+```bash
 sudo apt install git
 git config --global core.editor "nvim"
 git config --global user.email <your email>
@@ -23,7 +23,7 @@ git config --global user.name <your name>
 
 Integrate github to the desktop, first set up archive 
 
-```
+```bash
 sudo mkdir -p -m 755 /etc/apt/keyrings && wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null && sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
 sudo apt update && sudo apt install gh -y
@@ -34,7 +34,7 @@ gh auth login
 
 You can run the rest of the configuration from remote. We want to install an editor that will work from the remote terminal. We will be installing LazyVim. The first step is to install the latest version of neovim.
 
-```
+```bash
 sudo apt install curl tar xz-utils
 curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.tar.gz
 sudo rm -rf /opt/nvim-linux-x86_64
@@ -43,7 +43,7 @@ sudo tar -C /opt -xzf nvim-linux-x86_64.tar.gz
 
 We need to add the nvim directory to the PATH, and conifgure sudoedit so we can use this for elevated privilege files. Open the .bashrc
 
-```
+```bash
 vi .bashrc
 ```
 
@@ -56,31 +56,31 @@ export SUDO_EDITOR="nvim"
 
 And now activate the environment
 
-```
+```bash
 source ~/.bashrc
 ```
 
 LazyVim uses development tools to configure itself, so add these with the build-essential package. It also will need ripgrep.
 
-```
+```bash
 sudo apt install build-essential
 sudo apt install ripgrep
 ```
 
 LazyVim needs a font package, JetBrains is widely used.
 
-```
+```bash
 wget -P ~/.local/share/fonts https://github.com/ryanoasis/nerd-fonts/releases/download/v3.0.2/JetBrainsMono.zip && cd ~/.local/share/fonts && unzip JetBrainsMono.zip && rm JetBrainsMono.zip
 cd
 ```
 
 Register the font in the cache 
 
-```
+```bash
 fc-cache -f -v 
 ```
-* #### Check the exit code to make sure it completed succesfully, you may need to run this twice. For some reason it often fails on the first run. 
 
+Check the exit code to make sure it completed succesfully, you may need to run this twice. For some reason it often fails on the first run. 
 
 Close and re-open the terminal then select Preferences from the hamburger icon in the upper right corner. Scroll down a bit and unselect 'Use Sytem Font', then use the menu to select the 'JetBrainsMono Nerd Font Mono' type of your choice.
 
@@ -88,7 +88,7 @@ Close and re-open the terminal then select Preferences from the hamburger icon i
 
 Here we install the LazyVim package. The git configuration is removed in case you want to archive your own conifguration on git somewhere.
 
-```
+```bash
 git clone https://github.com/LazyVim/starter ~/.config/nvim
 rm -rf ~/.config/nvim.git
 nvim
@@ -98,7 +98,7 @@ LazyVim will configure itself on the first nvim run.
 
 Access system clipboard
 
-```
+```bash
 sudo apt install wl-clipboard xclip xsel
 ```
 
@@ -106,7 +106,7 @@ Auto Refresh
 
 If you are using agents to modify code, it helps to have nvim auto refresh to stay in sync. Add this to the init.lua in the nvim configuration. First open the configuration file
 
-```
+```bash
 nvim .config/nvim/init.lua
 ```
 
@@ -121,56 +121,11 @@ vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold", "CursorHo
 })
 ```
 
-## Install tmux
-
-tmux lets you split the screen into different prompts. This makes it super easy to run multiple prompts from the remote terminal.
-
-```
-sudo apt install tmux
-```
-
-The default tmux bindings can be awkword, so we customize.
-
-```
-nvim .tmux.conf
-```
-
-Add the follwing into the configuration file
-
-```
-unbind C-b
-set-option -g prefix C-a
-bind-key C-a send-prefix
-bind | split-window -h
-bind - split-window -v
-unbind '"'
-unbind %
-bind-key X kill-pane
-```
-
-Now, to split a screen horizontally, Ctl+a |, vertically, Ctl+a -
-
-## Install uv
-
-This will be needed for the camera MCP server.
-
-```
-curl -LsSf https://astral.sh/uv/install.sh | sh
-source .bashrc
-uv
-```
-
-## Install onvif-tui
-
-```
-uv tool install onvif-tui
-```
-
 ## Install VS Code
 
 Open this link in the browser to download the .deb file installer
 
-```
+```bash
 https://code.visualstudio.com/sha/download?build=stable&os=linux-deb-x64
 ```
 
@@ -190,38 +145,54 @@ Use the GUI tool in the Settings app. Go to Network and find your Adapter. Assum
 
 ## Enable Remote Access
 
-```
+```bash
 sudo apt install openssh-server -y
 sudo systemctl enable --now ssh
 ```
 
+## Other packages needed only if you have not installed optional tools above
+
+```bash
+sudo apt install curl tar xz-utils
+```
+
+## Install uv
+
+This will be needed for the camera MCP server.
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source .bashrc
+uv
+```
+
 ## Download onvif-mcp repository
 
-```
+```bash
 git clone https://github.com/sr99622/onvif-mcp
 ```
 
 ## Set up passwordless sudo
 
-```
+```bash
 sudo env USER="$USER" onvif-mcp/docs/scripts/enable-nopasswd.sh
 ```
 
 ## Install Hermes
 
-```
+```bash
 curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
 ```
 
 Use the minimal configuration and add the LLM model of your choice, the source the environment.
 
-```
+```bash
 source .bashrc
 ```
 
 Edit the .hermes/config.yaml to set up the camera MCP stdio, replacing the values in {{ }} double curly braces to fit your own configuration.
 
-```
+```bash
 nvim .hermes/config.yaml
 ```
 
