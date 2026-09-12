@@ -84,19 +84,6 @@ sudo ufw --force enable
 sudo ufw status numbered
 ```
 
-## Add only the missing ONVIF reply rules
-
-Use this if UFW is already enabled and `get_cameras` returns empty after opening UDP 3702.
-
-```bash
-CAMERA_IFACE="{{CAMERA_IFACE}}"
-CAMERA_SUBNET="{{CAMERA_SUBNET}}"
-EPHEMERAL_UDP_RANGE="$(tr '\t ' ':' < /proc/sys/net/ipv4/ip_local_port_range)"
-
-sudo ufw allow in on "$CAMERA_IFACE" from "$CAMERA_SUBNET" proto udp to any port "$EPHEMERAL_UDP_RANGE" comment 'ONVIF/libonvif UDP discovery replies from isolated cameras'
-sudo ufw status numbered
-```
-
 ## Expected rules on this host
 
 ```text
