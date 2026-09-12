@@ -164,7 +164,7 @@ https://www.google.com/chrome
 iex (irm https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.ps1)
 ```
 
-### Install the ceritificate
+### Install the certificate
 
 ```powershell
 curl -O http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt 
@@ -239,6 +239,20 @@ Install the trusted certifcate. Open the cameras app in the web browser by visit
 
 &nbsp;
 
+# DNS Configuration
+
+HTTPS operation requires that the server host name matches the certificate. This implies that the client resolves the host name rather than post the IP address directly. There are two ways to do this, DNS or hosts file configuration. Resolution by DNS server is preferable as a single authoritative source of addresses. This configuration requires that the LAN DHCP server assign the DNS address to clients whose addresses are assigned by DHCP. This is a setting on your router and will be specific to that device. In the event that this is impractical, clients can edit a hosts file to resolve the name locally. Each operating system has its own location for the hosts file. Clients with fixed IP can have the DNS server set manually along with the IP address.
+
+Hosts file location (elevated privileges required to edit)
+
+| Operating System | Location |
+|---|---|
+| Linux | /etc/hosts |
+| MacOS | /private/etc/hosts |
+| Windows | C:\Windows\system32\drivers\etc\hosts |
+
+&nbsp;
+
 # Common Hermes Instructions
 
 ### Retrieve the password from the server if necessary
@@ -291,7 +305,7 @@ A login dialog box will appear asking for your credentials. Enter your username 
 
 This will register and save the credentials in the browser, and you should be able to observe the camera streams.
 
-### Configure the MCP server
+### Configure the MCP server in Hermes
 
 Edit `~/.hermes/config.yaml` and add the following towards the end of the file above the comments and replace the {{...}} fields with your local values:
 
@@ -307,7 +321,11 @@ mcp_servers:
 
 You will need to know the {{CA_CERT_PATH}} for your system. If you have installed it using the instructions above, the path can be found on Linux from the instructions for your distro. On MacOS or Windows, download the certificate and store it somewhere safe.
 
-Get your IP address using the appropriate command for your operating system. Note that if you are using a Virtual Machine, the host IP address is the correct choince, not the VM address.
+### Get client IP address
+
+The server hosting the MCP will require that the client IP address be registered before allowing access. This implies that the client has a fixed IP address. Consult your operating system documentation for instruction on how to set a static IP.
+
+Get your IP address using the appropriate command for your operating system. Note that if you are using a Virtual Machine, the host IP address is the correct choice, not the VM address.
 
 * Linux
 
@@ -327,21 +345,29 @@ Get your IP address using the appropriate command for your operating system. Not
   Get-NetIPAddress -AddressFamily IPv4 -AddressState Preferred | Select-Object IPAddress
   ```
 
-Attempt a login which will fail. This creates an entry on the server side that can be used to verify the IP address you are using.
+### Unregistered Hermes login to MCP server
+
+It is helpful to attempt a login prior to server configuration. Although this command will fail, it creates an entry on the server side that can be used to verify the IP address you are using.
 
 ```bash
 hermes mcp login camera
 ```
 
-The command will fail with a 403 error. Go to the server machine, log in and start a hermes instance and prompt. In this prompt the {{CLIENT_SOURCE_IP}} is a literal placeholder for the agent to substitute in the model call, you should replace {{REPO_PATH}} with your installation location.  
+The command will fail with a 403 error. 
+
+### Configure server access for the IP address
+
+Go to the server machine, log in and start a hermes instance and prompt. In this prompt the {{CLIENT_SOURCE_IP}} is a literal placeholder for the agent to substitute in the model call, you should replace {{REPO_PATH}} with your installation location. Assuming the {{REPO_PATH}} is $HOME, the command will take the form
 
 ```
-execute {{REPO_PATH}}/onvif-mcp/docs/ADD_CLIENT_ON_SERVER.md using `{{CLIENT_SOURCE_IP}}` <ip-address>
+execute $HOME/onvif-mcp/docs/ADD_CLIENT_ON_SERVER.md using {{CLIENT_SOURCE_IP}} <ip-address>
 ```
 
 This will register your IP address with the server to allow access. You should see confirmation that the IP address attempted to access.
 
-Back on the client machine, run the login command again, this time it should launch a browser that you have already used to login to the cameras web page and ask you to allow Hermes agent to authenticate to which you should reply yes. You may need the password again, if so use the ssh command shown above to retrieve it from the server.
+### Succcessful Hermes MCP login
+
+Back on the client machine, run the login command again, this time it should launch your default browser and ask you to authenticate. Enter your username and password, then confirm authorization for the Hermes agent.
 
 ```bash
 hermes mcp login camera
@@ -351,14 +377,6 @@ You can get the list of available tools from the server
 
 ```bash
 hermes mcp test camera
-```
-
-## Configure the browser CLI
-
-```bash
-hermes tools enable browser --platform cli
-hermes config set browser.cdp_url http://127.0.0.1:9222
-hermes config set browser.allow_private_urls true
 ```
 
 ## Prompt the agent 

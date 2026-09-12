@@ -44,7 +44,7 @@ sudo tar -C /opt -xzf nvim-linux-x86_64.tar.gz
 We need to add the nvim directory to the PATH, and conifgure sudoedit so we can use this for elevated privilege files. Open the .bashrc
 
 ```bash
-vi .bashrc
+vi ~/.bashrc
 ```
 
 And add the environment variables
@@ -67,7 +67,7 @@ sudo apt install build-essential
 sudo apt install ripgrep
 ```
 
-LazyVim needs a font package, JetBrains is widely used.
+Install JetBrains font package
 
 ```bash
 wget -P ~/.local/share/fonts https://github.com/ryanoasis/nerd-fonts/releases/download/v3.0.2/JetBrainsMono.zip && cd ~/.local/share/fonts && unzip JetBrainsMono.zip && rm JetBrainsMono.zip
@@ -96,7 +96,7 @@ nvim
 
 LazyVim will configure itself on the first nvim run.
 
-Access system clipboard
+System clipboard access
 
 ```bash
 sudo apt install wl-clipboard xclip xsel
@@ -123,7 +123,7 @@ vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold", "CursorHo
 
 ## Install VS Code
 
-Open this link in the browser to download the .deb file installer
+VS Code can be useful when editing markdown files. Open this link in the browser to download the .deb file installer
 
 ```bash
 https://code.visualstudio.com/sha/download?build=stable&os=linux-deb-x64
@@ -153,7 +153,7 @@ sudo systemctl enable --now ssh
 ## Other packages needed only if you have not installed optional tools above
 
 ```bash
-sudo apt install curl tar xz-utils
+sudo apt install curl tar xz-utils ripgrep
 ```
 
 ## Install uv
@@ -187,7 +187,7 @@ curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
 Use the minimal configuration and add the LLM model of your choice, the source the environment.
 
 ```bash
-source .bashrc
+source ~/.bashrc
 ```
 
 Edit the .hermes/config.yaml to set up the camera MCP stdio, replacing the values in {{ }} double curly braces to fit your own configuration.

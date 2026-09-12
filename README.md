@@ -1,26 +1,26 @@
 ## ONVIF MCP
 
-This project builds a secure IP camera network with enterprise grade OAuth authentication and isolated private network ONVIF cameras. Cameras can be configured such that there is no direct access between the cameras and the local network or wider internet. All camera network traffic is proxied by a single secure server. 
+This project builds a secure IP camera network with enterprise grade OAuth authentication and isolated private network ONVIF cameras. Cameras are configured such that there is no direct access between the cameras and the local network or wider internet. All camera network traffic is proxied by a single secure server. 
 
-The system employs a Hermes Agent with elevated privileges to build and manage the system. The configurations described here have been tested using a locally hosted instance of Qwen3.8 27B inference model as the source of intelligence. The system is fully autonomous and does not require any external internet connection to function once it has been set up.
+The system employs a Hermes Agent with elevated privileges to build and manage the system. The configurations described here have been tested using a locally hosted instance of Qwen3.8 27B inference model as the source of intelligence. If inference is locally hosted, the system is fully autonomous and does not require any external internet connection to function once it has been set up.
 
 ## System Requirements
 
 * Server
 
-    The system requires a server with dual network interface adapters. A LAN facing adapter connects to the local network and is accessible by other computers on the LAN. A second interface is configured as the DHCP controller providing a private isolated network hosting the cameras. The documentation has been developed and tested against an Ubuntu 26.04 Operating System installed on the server. A freshly installed, dedicated bare metal server is recommended. Computing requirements for the server are modest, a reasonably powered mini pc is ideal for the application. Reference SERVER_PREP.md in the docs folder for the recommended server configuration.
+    The system requires a server with dual network interface adapters. A LAN facing adapter connects to the local network and is accessible by other computers on the LAN. A second interface is configured as the DHCP controller providing a private isolated network hosting the cameras. The documentation has been developed and tested against an Ubuntu 26.04 Operating System installed on the server. A freshly installed, dedicated bare metal server is recommended. Computing requirements for the server are modest, a reasonably powered mini pc is ideal for the application. Reference SERVER_PREP.md in the docs folder for the recommended server setup.
 
 * AI Provider
 
-    A source of intelligence is required for the system. This configuration was developed and tested using Qwen3.8 27B model running on a NVIDIA 4500 with 32GB VRAM. This arrangement provides sufficient compute to efficiently build and run the system. A full build out will require about three hours for the agent to complete. Run time operation is sufficiently responsive that the system provides operational characteristics on par with legacy deterministic camera management systems. Lower powered compute arrangements can provide acceptable performance as well in accordance with their capability. Note that during build out, context on the order of 90k tokens is needed to avoid context compression events.
+    A source of intelligence is required for the system. This configuration was developed and tested using Qwen3.8 27B model running on a NVIDIA 4500 with 32GB VRAM. This arrangement provides sufficient compute to efficiently build and run the system. A full build out will require about three hours for the agent to complete. Run time operation is sufficiently responsive that the system provides operational characteristics on par with legacy deterministic camera management systems. Lower powered compute arrangements can provide acceptable performance as well in accordance with their capability. Note that during build out, context on the order of 90k tokens is needed to avoid context compression events. Cloud based AI works as well, use a lower tier model to conserve token usage.
 
 * Agent 
 
-    This system is designed and tested around the Hermes Agent. This agent has many characteristics that make it ideal for this application. The MCP server is hosted locally and therefore incompatible with ChatGPT and Claude Agents. OpenClaw was found to be less capable than Hermes in this scenario, and is not recommended. The Hermes Agent will require sudo privileges in order to operate reasonably.
+    This system is designed and tested around the Hermes Agent. This agent has many characteristics that make it ideal for this application. The MCP server is hosted locally and therefore incompatible with ChatGPT and Claude Agents. OpenClaw was found to be less capable than Hermes in this scenario, and is not recommended. The Hermes Agent will require sudo privileges, see the SERVER_PREP.md document for details.
 
 * Clients
 
-    Configurations are documented for clients using Windows, Mac and Linux distros Ubuntu, Fedora and Cachy OS. Other distros can be easily adopted by following the instructions for the documented distro families. For example, Omarchy is easily configured using the instructions for Cachy OS. Clients can access camera feeds using the included web applications with minimal configuration. Hermes can be used on the client for AI enhanced operation including camera configuration and control. Hermes on the client can operate with full capabilities without elevated privileges.
+    Configurations are documented for clients using Windows, Mac and Linux distros Ubuntu, Fedora and Cachy OS. Other distros can be easily adopted by following the instructions for the documented distro families. For example, Omarchy is easily configured using the instructions for Cachy OS. Android clients can be configured for access to the camera web apps. Hermes can be used on the client for AI enhanced operation including camera configuration and control. Hermes on the client can operate with full capabilities without using elevated privileges.
 
 ## Security Features
 
@@ -30,7 +30,9 @@ Clients using only the camera apps do not require any additional configuration. 
 
 ## Building the Server
 
-The server is built in four stages, Server host preparation, Plain HTTP that sets up the services without encryption, HTTPS that creates the certificate and maps the endpoints for protection, and Authentication that implements the Keycloak server for login credential requirements. A firewall can be added at the conclusion of the configuration for additional protection.
+The server is built in four stages, Server host preparation, Plain HTTP that sets up the services without encryption, HTTPS that creates the certificate and maps the endpoints for protection, and Authentication implemented by the Keycloak server for login credential requirements. A firewall can be added at the conclusion of the configuration for additional protection.
+
+Be mindful of model context size when running the configurations shown below. As they are grouped, they will require around 80k token context window for each group of Runbooks. Starting a fresh context after each group is advised for models with standard context length. Runbooks can be execute individually on systems with modest context abilities.
 
 1. ### Server Preparation
 
@@ -82,9 +84,11 @@ The server is built in four stages, Server host preparation, Plain HTTP that set
     | `{{CA_ROOT_PATH}}` | Private CA root directory (e.g. $HOME/Private-CA) | - |
     | `{{SMB_PATH}}` | SMB shared drive to be created on the local host (e.g. `/mnt/backup`) | - |
     | `{{SERVER_FQDN}}` | Fully Qualified Domain Name of the server, e.g. camera.home.arpa | - |
-    | `{{SERVER_IP}}` | The IP address of the server | - |
     | `{{SERVER_USER}}` | Account name on the server under which Hermes is run | - |
     | `{{REPO_PATH}}` | Parent directory of this repository | - |
+    | `{{SERVER_IP}}` | IP address of the server e.g. 10.1.1.2 | - |
+    | `{{RVRS_SRV_IP}}` | Reverse IP address of the server e.g. 2.1.1.10 | - |
+    | `{{UPSTREAM_DNS}}` | Upstream DNS resolver | - |
 
     **Runbooks**
 
@@ -92,6 +96,7 @@ The server is built in four stages, Server host preparation, Plain HTTP that set
     CREATE_CA_CERT.md
     SITE_CERT.md
     CA_DISTRIBUTE.md
+    DNS.md
     ```
     ---
 

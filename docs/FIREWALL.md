@@ -6,10 +6,8 @@ The important non-obvious rule is the ONVIF discovery reply range. Opening UDP 3
 
 ## Values used in this deployment
 
-| Symbol | Current value | Meaning |
+| Symbol | Example value | Meaning |
 |---|---:|---|
-| `{{LAN_IFACE}}` | `enp170s0` | Main LAN interface |
-| `{{LAN_SUBNET}}` | `10.1.1.0/24` | Trusted LAN camera/client subnet |
 | `{{CAMERA_IFACE}}` | `enp171s0` | Isolated camera network interface |
 | `{{CAMERA_SUBNET}}` | `10.2.2.0/24` | Isolated camera subnet |
 | `{{EPHEMERAL_UDP_RANGE}}` | `32768:60999` | Linux UDP destination ports used for discovery replies |
@@ -62,10 +60,8 @@ Confirm:
 Use this when building the camera server firewall from scratch. It resets existing UFW user rules.
 
 ```bash
-LAN_IFACE="enp170s0"
-LAN_SUBNET="10.1.1.0/24"
-CAMERA_IFACE="enp171s0"
-CAMERA_SUBNET="10.2.2.0/24"
+CAMERA_IFACE="{{CAMERA_IFACE}}"
+CAMERA_SUBNET="{{CAMERA_SUBNET}}"
 EPHEMERAL_UDP_RANGE="$(tr '\t ' ':' < /proc/sys/net/ipv4/ip_local_port_range)"
 
 sudo ufw --force reset
@@ -82,7 +78,6 @@ sudo ufw allow in on "$CAMERA_IFACE" to any port 67 proto udp comment 'Kea DHCP 
 sudo ufw allow 8189/udp comment 'MediaMTX WebRTC ICE/media'
 sudo ufw allow 3702/udp comment 'ONVIF WS-Discovery/libonvif'
 
-sudo ufw allow in on "$LAN_IFACE" from "$LAN_SUBNET" proto udp to any port "$EPHEMERAL_UDP_RANGE" comment 'ONVIF/libonvif UDP discovery replies from LAN cameras'
 sudo ufw allow in on "$CAMERA_IFACE" from "$CAMERA_SUBNET" proto udp to any port "$EPHEMERAL_UDP_RANGE" comment 'ONVIF/libonvif UDP discovery replies from isolated cameras'
 
 sudo ufw --force enable
@@ -94,13 +89,10 @@ sudo ufw status numbered
 Use this if UFW is already enabled and `get_cameras` returns empty after opening UDP 3702.
 
 ```bash
-LAN_IFACE="enp170s0"
-LAN_SUBNET="10.1.1.0/24"
-CAMERA_IFACE="enp171s0"
-CAMERA_SUBNET="10.2.2.0/24"
+CAMERA_IFACE="{{CAMERA_IFACE}}"
+CAMERA_SUBNET="{{CAMERA_SUBNET}}"
 EPHEMERAL_UDP_RANGE="$(tr '\t ' ':' < /proc/sys/net/ipv4/ip_local_port_range)"
 
-sudo ufw allow in on "$LAN_IFACE" from "$LAN_SUBNET" proto udp to any port "$EPHEMERAL_UDP_RANGE" comment 'ONVIF/libonvif UDP discovery replies from LAN cameras'
 sudo ufw allow in on "$CAMERA_IFACE" from "$CAMERA_SUBNET" proto udp to any port "$EPHEMERAL_UDP_RANGE" comment 'ONVIF/libonvif UDP discovery replies from isolated cameras'
 sudo ufw status numbered
 ```
@@ -113,11 +105,10 @@ OpenSSH                     ALLOW IN    Anywhere
 443/tcp                     ALLOW IN    Anywhere
 53/tcp                      ALLOW IN    Anywhere
 53/udp                      ALLOW IN    Anywhere
-67/udp on enp171s0          ALLOW IN    Anywhere
+67/udp on {{CAMERA_IFACE}}  ALLOW IN    Anywhere
 8189/udp                    ALLOW IN    Anywhere
 3702/udp                    ALLOW IN    Anywhere
-32768:60999/udp on enp170s0 ALLOW IN    10.1.1.0/24
-32768:60999/udp on enp171s0 ALLOW IN    10.2.2.0/24
+32768:60999/udp on {{CAMERA_IFACE}} ALLOW IN  {{CAMERA_SUBNET}}
 ```
 
 IPv6 companion rules for SSH, HTTP, HTTPS, DNS, DHCP, 8189, and 3702 are acceptable when UFW creates them automatically. The IPv4 ephemeral UDP reply rules are the critical libonvif discovery fix for the camera subnets above.
@@ -145,7 +136,7 @@ Check the camera MCP locally or through Hermes:
 hermes mcp test camera-new
 ```
 
-Then run the camera MCP tool `get_cameras`. It must return camera summaries, not an empty string. A healthy result on this deployment includes cameras from both `10.1.1.0/24` and `10.2.2.0/24`.
+Then run the camera MCP tool `get_cameras`. It must return camera summaries, not an empty string. A healthy result on this deployment includes cameras from `{{CAMERA_SUBNET}}`.
 
 If `get_cameras` is still empty, inspect UFW blocks while running discovery:
 
@@ -161,4 +152,4 @@ Look for blocked UDP packets from camera IPs to destination ports in the ephemer
 - Do not open the ephemeral UDP range from `Anywhere` unless this is a temporary diagnostic step. Keep it restricted to trusted camera subnets and interfaces.
 - If the kernel ephemeral range differs from `32768 60999`, use the live range from `/proc/sys/net/ipv4/ip_local_port_range`.
 - If cameras live on a different subnet, add a matching interface/subnet rule for that subnet instead of broadening the existing rules.
-- Routed traffic remains denied by default. That is intentional for the isolated camera network unless a separate runbook explicitly requires forwarding.
+- Routed traffic remains denied by default. That is intentional for the isolated camera network.
