@@ -1,6 +1,5 @@
 {
-  "description": "Camera registry - one entry per physical camera, main stream (switchboard) and substream (multiview)",
-  "generated": "2026-09-07T21:30:00Z",
-  "cameras": [
-  ]
+  "description": "Template only. Runtime deployments should serve a generated site registry from /etc/onvif-mcp/camera_registry.json at /outputs/camera_registry.json.",
+  "generated": null,
+  "cameras": []
 }

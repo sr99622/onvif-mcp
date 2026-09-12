@@ -26,13 +26,20 @@ single-camera switchboard continues to use the main stream.
 
 ## Shared data
 
-Both applications load:
+Both applications fetch this stable URL:
 
-`outputs/camera_registry.json`
+`/outputs/camera_registry.json`
 
-This is the authoritative source for camera names, addresses, manufacturers,
-models, and media-player URLs. Update the registry once and both applications
-will use the change after a page refresh.
+In production, nginx serves that URL from the generated site-specific file:
+
+`/etc/onvif-mcp/camera_registry.json`
+
+The checked-in `apps/outputs/camera_registry.json` file is only a template. Do
+not put site camera data in the git checkout; regenerate or edit the file under
+`/etc/onvif-mcp/` so repository updates cannot erase the deployed registry.
+This runtime registry is the authoritative source for camera names, addresses,
+manufacturers, models, and media-player URLs. Update it once and both
+applications will use the change after a page refresh.
 
 Camera entries may provide both `media_player_url` (main stream) and
 `substream_player_url` (lower-bandwidth stream). The multiview uses substream URL

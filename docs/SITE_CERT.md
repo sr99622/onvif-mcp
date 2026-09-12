@@ -443,12 +443,12 @@ trailing slash):
 
 ```bash
 cp --update=none \
-  {{REPO_PATH}}/onvif-mcp/apps/outputs/camera_registry.json \
-  {{REPO_PATH}}/onvif-mcp/apps/outputs/camera_registry.json.backup-$(date +%F)
+  /etc/onvif-mcp/camera_registry.json \
+  /etc/onvif-mcp/camera_registry.json.backup-$(date +%F)
 perl -pi -e 's#http://\Q{{SERVER_FQDN}}\E/webrtc/#https://{{SERVER_FQDN}}/webrtc/#g' \
-  {{REPO_PATH}}/onvif-mcp/apps/outputs/camera_registry.json
-python3 -m json.tool {{REPO_PATH}}/onvif-mcp/apps/outputs/camera_registry.json >/dev/null   # valid JSON
-rg -n 'player_url' {{REPO_PATH}}/onvif-mcp/apps/outputs/camera_registry.json               # all https://, trailing slash
+  /etc/onvif-mcp/camera_registry.json
+python3 -m json.tool /etc/onvif-mcp/camera_registry.json >/dev/null   # valid JSON
+rg -n 'player_url' /etc/onvif-mcp/camera_registry.json               # all https://, trailing slash
 ```
 
 Final URL pattern:

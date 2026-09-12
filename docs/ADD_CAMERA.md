@@ -1,5 +1,19 @@
 # Adding a New Camera
 
+## Site-specific runtime data
+
+Do not store deployed camera data in the git checkout. Repository updates may
+replace tracked templates. Generated site data lives outside the repo:
+
+- `/etc/onvif-mcp/camera_registry.json` — served by nginx as
+  `/outputs/camera_registry.json` for the web apps.
+- `/etc/onvif-mcp/snapshot_routes.json` — loaded by `services/snapshot_proxy.py`
+  at startup.
+- `/etc/mediamtx/mediamtx.yml` — MediaMTX runtime config.
+
+The checked-in `apps/outputs/camera_registry.json` is a template only, and
+`snapshot_proxy.py` must not contain site-specific routes.
+
 ## Prerequisites
 
 1. Camera must be connected to one of the server's network interfaces.
@@ -14,6 +28,7 @@
 | {{USERNAME}}    | Camera username                             |
 | {{PASSWORD}}    | Camera password                             |
 
+These values are required for operation. Stop and prompt the user if any of thempl are not provided.
 
 ## Step 1 — Discover the Camera on the Network
 
@@ -33,7 +48,12 @@ From the output, identify your new camera and note:
 
 ## Step 2 — Add Entry to Camera Registry
 
-Edit `{{REPO_PATH}}/onvif-mcp/apps/outputs/camera_registry.json`.
+Edit `/etc/onvif-mcp/camera_registry.json`.
+
+This generated runtime file is served by nginx as `/outputs/camera_registry.json`.
+Do not edit the checked-in template at
+`{{REPO_PATH}}/onvif-mcp/apps/outputs/camera_registry.json` for deployed camera
+state.
 
 Add a new object inside the `"cameras"` array. Each entry requires:
 - `hostname`, `ip_address`, `manufacturer`, `model` — descriptive metadata taken directly from the results of the get_camera query, use the literal camera field names when populating the json fields.
@@ -92,17 +112,18 @@ Note: MediaMTX hot-loads the config — **no restart needed** after editing.
 ## Step 4 — Add Snapshot Proxy Route Entries
 
 Skip this step only if the camera's `<serial_number>/<token>` pairs already have
-entries in `{{REPO_PATH}}/onvif-mcp/services/snapshot_proxy.py` (some cameras are
-pre-registered there). Without these entries, the camera's `web_snapshot_url`
-links in the apps and MCP silently return 404 — nothing else fails loudly.
+entries in `/etc/onvif-mcp/snapshot_routes.json`. Without these entries, the
+camera's `web_snapshot_url` links in the apps and MCP silently return 404 —
+nothing else fails loudly.
 
-Edit the `ROUTES` dict in `{{REPO_PATH}}/onvif-mcp/services/snapshot_proxy.py`.
-One entry per profile token used by the fleet (main stream AND every substream):
+Edit `/etc/onvif-mcp/snapshot_routes.json`. One entry per profile token used by
+the fleet (main stream AND every substream):
 
-```python
-ROUTES: dict[str, str] = {
-    ...
-    "<serial_number>/<profile_token>": "http://<camera_ip>/<vendor-specific-snapshot-path>?params",
+```json
+{
+  "routes": {
+    "<serial_number>/<profile_token>": "http://<camera_ip>/<vendor-specific-snapshot-path>?params"
+  }
 }
 ```
 
@@ -156,13 +177,13 @@ import json, re, sys
 
 repo = "{{REPO_PATH}}"
 fqdn = "{{SERVER_FQDN}}"
-proxy_py = repo + "/onvif-mcp/services/snapshot_proxy.py"
+proxy_py = "/etc/onvif-mcp/snapshot_routes.json"
 
 errors = []
 warnings = []
 
 # --- camera_registry.json: main AND substream URLs present --------------------
-with open(repo + "/onvif-mcp/apps/outputs/camera_registry.json") as f:
+with open("/etc/onvif-mcp/camera_registry.json") as f:
     data = json.load(f)
 
 required_keys = ("hostname", "ip_address", "media_player_url", "substream_player_url")
@@ -196,7 +217,9 @@ for cam in data["cameras"]:
 # --- snapshot-proxy routes: every serial/token pair must have a ROUTES entry ---
 # (missing entries mean the camera's web_snapshot_url silently does not work;
 #  see SNAPSHOT.md Step 3 — add them there, then restart snapshot-proxy)
-routes = re.findall(r'^\s*"([^"]+)"\s*:', open(proxy_py).read(), re.M)
+routes_doc = json.load(open(proxy_py))
+routes_map = routes_doc.get("routes", routes_doc)
+routes = set(routes_map)
 for name, _key, path_name in pairs:
     if path_name not in routes:
         errors.append("Missing snapshot-proxy ROUTES entry for %s: %s" % (name, path_name))

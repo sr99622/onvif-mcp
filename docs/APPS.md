@@ -50,10 +50,11 @@ system nginx user, not under a per-user `python -m http.server` process.
 
 ## Step 1: Fix the camera registry URLs
 
-`apps/outputs/camera_registry.json` is the single source of truth for
-stream URLs. The initial state of the file contains no camera data, it
-is your job to populate the fields. Required camera fields can be found
-in the data returned from the camera MCP server get_data tool call.
+`/etc/onvif-mcp/camera_registry.json` is the runtime source of truth for
+stream URLs. Nginx serves it at `/outputs/camera_registry.json`. The checked-in
+`apps/outputs/camera_registry.json` file is only a template, not deployed state.
+Required camera fields can be found in the data returned from the camera MCP
+server get_data tool call.
 Every `media_player_url` / `substream_player_url` must point at
 the **MediaMTX WebRTC player URL** — not directly at a camera RTSP URI and
 not at HTTPS (this host has no TLS):
@@ -145,9 +146,15 @@ server {
         alias {{REPO_PATH}}/onvif-mcp/apps/multiview/;
     }
 
-    # Shared camera registry — both apps fetch it at this root-relative path
+    # Shared camera registry — both apps fetch it at this root-relative path.
+    # The runtime file is generated outside the git checkout so git pulls cannot
+    # erase site-specific camera data.
+    location = /outputs/camera_registry.json {
+        alias /etc/onvif-mcp/camera_registry.json;
+    }
+
     location /outputs/ {
-        alias {{REPO_PATH}}/onvif-mcp/apps/outputs/;
+        return 404;
     }
 
     location = / {

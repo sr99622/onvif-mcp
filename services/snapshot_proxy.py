@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
 import subprocess
 import time
+from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 logging.basicConfig(
@@ -15,24 +17,44 @@ logging.basicConfig(
 )
 log = logging.getLogger("snapshot-proxy")
 
-CAMERA_USERNAME = "admin"
-CAMERA_PASSWORD = "admin123"
-HOST = "127.0.0.1"
-PORT = 8891
+CAMERA_USERNAME = os.environ.get("CAMERA_USERNAME", "admin")
+CAMERA_PASSWORD = os.environ.get("CAMERA_PASSWORD", "admin123")
+HOST = os.environ.get("SNAPSHOT_PROXY_HOST", "127.0.0.1")
+PORT = int(os.environ.get("SNAPSHOT_PROXY_PORT", "8891"))
 UPSTREAM_TIMEOUT_S = 20
+SNAPSHOT_ROUTES_FILE = os.environ.get(
+    "SNAPSHOT_ROUTES_FILE",
+    "/etc/onvif-mcp/snapshot_routes.json",
+)
 
 # Route table: "<serial>/<profile>" -> upstream snapshot URI (no credentials).
-# Sourced from each camera's ONVIF GetProfiles snapshot_uri, verified live.
-# Important Notes:
-# Many cameras do not have proper interfaces on some api calls and may display 
-# erroneous data. Some cameras may only support Basic Authentication, but also 
-# have a faulty Digest Algorithm that returns garbage. In fact, any call a camera 
-# has may behave erratically or out of spec. These are exceptions to Match
-# out for. Most cameras will work most of the time, so try to optimaize 
-# for utility without obsessing over making absolutely everything conform.
-#
-ROUTES: dict[str, str] = {
-}
+# Site-specific routes are generated outside the git checkout so repository
+# updates cannot overwrite a working camera installation.
+def load_routes(path: str | os.PathLike[str]) -> dict[str, str]:
+    route_path = Path(path)
+    if not route_path.exists():
+        log.warning("snapshot routes file does not exist: %s", route_path)
+        return {}
+
+    with route_path.open() as f:
+        data = json.load(f)
+
+    if isinstance(data, dict) and "routes" in data:
+        data = data["routes"]
+    if not isinstance(data, dict):
+        raise ValueError("snapshot routes file must be a JSON object or contain a routes object")
+
+    routes: dict[str, str] = {}
+    for key, value in data.items():
+        if not isinstance(key, str) or not isinstance(value, str):
+            raise ValueError("snapshot route keys and values must be strings")
+        if "/" not in key:
+            raise ValueError(f"snapshot route key must be '<serial>/<profile>': {key!r}")
+        routes[key] = value
+    return routes
+
+
+ROUTES = load_routes(SNAPSHOT_ROUTES_FILE)
 
 # Match the external shape: optionally-prefixed /snapshot/<serial>/<profile>/
 _ROUTE_RE = re.compile(r"^/?(?:snapshot/)?(?P<serial>[^/]+)/(?P<profile>[^/]+)/?$")

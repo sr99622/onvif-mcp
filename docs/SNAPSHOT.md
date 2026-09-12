@@ -60,6 +60,7 @@ dependencies). Bind and credentials come from environment:
 |-------------------|--------------|-----------------------------------|
 | SNAPSHOT_PROXY_HOST | 127.0.0.1  | Bind address — keep loopback only |
 | SNAPSHOT_PROXY_PORT | 8891       | Bind port                         |
+| SNAPSHOT_ROUTES_FILE | /etc/onvif-mcp/snapshot_routes.json | Generated site route table |
 | CAMERA_USERNAME   | {{USERNAME}} | Camera login                      |
 | CAMERA_PASSWORD   | {{PASSWORD}} | Camera login                      |
 
@@ -109,13 +110,15 @@ Expectations and known fleet quirks (verified):
 
 ## Step 3 — Build the Route Table
 
-In `{{REPO_PATH}}/onvif-mcp/services/snapshot_proxy.py`, the `ROUTES` dict is
-the single source of mapping from external URL to upstream camera URI:
+In `/etc/onvif-mcp/snapshot_routes.json`, the `routes` object is the single
+source of mapping from external URL to upstream camera URI. It is generated
+outside the git checkout so repository updates cannot erase site camera data:
 
-```python
-ROUTES: dict[str, str] = {
-    "<serial_number>/<profile_token>": "http://<camera_ip>/vendor-specific/path?params",
-    # one entry per profile token used by the fleet (main stream AND every substream)
+```json
+{
+  "routes": {
+    "<serial_number>/<profile_token>": "http://<camera_ip>/vendor-specific/path?params"
+  }
 }
 ```
 
@@ -153,6 +156,7 @@ WorkingDirectory={{REPO_PATH}}/onvif-mcp
 # via environment so they are not embedded in the unit file on disk.
 Environment=SNAPSHOT_PROXY_HOST=127.0.0.1
 Environment=SNAPSHOT_PROXY_PORT=8891
+Environment=SNAPSHOT_ROUTES_FILE=/etc/onvif-mcp/snapshot_routes.json
 Environment=CAMERA_USERNAME={{USERNAME}}
 Environment=CAMERA_PASSWORD={{PASSWORD}}
 ExecStart={{REPO_PATH}}/onvif-mcp/.venv/bin/python {{REPO_PATH}}/onvif-mcp/services/snapshot_proxy.py
@@ -312,8 +316,8 @@ and re-test before reloading.
 
 The service needs no nginx changes — only:
 
-1. A new entry (or entries) in `ROUTES` in `services/snapshot_proxy.py`,
-   keyed exactly like the registry/MediaMTX path name (Step 3).
+1. A new entry (or entries) in `/etc/onvif-mcp/snapshot_routes.json`, keyed
+   exactly like the registry/MediaMTX path name (Step 3).
 2. Restart the unit: `sudo systemctl restart snapshot-proxy`.
 3. Re-run the Step 5 standalone test for the new route(s), plus one browser
    check from Step 7.
