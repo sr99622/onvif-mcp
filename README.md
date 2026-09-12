@@ -1,8 +1,10 @@
 ## ONVIF MCP
 
-This project builds a secure IP camera network with enterprise grade OAuth authentication and isolated private network ONVIF cameras. Cameras are configured such that there is no direct access between the cameras and the local network or wider internet. All camera network traffic is proxied by a single secure server. 
+This project builds a secure IP camera network with enterprise grade OAuth authentication and isolated private network ONVIF cameras. Cameras can be configured such that there is no direct access between the cameras and the local network or wider internet. All camera network traffic is proxied by a single secure server. The system includes web based switchboard apps that can select single camera views or multi-camera views of live streams.
 
 The system employs a Hermes Agent with elevated privileges to build and manage the system. The configurations described here have been tested using a locally hosted instance of Qwen3.8 27B inference model as the source of intelligence. If inference is locally hosted, the system is fully autonomous and does not require any external internet connection to function once it has been set up.
+
+Clients can connect to the camera web apps without further configuration beyond entering authorization credentials. Hermes can be configured on the client side to give the agent full control over camera operation including PTZ functions with additional security safeguards.
 
 ## System Requirements
 
@@ -16,7 +18,7 @@ The system employs a Hermes Agent with elevated privileges to build and manage t
 
 * Agent 
 
-    This system is designed and tested around the Hermes Agent. This agent has many characteristics that make it ideal for this application. The MCP server is hosted locally and therefore incompatible with ChatGPT and Claude Agents. OpenClaw was found to be less capable than Hermes in this scenario, and is not recommended. The Hermes Agent will require sudo privileges, see the SERVER_PREP.md document for details.
+    This system is designed and tested around the Hermes Agent. This agent has many characteristics that make it ideal for this application. Hermes implements the full OAuth stack for MCP security and does not require any cloud access to operate. The MCP server is hosted locally and therefore not fully  compatible with ChatGPT and Claude Agents, both of which require connection to thier cloud servers for MCP operation. OpenClaw was found to be less capable than Hermes in this scenario, and is not recommended. The Hermes Agent will require sudo privileges build the server.
 
 * Clients
 
@@ -30,9 +32,9 @@ Clients using only the camera apps do not require any additional configuration. 
 
 ## Building the Server
 
-The server is built in four stages, Server host preparation, Plain HTTP that sets up the services without encryption, HTTPS that creates the certificate and maps the endpoints for protection, and Authentication implemented by the Keycloak server for login credential requirements. A firewall can be added at the conclusion of the configuration for additional protection.
+The server is built in stages as listed below. Server host preparation sets up the baseline operating system configuration, Plain HTTP sets up the services without encryption, HTTPS creates the certificate and maps the endpoints for protection, and Authentication implements the Keycloak server for login credential requirements. A firewall can be added at the conclusion of the configuration for additional protection.
 
-Be mindful of model context size when running the configurations shown below. As they are grouped, they will require around 80k token context window for each group of Runbooks. Starting a fresh context after each group is advised for models with standard context length. Runbooks can be execute individually on systems with modest context abilities.
+Be mindful of model context size when running the configurations shown below. As they are grouped, they will require around 90k token context window for each group of Runbooks. Starting a fresh context after each group is advised for models with standard context length. Runbooks can be execute individually on systems with modest context abilities.
 
 1. ### Server Preparation
 
@@ -75,7 +77,7 @@ Be mindful of model context size when running the configurations shown below. As
 
     During execution of the `CREATE_CA_CERT.md` runbook, you will be prompted for passwords three times. Firstly you will be prompted for the gpg key generation, use a key that you can remember to protect the certificate. The second prompt occurs during the backup and testing, use the option to save the key in the store when prompted to minimize the possibility of a stranded key. After the procedure has completed, you will be prompted to export the GPG keys, follow the agent instructions.
 
-    Following completion of this section, nginx will be serving the endpoints under SSL encryption and clients will need to authorize the keys from their certificate store. Instructions for client configuration are in the `CLIENT.md` runbook. The site certificate can be accessed through the unencrypted endpoint on the server at `http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt.pem`. Note that some browsers may not accept server domain names with http, you may be able to circumvent that limitation by using the numeric IP address of the server.
+    Following completion of this section, nginx will be serving the endpoints under SSL encryption and clients will need to authorize the keys from their certificate store. Instructions for client configuration are in the `CLIENT.md` runbook. The site certificate can be accessed through an unencrypted endpoint on the server.
 
     **Required Values**
 
@@ -169,13 +171,13 @@ Be mindful of model context size when running the configurations shown below. As
     **Required Values**
 
     | Name | Description |
-    |------|-------------|
-    | `{{NEW_LOGIN_USER}}` | New login username supplied by agent, e.g. `mcp-user2` | — |
-    | `{{SERVER_FQDN}}` | Server Fully Qualified Domain Name | `camera.home.arpa` |
-    | `{{FIRST_NAME}}` | New login first name, supplied by agent; must be non-empty (the realm runs an active `update-profile` required action — see Section 3a). For a machine-only account, repeat `{{NEW_LOGIN_USER}}`. | `Joe` |
-    | `{{LAST_NAME}}` | New login last name, supplied by agent; must be non-empty (see Section 3a). For a machine-only account, repeat `{{NEW_LOGIN_USER}}`. | `Blow` |
-    | `{{USER_EMAIL}}` | New login email address, supplied by agent; must be non-empty. For a machine-only account use `{{NEW_LOGIN_USER}}@{{SERVER_FQDN}}` (same convention as `{{MCP_LOGIN_USER}}`). | `joe.blow@example.com` |
-    | `{{PASSWORD}}` | **Optional** - If not specified, a random password will be generated by the system |
+    |---|---|
+    | `{{NEW_LOGIN_USER}}` | New login username supplied by agent |
+    | `{{SERVER_FQDN}}` | Server Fully Qualified Domain Name |
+    | `{{FIRST_NAME}}` | New login first name |
+    | `{{LAST_NAME}}` | New login last name |
+    | `{{USER_EMAIL}}` | New login email address |
+    | `{{PASSWORD}}` | **Optional** - If not specified, a random password will be generated by the system, root accessible at `/opt/keycloak/{{NEW_LOGIN_USER}}.pass` |
 
     **Runbook**
 
@@ -192,11 +194,11 @@ Be mindful of model context size when running the configurations shown below. As
 
 ## Configuring the Client
 
-Clients are configured using the CLIENT.md doc. Configurations have been mapped for major Linux distros, Windows and MacOS. Limited configuration for Android mobile devices gives access to the camera stream apps.
+Clients are configured using the CLIENT.md doc. Configurations have been mapped for major Linux distros, Windows and MacOS. Limited configuration for Android mobile devices gives access to the camera web apps.
 
 If the client is using MCP services, you can optimize performance with the following prompt, which should be applied after testing the client in situ.
 
 ```
-It is not necessary to verify that any of the commands have completed successfully beyond checking the return code from the tool call. The camera communications library is very reliable and will pretty much always work properly. If something has gone wrong, the user will ask explicitly for you to check. This may go against your training to always verify things, but it is important that we optimize the system to be as responsive as possible, and the post command checking slows things down considerably. If the tool call returns a success message, assume that the call succeeded and do not re-query the cameras or take a snapshot without being explicitly asked by the user. One important exception here is the appearance of the 500 error message in the browser when viewing a camera stream. The tool call will return success, but the server may show 500 due to auth token timeout. You should check for the 500 message in the title of the browser when asked to view a camera stream, and if it appears, all you need to do is refresh the browser.
+When using camera MCP server tools, it is not necessary to verify that any of the commands have completed successfully beyond checking the return code from the tool call. The camera communications library is very reliable and will pretty much always work properly. If something has gone wrong, the user will ask explicitly for you to check. This may go against your training to always verify things, but it is important that we optimize the system to be as responsive as possible, and post tool call checking slows things down considerably. If the tool call returns a success message, assume that the call succeeded and do not re-query the cameras or take a snapshot without being explicitly asked by the user. One important exception here is the appearance of the 500 error message in the browser when viewing a camera stream. The tool call will return success, but the server may show 500 due to auth token timeout. You should check for the 500 message in the title of the browser when asked to view a camera stream, and if it appears, all you need to do is refresh the browser.
 ```
 ---
