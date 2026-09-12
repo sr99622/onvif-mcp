@@ -1000,7 +1000,7 @@ callback listener binds on port 27890 even without a TTY — *provided* no
 display variables are set (`env -u DISPLAY -u WAYLAND_DISPLAY ...`), which is
 also what prevents Hermes from auto-opening a competing browser tab. Then drive
 the Keycloak side with the verified driver script
-[`docs/scripts/kc-headless-login-driver.py`](kc-headless-login-driver.py) (it reads
+[`scripts/kc-headless-login-driver.py`](../scripts/kc-headless-login-driver.py) (it reads
 the login user password from `/opt/keycloak/mcp-user.pass` via `sudo cat`; it
 never prints credentials or token values):
 
@@ -1011,7 +1011,7 @@ cd <dir> && env -u DISPLAY -u WAYLAND_DISPLAY HERMES_HOME=<dir> \
 
 # terminal B: read the printed auth URL, confirm exactly ONE flow and that a
 # listener owns 127.0.0.1:27890 (ss -ltnp | grep 27890), then:
-python3 docs/scripts/kc-headless-login-driver.py "<printed-auth-url>"
+python3 scripts/kc-headless-login-driver.py "<printed-auth-url>"
 ```
 
 The script walks login form → consent screen through the HTTPS vhost (cookies;

@@ -680,14 +680,14 @@ Also require:
 ## 9. Verify browser behavior
 
 This phase is agent-driven: there is no manual browser step. The scripted
-headless driver `docs/scripts/stream_auth_step9_driver.py` performs the whole flow in
+headless driver `scripts/stream_auth_step9_driver.py` performs the whole flow in
 one process using in-memory cookie jars (never persisted to disk) and asserts
 status codes, parameter *names* only, and landing paths — never values.
 
 Run it from the repository root:
 
 ```bash
-python3 docs/scripts/stream_auth_step9_driver.py
+python3 scripts/stream_auth_step9_driver.py
 ```
 
 All deployment-specific values are CLI parameters (`--origin`, `--target`,

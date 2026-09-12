@@ -175,7 +175,7 @@ git clone https://github.com/sr99622/onvif-mcp
 ## Set up passwordless sudo
 
 ```bash
-sudo env USER="$USER" onvif-mcp/docs/scripts/enable-nopasswd.sh
+sudo env USER="$USER" onvif-mcp/scripts/enable-nopasswd.sh
 ```
 
 ## Install Hermes
