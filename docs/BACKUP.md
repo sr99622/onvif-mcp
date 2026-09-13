@@ -332,7 +332,7 @@ Configuration completed:
 
 - TLS server key (3072-bit RSA) + CSR with `DNS:gmktec.home.arpa` SAN; signed by the private CA as serial `0x1000`, 397 days, reviewed extensions.
 - `/etc/nginx/tls/` populated (key 600 root; cert/CA/chain/CSR 644); chain = leaf + CA.
-- HTTPS server block at `/etc/nginx/conf.d/gmktec.home.arpa.conf` pinned to `10.1.1.5:443` serving apps, registry, `/webrtc/`, `/mcp`, `/snapshot/`; the `mediamtx` sites file reduced to a port-80 → HTTPS hostname redirect (pre-change copies kept as `.backup-2026-09-12`).
+- HTTPS server block at `/etc/nginx/conf.d/gmktec.home.arpa.conf` pinned to `10.1.1.5:443` serving apps, registry, `/webrtc/`, `/mcp`, `/snapshot/`; the `mediamtx` sites file reduced to a port-80 → HTTPS hostname redirect (pre-change copies kept as `.backup-2026-09-12`). *(Superseded 2026-09-12: the pin caused a boot-time bind race; see "HTTPS listener unpinned" below.)*
 - Registry player URLs flipped to `https://`; MCP service `STREAM_SERVER_URL=https://gmktec.home.arpa`.
 
 Verification performed:
@@ -1133,3 +1133,25 @@ Verification performed:
 
 - Preflight: health 200, exactly one anonymous trusted-hosts component; second direct by-ID GET after PUT passed every assert; all `/tmp` secret artifacts confirmed removed.
 - Pending: nginx `201` for the client's DCR POST from `192.168.68.57` — confirm when the client runs login (final checklist item).
+
+### HTTPS listener unpinned (SITE_CERT §9 amendment)
+
+Runbook: `{{REPO_PATH}}/onvif-mcp/docs/SITE_CERT.md` (§7/§9 updated in place)
+
+Trigger: on boot at 22:04, nginx failed with `bind() to 10.1.1.5:443 failed (99: Cannot assign requested address)` — the pinned `listen` raced NetworkManager's assignment of `{{SERVER_IP}}` to the LAN interface (stock unit orders only after `network.target`), leaving nginx failed and all HTTPS/MCP/OAuth endpoints refusing connections until a manual restart.
+
+Backup:
+
+- `/etc/nginx/conf.d/gmktec.home.arpa.conf.backup-2026-09-12` — exact pre-change file (same-disk copy; no SMB folder for this one-line amendment).
+
+Configuration completed:
+
+- `listen 10.1.1.5:443 ssl;` → `listen 443 ssl;` in `/etc/nginx/conf.d/gmktec.home.arpa.conf` (host binding dropped; `server_name` still scopes the vhost).
+- systemd drop-in `/etc/systemd/system/nginx.service.d/wait-for-network.conf` ordering nginx after `network-online.target` (belt-and-braces; retained even with the unpinned listen).
+
+Verification performed:
+
+- `nginx -t` successful; clean restart (a reload alone kept the master's old bound socket — restart required for listen changes).
+- `ss -lntp 'sport = :443'` now `0.0.0.0:443`.
+- `https://gmktec.home.arpa/mcp` → `401` (expected pre-auth) via FQDN and loopback; reboot at 22:19 with the drop-in showed correct service ordering.
+- Firewall note: unpinned listen exposes 443 on all interfaces (`10.2.2.1`, `192.168.68.5`); ufw is currently inactive, so interface restriction now depends on FIREWALL.md rules if ever desired.

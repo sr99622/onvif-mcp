@@ -9,8 +9,8 @@ the camera web stack speak HTTPS, all **on the same host that runs nginx**:
    and verify the issued certificate.
 4. Back up the updated CA state after issuance.
 5. Install leaf + CA for nginx and prove the pair works.
-6. Configure nginx: an HTTPS server block on a **specific interface** plus a
-   hostname-specific HTTP→HTTPS redirect.
+6. Configure nginx: an HTTPS server block (`listen 443 ssl`, all interfaces)
+   plus a hostname-specific HTTP→HTTPS redirect.
 7. Update downstream consumers (camera registry, `STREAM_SERVER_URL`) to HTTPS.
 8. Validate every endpoint over TLS; distribute the public CA to clients.
 
@@ -142,7 +142,7 @@ subjectAltName         = DNS:{{SERVER_FQDN}}
 
 The SAN must contain every hostname clients will use. This deployment
 intentionally uses only the canonical DNS name, not an IP SAN (clients always
-use `{{SERVER_FQDN}}`; the listener is pinned to `{{SERVER_IP}}` in §7).
+use `{{SERVER_FQDN}}`; see §7 for the listener binding).
 
 ## 5. Sign the Nginx certificate with the CA
 
@@ -271,9 +271,15 @@ block (the one created by docs/MEDIAMTX.md, docs/APPS.md and docs/SNAPSHOT.md �
 it currently serves all locations over plain HTTP port 80). The HTTPS
 deployment does two things:
 
-1. **Move every location into a new HTTPS server block** bound to
-   `{{SERVER_IP}}:443` only (not all interfaces — this keeps HTTPS off the
-   camera/Wi-Fi subnets). If an HTTPS block for this FQDN already exists, extend
+1. **Move every location into a new HTTPS server block** with
+   `listen 443 ssl;` (all interfaces). Do NOT pin the listener to
+   `{{SERVER_IP}}:443`: a pinned bind makes nginx startup race the interface
+   address assignment — Ubuntu's stock unit only waits for `network.target`,
+   not for the address to exist, so a boot where NetworkManager is slower than
+   nginx produces `bind() ... failed (99: Cannot assign requested address)`
+   and nginx stays failed until manually restarted (observed 2026-09-12).
+   Exposure on non-LAN interfaces is a firewall concern (see FIREWALL.md), not
+   a reason to pin. If an HTTPS block for this FQDN already exists, extend
    that one; never enable two files declaring the same name.
 2. **Add a hostname-specific port-80 redirect** so browsers are sent to TLS:
 
@@ -292,7 +298,7 @@ declaration per port):
 
 ```nginx
 server {
-    listen {{SERVER_IP}}:443 ssl;
+    listen 443 ssl;
     server_name {{SERVER_FQDN}};
 
     ssl_certificate     /etc/nginx/tls/{{SERVER_FQDN}}.chain.pem;
@@ -398,10 +404,10 @@ sudo systemctl reload nginx.service
 systemctl --no-pager --full status nginx.service
 ```
 
-Confirm the listener is pinned to the right interface:
+Confirm the listener is bound as expected:
 
 ```bash
-sudo ss -lntp 'sport = :443'     # expect exactly {{SERVER_IP}}:443, not *:443
+sudo ss -lntp 'sport = :443'     # expect 0.0.0.0:443 (unpinned listen)
 ```
 
 Note on the port-80 redirect block: a `default_server` may still exist for other
