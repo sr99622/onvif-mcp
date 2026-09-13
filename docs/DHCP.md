@@ -14,11 +14,54 @@ This configuration creates an isolated IPv4 network on {{EN_NAME}}:
 The server's other interface and its existing LAN/Internet configuration are not changed.
 
 ## Value provided by Agent
-| Value | Desription |
+| Value | Description |
 |---|---|
 | {{EN_NAME}} | Ethernet Adapter Interface name hosting the private camera subnet |
 
 This value is required for operation. Stop and prompt the user if it is not provided.
+
+## Backup Requirements
+
+Before changing this server, create a timestamped backup directory under `{{SMB_PATH}}`, for example:
+
+```bash
+BACKUP_DIR="{{SMB_PATH}}/dhcp-$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$BACKUP_DIR"
+```
+
+For this DHCP/Kea configuration, back up these files and state before making changes:
+
+| Source | Why it matters |
+|---|---|
+| `/etc/NetworkManager/system-connections/` | NetworkManager connection profiles, including the generated `isolated` profile for `{{EN_NAME}}` |
+| `/etc/kea/` | Kea DHCP server configuration, especially `/etc/kea/kea-dhcp4.conf` |
+| `/var/lib/kea/` | Kea lease database, including `/var/lib/kea/kea-leases4.csv` if leases exist |
+| `/etc/sysctl.d/90-isolated.conf` | Persistent IP forwarding isolation settings |
+| `nmcli`/`ip`/`sysctl`/`systemctl` command output | Rebuild evidence for interface state, routes, forwarding state, installed packages, and service state |
+
+Recommended backup commands:
+
+```bash
+BACKUP_DIR="{{SMB_PATH}}/dhcp-$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$BACKUP_DIR"
+
+nmcli -f NAME,UUID,TYPE,DEVICE connection show > "$BACKUP_DIR/nmcli-connections.txt"
+nmcli device status > "$BACKUP_DIR/nmcli-devices.txt"
+ip address show > "$BACKUP_DIR/ip-addresses.txt"
+ip route show > "$BACKUP_DIR/ip-routes.txt"
+sysctl net.ipv4.ip_forward net.ipv6.conf.all.forwarding > "$BACKUP_DIR/sysctl-forwarding.txt"
+dpkg-query -W -f='${Package} ${Version}\n' kea-common kea-dhcp4-server > "$BACKUP_DIR/kea-packages.txt" 2>/dev/null || true
+
+sudo tar --xattrs --acls --selinux -cpf "$BACKUP_DIR/etc-NetworkManager-system-connections.tar" -C / etc/NetworkManager/system-connections
+[ -d /etc/kea ] && sudo tar --xattrs --acls --selinux -cpf "$BACKUP_DIR/etc-kea.tar" -C / etc/kea
+[ -d /var/lib/kea ] && sudo tar --xattrs --acls --selinux -cpf "$BACKUP_DIR/var-lib-kea.tar" -C / var/lib/kea
+[ -e /etc/sysctl.d/90-isolated.conf ] && sudo cp -a /etc/sysctl.d/90-isolated.conf "$BACKUP_DIR/90-isolated.conf"
+
+sudo chown -R "$USER:$(id -gn)" "$BACKUP_DIR"
+( cd "$BACKUP_DIR" && sha256sum * > SHA256SUMS )
+```
+
+After configuration is complete, repeat the archive commands with `final-` prefixes so the backup contains both the pre-change state and the working configuration needed for reconstruction.
 
 ## 1. Configure Private Network Interface with NetworkManager
 

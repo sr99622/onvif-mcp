@@ -14,6 +14,71 @@ and pull live streams from the MediaMTX server
 
 These values are required for operation. Stop and prompt the user if they are not provided.
 
+## Backup Requirements
+
+Before changing this server, create a timestamped backup directory under `{{SMB_PATH}}`, for example:
+
+```bash
+BACKUP_DIR="{{SMB_PATH}}/apps-$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$BACKUP_DIR"
+```
+
+For this camera applications/nginx configuration, back up these files and state before making changes:
+
+| Source | Why it matters |
+|---|---|
+| `/etc/onvif-mcp/camera_registry.json` | Runtime site camera registry served at `/outputs/camera_registry.json`; generated outside the git checkout, so it exists nowhere else |
+| `/etc/onvif-mcp/` (whole directory) | Site config directory; also holds `snapshot_routes.json` consumed by the snapshot proxy |
+| `/etc/nginx/nginx.conf` | Main nginx config — this runbook changes the `user` directive there (`www-data` → `webcam`) |
+| `/etc/nginx/sites-available/` and `/etc/nginx/sites-enabled/` | vhost extended with `/cameras/`, `/multiview/`, `/outputs/` locations |
+| `{{REPO_PATH}}/onvif-mcp/apps/` | Static app sources served directly by nginx alias — the served content is the repo content |
+| `id`/`getent`/`stat`/`nginx -T`/HTTP check output | Rebuild evidence for the `webcam` user, group membership, directory permissions, nginx config, and endpoint behavior |
+
+Recommended backup commands:
+
+```bash
+BACKUP_DIR="{{SMB_PATH}}/apps-$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$BACKUP_DIR"
+
+{
+  printf 'SERVER_FQDN: {{SERVER_FQDN}}\n'
+  printf 'REPO_PATH: {{REPO_PATH}}\n'
+  printf 'Timestamp: %s\n' "$(date --iso-8601=seconds)"
+  id webcam 2>/dev/null || echo 'webcam user: absent'
+  getent group stephen || true
+  stat -c '%U:%G %a %n' \
+    {{REPO_PATH}} \
+    {{REPO_PATH}}/onvif-mcp \
+    {{REPO_PATH}}/onvif-mcp/apps \
+    /etc/onvif-mcp 2>&1 || true
+  grep '^user' /etc/nginx/nginx.conf || true
+  sudo nginx -T 2>/dev/null || true
+  for u in /cameras/ /multiview/ /outputs/camera_registry.json; do
+    printf '%s %s\n' "$u" "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1$u)"
+  done
+} > "$BACKUP_DIR/pre-change-state.txt"
+
+for item in \
+  /etc/nginx/nginx.conf \
+  /etc/nginx/sites-available \
+  /etc/nginx/sites-enabled \
+  /etc/onvif-mcp \
+  {{REPO_PATH}}/onvif-mcp/apps
+do
+  if [ -e "$item" ]; then
+    safe=$(printf '%s' "$item" | sed 's#^/##; s#/#-#g')
+    sudo tar --xattrs --acls --selinux -cpf "$BACKUP_DIR/${safe}.tar" -C / "${item#/}"
+  fi
+done
+
+sudo chown -R "$USER:$(id -gn)" "$BACKUP_DIR"
+( cd "$BACKUP_DIR" && sha256sum * > SHA256SUMS )
+```
+
+After configuration is complete, repeat the archive commands with `final-` prefixes so the backup contains both the pre-change state and the working configuration needed for reconstruction. Also copy the final `APPS.md` and `BACKUP.md` into the backup folder.
+
+Security note: the registry exposes camera hostnames, IPs, and stream endpoints; the backup of `/etc/onvif-mcp/` also contains `snapshot_routes.json`. No camera credentials are stored in registry or app files — authentication happens inside MediaMTX. Treat backups containing `/etc/onvif-mcp/` as sensitive.
+
 ## Applications
 
 | App | URL | Purpose |

@@ -35,6 +35,20 @@ Wired clients
 - `systemd-resolved` remains the Ubuntu host resolver on `127.0.0.53` and `127.0.0.54`.
 - backups of dnsmasq.d configs must live outside the conf-dir glob, or rename them .bak
 
+## Backup Requirements
+
+Before changing this server, create a timestamped backup directory under the SMB backup root (e.g. `{{SMB_PATH}}/Camera-System-Backup/dns-$(date +%Y%m%d-%H%M%S)` — never inside `/etc/dnsmasq.d/`, whose conf-dir glob would load stray files). For this DNS configuration, back up:
+
+| Source | Why it matters |
+|---|---|
+| `/etc/dnsmasq.d/` | camera-system.conf: bindings, private zone, upstream server, PTR record |
+| `/etc/dnsmasq.conf` | the `conf-dir=/etc/dnsmasq.d/,*.conf` enable line (line 684 on Ubuntu dnsmasq 2.92) |
+| `/etc/systemd/system/dnsmasq.service.d/` | drop-in blanking the resolver-registration hooks |
+| `/etc/default/dnsmasq` | `IGNORE_RESOLVCONF=yes` |
+| `ss`/`dig`/`systemctl`/`dpkg-query` output | Rebuild evidence for listener placement, record answers, service state, package versions |
+
+After configuration is complete, archive the same items with `final-` prefixes, generate `SHA256SUMS`, and record the entry in BACKUP.md. No secrets are involved — everything here is reproducible topology data plus the runbook.
+
 ## Client configurations
 
 - The LAN DHCP server should be edited to advertise `{{SERVER_IP}}` to wired DHCP clients, or clients may edit their local hosts file for name resolution

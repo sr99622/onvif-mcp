@@ -10,11 +10,70 @@
 | `{{REPO_PATH}}`   | Full Pathname of Repository Location            |
 | `{{SERVER_USER}}` | System user the service runs as (project owner) |
 
-These values are required for operation. Stop and prompt the user if they are not provided.
+These values are required for operation. Stop and prompt the user if any of them are not provided.
+
+## Backup Requirements
+
+Before changing this server, create a timestamped backup directory under `{{SMB_PATH}}`, for example:
+
+```bash
+BACKUP_DIR="{{SMB_PATH}}/mcp-http-$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$BACKUP_DIR"
+```
+
+For this MCP HTTP server/nginx configuration, back up these files and state before making changes:
+
+| Source | Why it matters |
+|---|---|
+| `/etc/systemd/system/onvif-mcp-http.service` | Systemd unit with runtime user, repo path, bind address, and camera credentials in `Environment=` lines; not committed to the repo |
+| `/etc/nginx/sites-available/` and `/etc/nginx/sites-enabled/` | vhost receiving the merged `/mcp` locations — this runbook must merge into the existing `{{SERVER_FQDN}}` block, never create a second vhost |
+| `{{REPO_PATH}}/onvif-mcp/.venv` | Virtualenv containing the installed `onvif-mcp-http` executable and its dependency set |
+| `systemctl`/`ss`/`nginx -T`/HTTP check output | Rebuild evidence for service state, listener state, nginx config, and endpoint behavior |
+
+Recommended backup commands:
+
+```bash
+BACKUP_DIR="{{SMB_PATH}}/mcp-http-$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$BACKUP_DIR"
+
+{
+  printf 'SERVER_FQDN: {{SERVER_FQDN}}\n'
+  printf 'REPO_PATH: {{REPO_PATH}}\n'
+  printf 'SERVER_USER: {{SERVER_USER}}\n'
+  printf 'Timestamp: %s\n' "$(date --iso-8601=seconds)"
+  systemctl is-enabled onvif-mcp-http 2>/dev/null || echo 'onvif-mcp-http: not-installed'
+  systemctl is-active onvif-mcp-http 2>/dev/null || true
+  ls -la {{REPO_PATH}}/onvif-mcp/.venv/bin/onvif-mcp-http 2>&1 || true
+  sudo ss -tlnp | grep ':8001' || echo 'no listener on 8001'
+  sudo nginx -T 2>/dev/null || true
+  for u in /cameras/ /multiview/ /outputs/camera_registry.json; do
+    printf '%-35s %s\n' "$u" "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1$u)"
+  done
+} > "$BACKUP_DIR/pre-change-state.txt"
+
+for item in \
+  /etc/systemd/system/onvif-mcp-http.service \
+  /etc/nginx/sites-available \
+  /etc/nginx/sites-enabled \
+  {{REPO_PATH}}/onvif-mcp/.venv
+do
+  if [ -e "$item" ]; then
+    safe=$(printf '%s' "$item" | sed 's#^/##; s#/#-#g')
+    sudo tar --xattrs --acls --selinux -cpf "$BACKUP_DIR/${safe}.tar" -C / "${item#/}"
+  fi
+done
+
+sudo chown -R "$USER:$(id -gn)" "$BACKUP_DIR"
+( cd "$BACKUP_DIR" && find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%P\0' | sort -z | xargs -0 sha256sum > SHA256SUMS )
+```
+
+After configuration is complete, repeat the archive commands with `final-` prefixes so the backup contains both the pre-change state and the working configuration needed for reconstruction. Also copy the final `MCP_HTTP.md` and `BACKUP.md` into the backup folder.
+
+Security note: `/etc/systemd/system/onvif-mcp-http.service` contains camera credentials in `Environment=` lines — treat any backup containing it as sensitive. The venv archive is large (~80 MB); keep it in the same restricted SMB share as the other backups.
 
 ## Overview
 
-The `onvif-mcp-http` package provides an HTTP-based MCP (Model Context Protocol) server for discovering and controlling ONVIF cameras on the local network. It exposestools through a Streamable HTTP transport (SSE + POST), accessible both locally on port 8001 and externally through nginx at `http://{{SERVER_FQDN}}/mcp/`.
+The `onvif-mcp-http` package provides an HTTP-based MCP (Model Context Protocol) server for discovering and controlling ONVIF cameras on the local network. It exposes tools through a Streamable HTTP transport (SSE + POST), accessible both locally on port 8001 and externally through nginx at `http://{{SERVER_FQDN}}/mcp/`.
 
 ## Current State
 
@@ -128,6 +187,12 @@ sudo systemctl disable onvif-mcp-http     # Disable auto-start
 ## MCP Protocol Usage (curl examples)
 
 The MCP Streamable HTTP transport uses a session-based handshake. All requests must carry the session ID from the initialize response.
+
+> **Testing note:** the upstream enforces host/origin validation — a POST to
+> `http://127.0.0.1/mcp` through nginx (or directly to `127.0.0.1:8001/mcp` with a
+> loopback Host) returns `421 Misdirected Request` / `406`. Use the real FQDN
+> (`http://{{SERVER_FQDN}}/mcp`) in these tests, or add `-H "Host: {{SERVER_FQDN}}"`
+> when targeting `127.0.0.1`. This is correct security behavior, not a broken proxy.
 
 ### Step 1: Initialize
 

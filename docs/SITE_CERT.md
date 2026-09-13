@@ -213,13 +213,13 @@ tar -tzf /tmp/.ca-decrypted.tgz    # must list key, certs, issued/, csr/, index.
 shred -u /tmp/.ca-decrypted.tgz
 
 # copy without overwriting; hashes must match exactly
-mkdir -p "{{SMB_PATH}}/Camera-CA-Backups"
+mkdir -p "{{SMB_PATH}}/Camera-System-Backup/Camera-CA-Backups"
 cp --update=none \
   "{{CA_ROOT_PATH}}/backups/camera-system-ca-after-<server>-cert-{{DATE}}.tar.gz.age" \
-  "{{SMB_PATH}}/Camera-CA-Backups/"
+  "{{SMB_PATH}}/Camera-System-Backup/Camera-CA-Backups/"
 sha256sum \
   "{{CA_ROOT_PATH}}/backups/camera-system-ca-after-<server>-cert-{{DATE}}.tar.gz.age" \
-  "{{SMB_PATH}}/Camera-CA-Backups/camera-system-ca-after-<server>-cert-{{DATE}}.tar.gz.age"
+  "{{SMB_PATH}}/Camera-System-Backup/Camera-CA-Backups/camera-system-ca-after-<server>-cert-{{DATE}}.tar.gz.age"
 ```
 
 The archive must contain the encrypted CA key, root cert, issued site
@@ -313,9 +313,16 @@ server {
         alias {{REPO_PATH}}/onvif-mcp/apps/multiview/;
     }
 
-    # Shared camera registry — both apps fetch it at this root-relative path
+    # Shared camera registry — both apps fetch it at this root-relative path.
+    # The RUNTIME file lives outside the git checkout (APPS.md Step 1); the
+    # checked-in apps/outputs/ file is a template with an empty camera list —
+    # aliasing that instead would serve an empty registry to both apps.
+    location = /outputs/camera_registry.json {
+        alias /etc/onvif-mcp/camera_registry.json;
+    }
+
     location /outputs/ {
-        alias {{REPO_PATH}}/onvif-mcp/apps/outputs/;
+        return 404;
     }
 
     # --- MediaMTX WebRTC proxy (trailing slash REQUIRED, preserve /webrtc/) ---
@@ -419,12 +426,16 @@ sudo curl -s \
   -o /tmp/e2e.jpg -w '%{http_code} %{content_type}\n' \
   https://{{SERVER_FQDN}}/snapshot/<serial>/<token>/     # real JPEG, not HTML
 
-# every app/stream endpoint must work over TLS:
+# every app/stream endpoint must work over TLS
+# (sudo: /etc/nginx/tls is mode 700 root — an unprivileged curl cannot read the
+# CA file, and curl >= 8.18 reports that failure misleadingly as
+# "option --cacert: is badly used here" rather than "permission denied")
 for u in /cameras/ /multiview/ /outputs/camera_registry.json \
          /webrtc/<SERIAL>/<TOKEN>/; do
-  curl -s --resolve {{SERVER_FQDN}}:443:{{SERVER_IP}} \
+  code=$(sudo curl -s --resolve {{SERVER_FQDN}}:443:{{SERVER_IP}} \
     --cacert /etc/nginx/tls/camera-system-root-ca.crt.pem \
-    -o /dev/null -w "%-45s %s\n" "$u" "$(curl -s -o /dev/null -w '%{http_code}' --resolve {{SERVER_FQDN}}:443:{{SERVER_IP}} --cacert /etc/nginx/tls/camera-system-root-ca.crt.pem https://{{SERVER_FQDN}}$u)"
+    -o /dev/null -w '%{http_code}' "https://{{SERVER_FQDN}}$u")
+  printf "%-45s %s\n" "$u" "$code"
 done
 
 # port-80 must bounce, not serve
@@ -441,11 +452,14 @@ self-issued CA via `/etc/nginx/tls/camera-system-root-ca.crt.pem`) and confirm s
 Back it up, then flip the scheme on every player URL (keep the existing path and
 trailing slash):
 
+The registry is owned `root:{{SERVER_USER}}` mode 640 (APPS.md), so both the
+backup copy and the in-place edit need `sudo`:
+
 ```bash
-cp --update=none \
+sudo cp --update=none \
   /etc/onvif-mcp/camera_registry.json \
   /etc/onvif-mcp/camera_registry.json.backup-$(date +%F)
-perl -pi -e 's#http://\Q{{SERVER_FQDN}}\E/webrtc/#https://{{SERVER_FQDN}}/webrtc/#g' \
+sudo perl -pi -e 's#http://\Q{{SERVER_FQDN}}\E/webrtc/#https://{{SERVER_FQDN}}/webrtc/#g' \
   /etc/onvif-mcp/camera_registry.json
 python3 -m json.tool /etc/onvif-mcp/camera_registry.json >/dev/null   # valid JSON
 rg -n 'player_url' /etc/onvif-mcp/camera_registry.json               # all https://, trailing slash

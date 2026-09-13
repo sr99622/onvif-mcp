@@ -18,7 +18,7 @@ Clients can connect to the camera web apps without further configuration beyond 
 
 * Agent 
 
-    This system is designed and tested around the Hermes Agent. This agent has many characteristics that make it ideal for this application. Hermes implements the full OAuth stack for MCP security and does not require any cloud access to operate. The MCP server is hosted locally and therefore not fully  compatible with ChatGPT and Claude Agents, both of which require connection to thier cloud servers for MCP operation. OpenClaw was found to be less capable than Hermes in this scenario, and is not recommended. The Hermes Agent will require sudo privileges build the server.
+    This system is designed and tested around the Hermes Agent. This agent has many characteristics that make it ideal for this application. Hermes implements the full OAuth stack for MCP security and does not require any cloud access to operate. The MCP server is hosted locally and therefore not fully  compatible with ChatGPT and Claude Agents, both of which require connection to their cloud servers for MCP operation. OpenClaw was found to be less capable than Hermes in this scenario, and is not recommended. The Hermes Agent will require sudo privileges to build the server.
 
 * Clients
 
@@ -44,7 +44,7 @@ Be mindful of model context size when running the configurations shown below. As
 
 2. ### HTTP Services
 
-    This is a baseline configuration required before layering encryption and authentication on the server. All essential services are initially configured here without encyption. This could theoretically be considered a fully functional unsecured system. The Hermes agent is used to perform the configuration and can be prompted to follow this document and implement the steps as described in the runbook referenced below. Values required for implementation are listed in the table, edit this document with your own site values and Hermes can implement the configuration autonomously.
+    This is a baseline configuration required before layering encryption and authentication on the server. All essential services are initially configured here without encryption. This could theoretically be considered a fully functional unsecured system. The Hermes agent is used to perform the configuration and can be prompted to follow this document and implement the steps as described in the runbook referenced below. Values required for implementation are listed in the table, edit this document with your own site values and Hermes can implement the configuration autonomously.
 
     After following the instructions in SERVER_PREP.md, attach the cameras to the second ethernet adapter. Prompt the agent with the required values and the list of runbooks to make the build. The runbooks to implement the configuration are found in the `{{REPO_PATH}}/onvif-mcp/docs` directory. The runbooks are intended to be executed in the order listed.
 
@@ -53,7 +53,7 @@ Be mindful of model context size when running the configurations shown below. As
 
     | Name | Description | Site Value |
     |------|-------------|------------|
-    | `{{EN_NAME}}` | Ethernet adpater hosting the private camera network | - |
+    | `{{EN_NAME}}` | Ethernet adapter hosting the private camera network | - |
     | `{{SERVER_FQDN}}` | Fully Qualified Domain Name of the server, e.g. camera.home.arpa | - |
     | `{{USERNAME}}` | Common username for cameras | - |
     | `{{PASSWORD}}` | Common password for cameras | - |

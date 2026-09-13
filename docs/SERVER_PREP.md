@@ -80,9 +80,9 @@ Register the font in the cache
 fc-cache -f -v 
 ```
 
-Check the exit code to make sure it completed succesfully, you may need to run this twice. For some reason it often fails on the first run. 
+Check the exit code to make sure it completed successfully, you may need to run this twice. For some reason it often fails on the first run. 
 
-Close and re-open the terminal then select Preferences from the hamburger icon in the upper right corner. Scroll down a bit and unselect 'Use Sytem Font', then use the menu to select the 'JetBrainsMono Nerd Font Mono' type of your choice.
+Close and re-open the terminal then select Preferences from the hamburger icon in the upper right corner. Scroll down a bit and unselect 'Use System Font', then use the menu to select the 'JetBrainsMono Nerd Font Mono' type of your choice.
 
 #### Install LazyVim
 
