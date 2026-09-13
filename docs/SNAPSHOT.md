@@ -45,10 +45,10 @@ These values are required for operation. Stop and prompt the user if any of them
 
 ## Backup Requirements
 
-Before changing this server, create a timestamped backup directory under `{{SMB_PATH}}`, for example:
+Before changing this server, create a timestamped backup directory under `{{BACKUP_PATH}}`, for example:
 
 ```bash
-BACKUP_DIR="{{SMB_PATH}}/snapshot-$(date +%Y%m%d-%H%M%S)"
+BACKUP_DIR="{{BACKUP_PATH}}/snapshot-$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$BACKUP_DIR"
 ```
 
@@ -65,7 +65,7 @@ For this snapshot proxy/nginx configuration, back up these files and state befor
 Recommended backup commands:
 
 ```bash
-BACKUP_DIR="{{SMB_PATH}}/snapshot-$(date +%Y%m%d-%H%M%S)"
+BACKUP_DIR="{{BACKUP_PATH}}/snapshot-$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$BACKUP_DIR"
 
 {

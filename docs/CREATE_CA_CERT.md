@@ -12,7 +12,7 @@ This runbook documents the tested, end-to-end process used to:
   share under authenticated `age` encryption and GPG-encrypted store backups.
 
 No cloud service or account is involved. Everything is encrypted locally; encrypted
-copies live on the SMB share at `{{SMB_PATH}}/Camera-System-Backup/Camera-CA-Backups/`.
+copies live on the SMB share at `{{BACKUP_PATH}}/Camera-CA-Backups/`.
 
 This document unifies two earlier, overlapping runbooks (a CA-creation runbook and a
 password-store runbook) that disagreed about where the CA passphrases come from. This
@@ -26,7 +26,7 @@ host, user account, GPG key, or prior session.
 | Name | Meaning |
 |---|---|
 | `{{CA_ROOT_PATH}}` | Private CA root directory (e.g. `/home/stephen/Private-CA`) |
-| `{{SMB_PATH}}`     | Mounted SMB share path (e.g. `/mnt/taurus`) |
+| `{{BACKUP_PATH}}`     | Mounted SMB share path (e.g. `/mnt/taurus`) |
 | `{{DATE}}`         | Current date for archive names (e.g. `2026-09-01`; never reuse a hardcoded value) |
 
 Passphrases are **not** supplied as variables and never echoed. Both live in the local
@@ -63,7 +63,7 @@ Tested on macOS and on Debian/Ubuntu Linux. Differences handled in this runbook:
 | Root CA name | `Camera System Root CA` |
 | CA working directory | `{{CA_ROOT_PATH}}/camera-system-ca` |
 | Local encrypted backups | `{{CA_ROOT_PATH}}/backups` |
-| SMB encrypted backups | `{{SMB_PATH}}/Camera-CA-Backups` |
+| SMB encrypted backups | `{{BACKUP_PATH}}/Camera-CA-Backups` |
 
 ## Security model
 
@@ -435,14 +435,14 @@ backups must include the whole directory including the hidden `.gpg-id`:
 ```bash
 tar -C ~/.password-store -czf \
   "{{CA_ROOT_PATH}}/backups/password-store-backup-{{DATE}}.tar.gz" camera-ca .gpg-id
-mkdir -p "{{SMB_PATH}}/Camera-System-Backup/Camera-CA-Backups"
+mkdir -p "{{BACKUP_PATH}}/Camera-CA-Backups"
 cp --update=none \
   "{{CA_ROOT_PATH}}/backups/password-store-backup-{{DATE}}.tar.gz" \
-  "{{SMB_PATH}}/Camera-System-Backup/Camera-CA-Backups/"
-cat ~/.password-store/.gpg-id > "{{SMB_PATH}}/Camera-System-Backup/Camera-CA-Backups/pass-gpg-id.txt"
+  "{{BACKUP_PATH}}/Camera-CA-Backups/"
+cat ~/.password-store/.gpg-id > "{{BACKUP_PATH}}/Camera-CA-Backups/pass-gpg-id.txt"
 sha256sum \
   "{{CA_ROOT_PATH}}/backups/password-store-backup-{{DATE}}.tar.gz" \
-  "{{SMB_PATH}}/Camera-System-Backup/Camera-CA-Backups/password-store-backup-{{DATE}}.tar.gz"   # hashes must match exactly
+  "{{BACKUP_PATH}}/Camera-CA-Backups/password-store-backup-{{DATE}}.tar.gz"   # hashes must match exactly
 ```
 
 ## 10. Create and verify an encrypted age archive of the CA state
@@ -488,16 +488,16 @@ there):
 ```bash
 cp --update=none \
   "{{CA_ROOT_PATH}}/backups/camera-system-ca-initial-{{DATE}}.tar.gz.age" \
-  "{{SMB_PATH}}/Camera-System-Backup/Camera-CA-Backups/"
+  "{{BACKUP_PATH}}/Camera-CA-Backups/"
 sha256sum \
   "{{CA_ROOT_PATH}}/backups/camera-system-ca-initial-{{DATE}}.tar.gz.age" \
-  "{{SMB_PATH}}/Camera-System-Backup/Camera-CA-Backups/camera-system-ca-initial-{{DATE}}.tar.gz.age"   # hashes must match exactly
+  "{{BACKUP_PATH}}/Camera-CA-Backups/camera-system-ca-initial-{{DATE}}.tar.gz.age"   # hashes must match exactly
 ```
 
 Final SMB contents after a full run:
 
 ```text
-{{SMB_PATH}}/Camera-System-Backup/Camera-CA-Backups/
+{{BACKUP_PATH}}/Camera-CA-Backups/
 ├── camera-system-ca-initial-{{DATE}}.tar.gz.age   # full CA state (age, passphrase)
 ├── password-store-backup-{{DATE}}.tar.gz          # vault entries + .gpg-id (GPG-encrypted)
 └── pass-gpg-id.txt                                # the store's .gpg-id value
@@ -514,8 +514,8 @@ identity from §2 — the agent hands this block over with it already substitute
 ```bash
 gpg --armor --export-secret-key <user-id> > ~/ca-vault-gpg.key.gpg
 chmod 600 ~/ca-vault-gpg.key.gpg
-cp ~/ca-vault-gpg.key.gpg "{{SMB_PATH}}/Camera-System-Backup/Camera-CA-Backups/"
-sha256sum ~/ca-vault-gpg.key.gpg "{{SMB_PATH}}/Camera-System-Backup/Camera-CA-Backups/ca-vault-gpg.key.gpg"
+cp ~/ca-vault-gpg.key.gpg "{{BACKUP_PATH}}/Camera-CA-Backups/"
+sha256sum ~/ca-vault-gpg.key.gpg "{{BACKUP_PATH}}/Camera-CA-Backups/ca-vault-gpg.key.gpg"
 gpg --list-packets ~/ca-vault-gpg.key.gpg   # must show a v4 passphrase-protected secret key packet
 ```
 

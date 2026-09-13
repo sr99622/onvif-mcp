@@ -27,7 +27,7 @@ vault entry `camera-ca/age-archive-<DATE>` for the age archives).
 | `{{SERVER_IP}}` | Server IP address of the interface that should publish HTTPS (e.g. `10.1.1.6`) |
 | `{{SERVER_USER}}` | `$USER` account name for the agent (the CA owner) |
 | `{{CA_ROOT_PATH}}` | Private CA root directory (e.g. `/home/stephen/Private-CA`) |
-| `{{SMB_PATH}}` | Mounted SMB share path (e.g. `/mnt/taurus`) |
+| `{{BACKUP_PATH}}` | Mounted SMB share path (e.g. `/mnt/taurus`) |
 | `{{REPO_PATH}}` | Project repository location (the onvif-mcp repo lives at `{{REPO_PATH}}/onvif-mcp`) |
 | `{{DATE}}` | Current date for archive names (e.g. `2026-09-01`; never reuse a hardcoded value) |
 
@@ -213,13 +213,13 @@ tar -tzf /tmp/.ca-decrypted.tgz    # must list key, certs, issued/, csr/, index.
 shred -u /tmp/.ca-decrypted.tgz
 
 # copy without overwriting; hashes must match exactly
-mkdir -p "{{SMB_PATH}}/Camera-System-Backup/Camera-CA-Backups"
+mkdir -p "{{BACKUP_PATH}}/Camera-CA-Backups"
 cp --update=none \
   "{{CA_ROOT_PATH}}/backups/camera-system-ca-after-<server>-cert-{{DATE}}.tar.gz.age" \
-  "{{SMB_PATH}}/Camera-System-Backup/Camera-CA-Backups/"
+  "{{BACKUP_PATH}}/Camera-CA-Backups/"
 sha256sum \
   "{{CA_ROOT_PATH}}/backups/camera-system-ca-after-<server>-cert-{{DATE}}.tar.gz.age" \
-  "{{SMB_PATH}}/Camera-System-Backup/Camera-CA-Backups/camera-system-ca-after-<server>-cert-{{DATE}}.tar.gz.age"
+  "{{BACKUP_PATH}}/Camera-CA-Backups/camera-system-ca-after-<server>-cert-{{DATE}}.tar.gz.age"
 ```
 
 The archive must contain the encrypted CA key, root cert, issued site

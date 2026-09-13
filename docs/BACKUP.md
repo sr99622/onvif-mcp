@@ -1,17 +1,39 @@
 # Camera System Backup Log
 
-Backup destination: `{{SMB_PATH}}`
+Backup destination: `{{BACKUP_PATH}}`
 
-For this server, `{{SMB_PATH}}` currently resolves to `/mnt/taurus/Camera-System-Backup`.
+For this server, `{{BACKUP_PATH}}` currently resolves to `/mnt/taurus/Camera-System-Backup`.
 
-This document records backup actions taken before and during server configuration changes. Runbooks should refer to the backup location as `{{SMB_PATH}}` so future agents can substitute the correct SMB-mounted backup folder.
+This document records backup actions taken before and during server configuration changes. Runbooks should refer to the backup location as `{{BACKUP_PATH}}` so future agents can substitute the correct SMB-mounted backup folder.
+
+## Required Values
+
+Authoritative substitutions for every `{{PLACEHOLDER}}` used in this document and its referenced runbooks. Resolve these **before** executing any runbook step; never substitute a placeholder literally, and never re-derive a value from a per-runbook mapping block below if it disagrees with this table.
+
+| Placeholder | Required value | Notes |
+|---|---|---|
+| `{{BACKUP_PATH}}` | `/mnt/taurus/Camera-System-Backup` | Backup root **includes** `Camera-System-Backup/`; backup folders are `{{BACKUP_PATH}}/<runbook-name>-{{DATETIME_STAMP}}/`. Verify the mount is present and writable first. |
+| `{{SERVER_FQDN}}` | `gmktec.home.arpa` | Must match the site certificate SAN (SITE_CERT.md §4). |
+| `{{SERVER_IP}}` | `10.1.1.5` | LAN interface address (`enp170s0`). Not used for nginx binding — 443 listens on all interfaces (SITE_CERT.md §9). |
+| `{{REPO_PATH}}` | `/home/stephen` | Parent directory of the `onvif-mcp/` checkout. |
+| `{{SERVER_USER}}` | `stephen` | Service user for snapshot-proxy and related units. |
+| `{{PRVT_CAMERA_NET_EN_NAME}}` | `enp171s0` | Private camera network interface (Kea/DHCP `isolated` profile). |
+| `{{CA_ROOT_PATH}}` | `/home/stephen/Private-CA` | Private CA working root (CREATE_CA_CERT.md). |
+| `{{USERNAME}}` | `admin` | Camera login; source of truth `~/.hermes/config.yaml` camera env. |
+| `{{PASSWORD}}` | *(not inlined — see source)* | Camera password; read from `~/.hermes/config.yaml` `mcp_servers.camera.env.CAMERA_PASSWORD` at run time. Do not copy the value into new doc sections. |
+| `{{DATETIME_STAMP}}` | generate at run time: `date +%Y%m%d-%H%M%S` | One stamp per runbook execution, reused within a run. |
+| `{{DATE}}` | generate at run time: `date +%F` | Legacy date-only stamp; prefer `{{DATETIME_STAMP}}` for new entries. |
+
+Excluded from this table by design:
+- Per-run identity inputs consumed by user/client onboarding runbooks (`ADD_USER.md`, `ADD_CLIENT_ON_SERVER.md`) — new Keycloak usernames, names, emails, and client source IPs. Those are site data persisted in the Keycloak database (and its `{{BACKUP_PATH}}` dumps); restoring the database restores them, so they are never configuration constants to track here.
+- DNS deployment values (`{{RVRS_SRV_IP}}`, `{{UPSTREAM_DNS}}`) defined in DNS.md. They are materialized inside `/etc/dnsmasq.d/camera-system.conf`, which the `dns-*` backup archives restore; `{{RVRS_SRV_IP}}` is also mechanically derived from `{{SERVER_IP}}` (its octets reversed). Resolved values live in DNS.md's own table and the live config, not here.
 
 ## Backup Naming Convention
 
-Each configuration backup is stored in a timestamped directory under `{{SMB_PATH}}`:
+Each configuration backup is stored in a timestamped directory under `{{BACKUP_PATH}}`:
 
 ```text
-{{SMB_PATH}}/<runbook-name>-{{DATETIME_STAMP}}/
+{{BACKUP_PATH}}/<runbook-name>-{{DATETIME_STAMP}}/
 ```
 
 Use `{{DATETIME_STAMP}}` for the timestamp component. Generate it at runtime with:
@@ -22,10 +44,10 @@ date +%Y%m%d-%H%M%S
 
 Examples:
 
-- `{{SMB_PATH}}/dhcp-{{DATETIME_STAMP}}/`
-- `{{SMB_PATH}}/mediamtx-{{DATETIME_STAMP}}/`
-- `{{SMB_PATH}}/snapshot-{{DATETIME_STAMP}}/`
-- `{{SMB_PATH}}/snapshot-user-correction-{{DATETIME_STAMP}}/`
+- `{{BACKUP_PATH}}/dhcp-{{DATETIME_STAMP}}/`
+- `{{BACKUP_PATH}}/mediamtx-{{DATETIME_STAMP}}/`
+- `{{BACKUP_PATH}}/snapshot-{{DATETIME_STAMP}}/`
+- `{{BACKUP_PATH}}/snapshot-user-correction-{{DATETIME_STAMP}}/`
 
 Within each backup directory:
 
@@ -40,7 +62,7 @@ Within each backup directory:
 For each server configuration we touch:
 
 1. Identify the files, directories, services, credentials, package state, and command output needed to reconstruct the configuration.
-2. Create a timestamped folder under `{{SMB_PATH}}` before making changes.
+2. Create a timestamped folder under `{{BACKUP_PATH}}` before making changes.
 3. Copy essential backup data to that folder before making changes.
 4. Preserve file ownership, permissions, timestamps, ACLs, xattrs, and symlinks where applicable.
 5. After the configuration is working, copy the final working configuration into the same backup folder with `final-` prefixes.
@@ -55,12 +77,12 @@ Runbook: `{{REPO_PATH}}/onvif-mcp/docs/DHCP.md`
 
 Runbook variables used:
 
-- `{{EN_NAME}}`: `{{PRVT_CAMERA_NET_EN_NAME}}`
-- `{{SMB_PATH}}`: `/mnt/taurus/Camera-System-Backup`
+- `{{PRVT_CAMERA_NET_EN_NAME}}`: `enp171s0`
+- `{{BACKUP_PATH}}`: `/mnt/taurus/Camera-System-Backup`
 
 Backup folder:
 
-- `{{SMB_PATH}}/dhcp-{{DATETIME_STAMP}}`
+- `{{BACKUP_PATH}}/dhcp-{{DATETIME_STAMP}}`
 
 Backed up data:
 
@@ -99,14 +121,14 @@ Runbook: `{{REPO_PATH}}/onvif-mcp/docs/MEDIAMTX.md`
 
 Runbook variables used:
 
-- `{{SERVER_FQDN}}`: `{{SERVER_FQDN}}`
+- `{{SERVER_FQDN}}`: `gmktec.home.arpa`
 - `{{USERNAME}}`: `admin`
 - `{{PASSWORD}}`: `admin123`
-- `{{SMB_PATH}}`: `/mnt/taurus/Camera-System-Backup`
+- `{{BACKUP_PATH}}`: `/mnt/taurus/Camera-System-Backup`
 
 Backup folder:
 
-- `{{SMB_PATH}}/mediamtx-{{DATETIME_STAMP}}`
+- `{{BACKUP_PATH}}/mediamtx-{{DATETIME_STAMP}}`
 
 Backed up data:
 
@@ -121,7 +143,7 @@ Backed up data:
 - `final-var-log-mediamtx.tar` — final MediaMTX log directory.
 - `final-etc-nginx-sites-available.tar` — final nginx site configs.
 - `final-etc-nginx-sites-enabled.tar` — final nginx enabled site configs.
-- `final-docs-MEDIAMTX.md` — final MediaMTX runbook with generic `{{SMB_PATH}}` backup instructions.
+- `final-docs-MEDIAMTX.md` — final MediaMTX runbook with generic `{{BACKUP_PATH}}` backup instructions.
 - `final-docs-BACKUP.md` — final backup log and reconstruction instructions.
 - `SHA256SUMS` — checksums for files in the backup folder.
 
@@ -157,16 +179,16 @@ Runbook: `{{REPO_PATH}}/onvif-mcp/docs/SNAPSHOT.md`
 
 Runbook variables used:
 
-- `{{SERVER_FQDN}}`: `{{SERVER_FQDN}}`
-- `{{REPO_PATH}}`: `{{REPO_PATH}}`
-- `{{SERVER_USER}}`: `{{SERVER_USER}}`
+- `{{SERVER_FQDN}}`: `gmktec.home.arpa`
+- `{{REPO_PATH}}`: `/home/stephen`
+- `{{SERVER_USER}}`: `stephen`
 - `{{USERNAME}}`: `admin`
 - `{{PASSWORD}}`: `admin123`
-- `{{SMB_PATH}}`: `/mnt/taurus/Camera-System-Backup`
+- `{{BACKUP_PATH}}`: `/mnt/taurus/Camera-System-Backup`
 
 Backup folder:
 
-- `{{SMB_PATH}}/snapshot-{{DATETIME_STAMP}}`
+- `{{BACKUP_PATH}}/snapshot-{{DATETIME_STAMP}}`
 
 Backed up data:
 
@@ -180,7 +202,7 @@ Backed up data:
 - `final-etc-nginx-sites-available.tar` — final nginx site configs with `/snapshot/` location.
 - `final-etc-nginx-sites-enabled.tar` — final nginx enabled site configs.
 - final `{{REPO_PATH}}/onvif-mcp/services/snapshot_proxy.py` archive — final snapshot proxy source.
-- `final-docs-SNAPSHOT.md` — final snapshot runbook with generic `{{SMB_PATH}}` backup instructions.
+- `final-docs-SNAPSHOT.md` — final snapshot runbook with generic `{{BACKUP_PATH}}` backup instructions.
 - `final-docs-BACKUP.md` — final backup log and reconstruction instructions.
 - `SHA256SUMS` — checksums for files in the backup folder.
 
@@ -213,11 +235,11 @@ Runbook variables used:
 
 - `{{SERVER_FQDN}}`: `gmktec.home.arpa`
 - `{{REPO_PATH}}`: `/home/stephen`
-- `{{SMB_PATH}}`: `/mnt/taurus/Camera-System-Backup`
+- `{{BACKUP_PATH}}`: `/mnt/taurus/Camera-System-Backup`
 
 Backup folder:
 
-- `{{SMB_PATH}}/apps-{{DATETIME_STAMP}}`
+- `{{BACKUP_PATH}}/apps-{{DATETIME_STAMP}}`
 
 Backed up data:
 
@@ -231,7 +253,7 @@ Backed up data:
 - `final-etc-nginx-sites-available.tar` / `final-etc-nginx-sites-enabled.tar` — final vhost with `/cameras/`, `/multiview/`, `/snapshot/`, `/webrtc/`, `/outputs/` locations.
 - `final-etc-onvif-mcp.tar` — final site config directory including `camera_registry.json` (7 cameras) and `snapshot_routes.json`. Sensitive: exposes camera hostnames, IPs, and endpoints.
 - `final-home-stephen-onvif-mcp-apps.tar` — final app sources actually served by nginx.
-- `final-docs-APPS.md` — final APPS runbook with generic `{{SMB_PATH}}` backup instructions.
+- `final-docs-APPS.md` — final APPS runbook with generic `{{BACKUP_PATH}}` backup instructions.
 - `SHA256SUMS` — checksums for files in the backup folder.
 
 Configuration completed:
@@ -262,11 +284,11 @@ Runbook variables used:
 - `{{SERVER_USER}}`: `stephen`
 - `{{USERNAME}}`: `admin`
 - `{{PASSWORD}}`: `admin123`
-- `{{SMB_PATH}}`: `/mnt/taurus/Camera-System-Backup`
+- `{{BACKUP_PATH}}`: `/mnt/taurus/Camera-System-Backup`
 
 Backup folder:
 
-- `{{SMB_PATH}}/mcp-http-{{DATETIME_STAMP}}`
+- `{{BACKUP_PATH}}/mcp-http-{{DATETIME_STAMP}}`
 
 Backed up data:
 
@@ -277,7 +299,7 @@ Backed up data:
 - `final-etc-systemd-system-onvif-mcp-http.service.tar` — final systemd unit. Sensitive: includes camera credentials in `Environment=` lines.
 - `final-etc-nginx-sites-available.tar` / `final-etc-nginx-sites-enabled.tar` — final vhost with merged `/mcp` locations.
 - `home-stephen-onvif-mcp-.venv.tar` (`final-` archive also present) — final virtualenv with `onvif-mcp-http==0.1.7` installed.
-- `final-docs-MCP_HTTP.md` — final runbook with generic `{{SMB_PATH}}` backup instructions and the 421 testing note.
+- `final-docs-MCP_HTTP.md` — final runbook with generic `{{BACKUP_PATH}}` backup instructions and the 421 testing note.
 - `final-docs-BACKUP.md` — final backup log and reconstruction instructions.
 - `SHA256SUMS` — checksums for files in the backup folder.
 
@@ -308,13 +330,12 @@ Runbook variables used:
 - `{{SERVER_IP}}`: `10.1.1.5`
 - `{{REPO_PATH}}`: `/home/stephen`
 - `{{CA_ROOT_PATH}}`: `/home/stephen/Private-CA`
-- `{{SMB_PATH}}`: `/mnt/taurus`
-- `{{SMB_PATH}} backup root`: `/mnt/taurus/Camera-System-Backup`
+- `{{BACKUP_PATH}}`: `/mnt/taurus/Camera-System-Backup`
 
 Backup folders:
 
-- `{{SMB_PATH}}/Camera-System-Backup/site-cert-{{DATETIME_STAMP}}` — host HTTPS configuration
-- `{{SMB_PATH}}/Camera-System-Backup/Camera-CA-Backups/camera-system-ca-after-gmktec-cert-{{DATE}}.tar.gz.age` — post-issuance CA state (age-encrypted, per SITE_CERT.md §7; created during the runbook itself)
+- `{{BACKUP_PATH}}/site-cert-{{DATETIME_STAMP}}` — host HTTPS configuration
+- `{{BACKUP_PATH}}/Camera-CA-Backups/camera-system-ca-after-gmktec-cert-{{DATE}}.tar.gz.age` — post-issuance CA state (age-encrypted, per SITE_CERT.md §7; created during the runbook itself)
 
 Backed up data (site-cert folder):
 
@@ -352,11 +373,11 @@ Runbook variables used:
 
 - `{{SERVER_FQDN}}`: `gmktec.home.arpa`
 - `{{SERVER_IP}}`: `10.1.1.5`
-- `{{SMB_PATH}} backup root`: `/mnt/taurus/Camera-System-Backup`
+- `{{BACKUP_PATH}}`: `/mnt/taurus/Camera-System-Backup`
 
 Backup folder:
 
-- `{{SMB_PATH}}/Camera-System-Backup/ca-distribute-{{DATETIME_STAMP}}`
+- `{{BACKUP_PATH}}/ca-distribute-{{DATETIME_STAMP}}`
 
 Backed up data:
 
@@ -385,10 +406,10 @@ before installing the distributed certificate.
 
 ## Reconstructing the CA distribution endpoint from backup
 
-Use these instructions with `{{SMB_PATH}}/Camera-System-Backup/ca-distribute-{{DATETIME_STAMP}}`. All contents are public material — no private key is involved in this restore.
+Use these instructions with `{{BACKUP_PATH}}/ca-distribute-{{DATETIME_STAMP}}`. All contents are public material — no private key is involved in this restore.
 
 ```bash
-BACKUP_DIR="{{SMB_PATH}}/Camera-System-Backup/ca-distribute-{{DATETIME_STAMP}}"
+BACKUP_DIR="{{BACKUP_PATH}}/ca-distribute-{{DATETIME_STAMP}}"
 sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-srv-camera-pki.tar" -C /
 sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-nginx-sites-available.tar" -C /
 sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-nginx-sites-enabled.tar" -C /
@@ -415,11 +436,11 @@ Runbook variables used:
 - `{{SERVER_IP}}`: `10.1.1.5`
 - `{{RVRS_SRV_IP}}`: `5.1.1.10`
 - `{{UPSTREAM_DNS}}`: `192.168.68.1`
-- `{{SMB_PATH}} backup root`: `/mnt/taurus/Camera-System-Backup`
+- `{{BACKUP_PATH}}`: `/mnt/taurus/Camera-System-Backup`
 
 Backup folder:
 
-- `{{SMB_PATH}}/Camera-System-Backup/dns-{{DATETIME_STAMP}}`
+- `{{BACKUP_PATH}}/dns-{{DATETIME_STAMP}}`
 
 Backed up data:
 
@@ -448,7 +469,7 @@ Verification performed:
 
 ## Reconstructing the local DNS server from backup
 
-Use these instructions with `{{SMB_PATH}}/Camera-System-Backup/dns-{{DATETIME_STAMP}}`. No private keys are involved.
+Use these instructions with `{{BACKUP_PATH}}/dns-{{DATETIME_STAMP}}`. No private keys are involved.
 
 1. Install dnsmasq using the mask procedure (the default service must not start unrestricted):
 
@@ -460,7 +481,7 @@ Use these instructions with `{{SMB_PATH}}/Camera-System-Backup/dns-{{DATETIME_ST
 2. Restore the configuration files, drop-in, and defaults (restores the conf-dir enable and camera config together):
 
    ```bash
-   BACKUP_DIR="{{SMB_PATH}}/Camera-System-Backup/dns-{{DATETIME_STAMP}}"
+   BACKUP_DIR="{{BACKUP_PATH}}/dns-{{DATETIME_STAMP}}"
    sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-dnsmasq.conf.tar" -C /
    sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-dnsmasq.d.tar" -C /
    sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-systemd-system-dnsmasq.service.d.tar" -C /
@@ -490,7 +511,7 @@ Expected restored state matches `post-change-state.txt`: enabled+active service,
 
 ## Reconstructing the DHCP/Kea server from backup
 
-Use these instructions with a selected backup folder such as `{{SMB_PATH}}/dhcp-{{DATETIME_STAMP}}`.
+Use these instructions with a selected backup folder such as `{{BACKUP_PATH}}/dhcp-{{DATETIME_STAMP}}`.
 
 1. Install required packages:
 
@@ -502,7 +523,7 @@ Use these instructions with a selected backup folder such as `{{SMB_PATH}}/dhcp-
 2. Restore NetworkManager connection profiles:
 
    ```bash
-   BACKUP_DIR="{{SMB_PATH}}/dhcp-{{DATETIME_STAMP}}"
+   BACKUP_DIR="{{BACKUP_PATH}}/dhcp-{{DATETIME_STAMP}}"
    sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-NetworkManager-system-connections.tar" -C /
    sudo systemctl restart NetworkManager
    sudo nmcli connection up isolated
@@ -511,7 +532,7 @@ Use these instructions with a selected backup folder such as `{{SMB_PATH}}/dhcp-
 3. Restore Kea configuration and lease data:
 
    ```bash
-   BACKUP_DIR="{{SMB_PATH}}/dhcp-{{DATETIME_STAMP}}"
+   BACKUP_DIR="{{BACKUP_PATH}}/dhcp-{{DATETIME_STAMP}}"
    sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-kea.tar" -C /
    sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-var-lib-kea.tar" -C /
    sudo chown root:_kea /etc/kea/kea-dhcp4.conf
@@ -521,7 +542,7 @@ Use these instructions with a selected backup folder such as `{{SMB_PATH}}/dhcp-
 4. Restore persistent forwarding isolation:
 
    ```bash
-   BACKUP_DIR="{{SMB_PATH}}/dhcp-{{DATETIME_STAMP}}"
+   BACKUP_DIR="{{BACKUP_PATH}}/dhcp-{{DATETIME_STAMP}}"
    sudo cp -a "$BACKUP_DIR/final-90-isolated.conf" /etc/sysctl.d/90-isolated.conf
    sudo sysctl --system
    ```
@@ -554,7 +575,7 @@ Expected restored state:
 
 ## Reconstructing the MediaMTX server from backup
 
-Use these instructions with a selected backup folder such as `{{SMB_PATH}}/mediamtx-{{DATETIME_STAMP}}`.
+Use these instructions with a selected backup folder such as `{{BACKUP_PATH}}/mediamtx-{{DATETIME_STAMP}}`.
 
 1. Install prerequisite package and restore the MediaMTX system user:
 
@@ -569,7 +590,7 @@ Use these instructions with a selected backup folder such as `{{SMB_PATH}}/media
 2. Restore MediaMTX binary, configuration, service unit, and state:
 
    ```bash
-   BACKUP_DIR="{{SMB_PATH}}/mediamtx-{{DATETIME_STAMP}}"
+   BACKUP_DIR="{{BACKUP_PATH}}/mediamtx-{{DATETIME_STAMP}}"
    sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-usr-local-bin-mediamtx.tar" -C /
    sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-mediamtx.tar" -C /
    sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-systemd-system-mediamtx.service.tar" -C /
@@ -583,7 +604,7 @@ Use these instructions with a selected backup folder such as `{{SMB_PATH}}/media
 3. Restore nginx site configuration:
 
    ```bash
-   BACKUP_DIR="{{SMB_PATH}}/mediamtx-{{DATETIME_STAMP}}"
+   BACKUP_DIR="{{BACKUP_PATH}}/mediamtx-{{DATETIME_STAMP}}"
    sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-nginx-sites-available.tar" -C /
    sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-nginx-sites-enabled.tar" -C /
    sudo nginx -t
@@ -624,12 +645,12 @@ Expected restored state:
 
 ## Reconstructing the snapshot proxy from backup
 
-Use these instructions with a selected backup folder such as `{{SMB_PATH}}/snapshot-{{DATETIME_STAMP}}`.
+Use these instructions with a selected backup folder such as `{{BACKUP_PATH}}/snapshot-{{DATETIME_STAMP}}`.
 
 1. Verify the service user and repository access exactly as deployed:
 
    ```bash
-   BACKUP_DIR="{{SMB_PATH}}/snapshot-{{DATETIME_STAMP}}"
+   BACKUP_DIR="{{BACKUP_PATH}}/snapshot-{{DATETIME_STAMP}}"
    id {{SERVER_USER}}
    sudo -u {{SERVER_USER}} {{REPO_PATH}}/onvif-mcp/.venv/bin/python -c 'import sys; print(sys.version.split()[0])'
    ```
@@ -637,7 +658,7 @@ Use these instructions with a selected backup folder such as `{{SMB_PATH}}/snaps
 2. Restore route table, service unit, source snapshot, and nginx config:
 
    ```bash
-   BACKUP_DIR="{{SMB_PATH}}/snapshot-{{DATETIME_STAMP}}"
+   BACKUP_DIR="{{BACKUP_PATH}}/snapshot-{{DATETIME_STAMP}}"
    sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-onvif-mcp.tar" -C /
    sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-systemd-system-snapshot-proxy.service.tar" -C /
    SNAPSHOT_PROXY_ARCHIVE=$(find "$BACKUP_DIR" -maxdepth 1 -name 'final-*-onvif-mcp-services-snapshot_proxy.py.tar' -print -quit)
@@ -686,7 +707,7 @@ Expected restored state:
 
 ## Reconstructing the camera applications from backup
 
-Use these instructions with a selected backup folder such as `{{SMB_PATH}}/apps-{{DATETIME_STAMP}}`. Requires MediaMTX and the snapshot proxy already reconstructed (their backups contain the overlapping nginx site configs; the apps backup's site configs are the newest complete set and supersede them).
+Use these instructions with a selected backup folder such as `{{BACKUP_PATH}}/apps-{{DATETIME_STAMP}}`. Requires MediaMTX and the snapshot proxy already reconstructed (their backups contain the overlapping nginx site configs; the apps backup's site configs are the newest complete set and supersede them).
 
 1. Create the web user and grant repo traversal exactly as deployed:
 
@@ -699,7 +720,7 @@ Use these instructions with a selected backup folder such as `{{SMB_PATH}}/apps-
 2. Restore nginx main config, site configs, the site directory, and app sources:
 
    ```bash
-   BACKUP_DIR="{{SMB_PATH}}/apps-{{DATETIME_STAMP}}"
+   BACKUP_DIR="{{BACKUP_PATH}}/apps-{{DATETIME_STAMP}}"
    sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-nginx-nginx.conf.tar" -C /
    sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-nginx-sites-available.tar" -C /
    sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-nginx-sites-enabled.tar" -C /
@@ -739,12 +760,12 @@ Expected restored state:
 
 ## Reconstructing the ONVIF MCP HTTP server from backup
 
-Use these instructions with a selected backup folder such as `{{SMB_PATH}}/mcp-http-{{DATETIME_STAMP}}`. This backup holds the newest complete nginx site configs (vhost includes `/webrtc/`, `/snapshot/`, apps locations, and `/mcp`) — restore it last among the HTTP-stage backups.
+Use these instructions with a selected backup folder such as `{{BACKUP_PATH}}/mcp-http-{{DATETIME_STAMP}}`. This backup holds the newest complete nginx site configs (vhost includes `/webrtc/`, `/snapshot/`, apps locations, and `/mcp`) — restore it last among the HTTP-stage backups.
 
 1. Restore the repository virtualenv (or rebuild it):
 
    ```bash
-   BACKUP_DIR="{{SMB_PATH}}/mcp-http-{{DATETIME_STAMP}}"
+   BACKUP_DIR="{{BACKUP_PATH}}/mcp-http-{{DATETIME_STAMP}}"
    sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-home-{{SERVER_USER}}-onvif-mcp-.venv.tar" -C /
    # alternative rebuild from source:
    # ( cd {{REPO_PATH}}/onvif-mcp && uv sync --frozen )
@@ -754,7 +775,7 @@ Use these instructions with a selected backup folder such as `{{SMB_PATH}}/mcp-h
 2. Restore the systemd unit and nginx site configs:
 
    ```bash
-   BACKUP_DIR="{{SMB_PATH}}/mcp-http-{{DATETIME_STAMP}}"
+   BACKUP_DIR="{{BACKUP_PATH}}/mcp-http-{{DATETIME_STAMP}}"
    sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-systemd-system-onvif-mcp-http.service.tar" -C /
    sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-nginx-sites-available.tar" -C /
    sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-nginx-sites-enabled.tar" -C /
@@ -789,14 +810,14 @@ Expected restored state:
 
 ## Reconstructing the HTTPS configuration from backup
 
-Use these instructions with a selected backup folder such as `{{SMB_PATH}}/Camera-System-Backup/site-cert-{{DATETIME_STAMP}}`. This backup holds the complete nginx configuration **as of HTTPS deployment** — if a `ca-distribute-*` backup also exists (CA_DISTRIBUTE.md), restore the sites configs from THAT folder instead (it adds the `/ca/` distribution location and supersedes these); restore HTTPS configs last among the HTTP/MCP-stage backups either way.
+Use these instructions with a selected backup folder such as `{{BACKUP_PATH}}/site-cert-{{DATETIME_STAMP}}`. This backup holds the complete nginx configuration **as of HTTPS deployment** — if a `ca-distribute-*` backup also exists (CA_DISTRIBUTE.md), restore the sites configs from THAT folder instead (it adds the `/ca/` distribution location and supersedes these); restore HTTPS configs last among the HTTP/MCP-stage backups either way.
 
 The CA itself must be restored first per CREATE_CA_CERT.md §13 (GPG key → vault → age archive). The **server private key is not in any archive** — regenerate and reissue rather than restore:
 
 1. Restore the server key and reissue a certificate (SITE_CERT.md §1–§6 + §8): generate a fresh 3072-bit key in `/etc/nginx/tls/`, create the CSR, stage it into the restored CA, sign with `openssl ca`, verify chain/purpose/hostname and key match, then install cert/CA/chain with modes 600/644. (If the old key is still intact at `/etc/nginx/tls/`, skip regeneration and reuse it — verify its hash against the archived public cert in `final-etc-nginx-tls-public.tar`.)
 
    ```bash
-   BACKUP_DIR="{{SMB_PATH}}/Camera-System-Backup/site-cert-{{DATETIME_STAMP}}"
+   BACKUP_DIR="{{BACKUP_PATH}}/site-cert-{{DATETIME_STAMP}}"
    # public material (leaf/CA/chain/CSR) for comparison or reuse if the key survived:
    sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-nginx-tls-public.tar" -C /
    ```
@@ -804,7 +825,7 @@ The CA itself must be restored first per CREATE_CA_CERT.md §13 (GPG key → vau
 2. Restore nginx configuration, site directory, and MCP unit:
 
    ```bash
-   BACKUP_DIR="{{SMB_PATH}}/Camera-System-Backup/site-cert-{{DATETIME_STAMP}}"
+   BACKUP_DIR="{{BACKUP_PATH}}/site-cert-{{DATETIME_STAMP}}"
    sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-nginx-nginx.conf.tar" -C /
    sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-nginx-conf.d.tar" -C /
    sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-nginx-sites-available.tar" -C /
@@ -853,7 +874,7 @@ Runbook variables used:
 - `{{SERVER_IP}}`: `10.1.1.5`
 - `{{REPO_PATH}}`: `/home/stephen`
 - `{{SERVER_USER}}`: `stephen`
-- `{{SMB_PATH}} backup root`: `/mnt/taurus/Camera-System-Backup`
+- `{{BACKUP_PATH}}`: `/mnt/taurus/Camera-System-Backup`
 
 Deployment constants (KEYCLOAK.md §1, non-secret):
 
@@ -863,7 +884,7 @@ Deployment constants (KEYCLOAK.md §1, non-secret):
 
 Backup folder:
 
-- `{{SMB_PATH}}/Camera-System-Backup/keycloak-{{DATETIME_STAMP}}`
+- `{{BACKUP_PATH}}/keycloak-{{DATETIME_STAMP}}`
 
 Backed up data:
 
@@ -907,14 +928,14 @@ Verification performed:
 
 ## Reconstructing the Keycloak OAuth server from backup
 
-Use these instructions with `{{SMB_PATH}}/Camera-System-Backup/keycloak-{{DATETIME_STAMP}}`. This backup holds the newest complete nginx configs (restore them last among config-stage backups) and the only copy of the Keycloak secrets and database.
+Use these instructions with `{{BACKUP_PATH}}/keycloak-{{DATETIME_STAMP}}`. This backup holds the newest complete nginx configs (restore them last among config-stage backups) and the only copy of the Keycloak secrets and database.
 
 1. Install Docker and Compose, then restore the deployment directory (secrets included):
 
    ```bash
    sudo apt-get update
    sudo apt-get install -y docker.io docker-compose-v2
-   BACKUP_DIR="{{SMB_PATH}}/Camera-System-Backup/keycloak-{{DATETIME_STAMP}}"
+   BACKUP_DIR="{{BACKUP_PATH}}/keycloak-{{DATETIME_STAMP}}"
    sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-opt-keycloak.tar" -C / opt
    sudo chown -R root:root /opt/keycloak
    sudo chmod 750 /opt/keycloak
@@ -1005,12 +1026,12 @@ Runbook variables used:
 - `{{SERVER_FQDN}}`: `gmktec.home.arpa` (user-supplied value `gmktc.home.arpa` was a typo — it does not resolve and is outside the certificate SAN; corrected with user awareness, standard placeholder-verification procedure)
 - `{{SERVER_IP}}`: `10.1.1.5`
 - `{{REPO_PATH}}`: `/home/stephen`
-- `{{SMB_PATH}} backup root`: `/mnt/taurus/Camera-System-Backup`
+- `{{BACKUP_PATH}}`: `/mnt/taurus/Camera-System-Backup`
 - Defaults as documented: realm `mcp`, browser client `camera-web`, login user `mcp-user`, oauth2-proxy `v7.15.3` on `127.0.0.1:4180`
 
 Backup folder:
 
-- `{{SMB_PATH}}/Camera-System-Backup/stream-auth-{{DATETIME_STAMP}}`
+- `{{BACKUP_PATH}}/stream-auth-{{DATETIME_STAMP}}`
 
 Backed up data:
 
@@ -1047,7 +1068,7 @@ Human-confirmation items (out of driver scope by design): live video rendering i
 
 ## Reconstructing the browser authentication gate from backup
 
-Use `{{SMB_PATH}}/Camera-System-Backup/stream-auth-{{DATETIME_STAMP}}`. This supersedes the keycloak folder's `compose.yaml`/`.env`/nginx configs and its dumps — restore this folder's artifacts after (not before) the Keycloak procedure, or simply use this folder's copies of `final-opt-keycloak.tar` and `final-etc-nginx-conf.d.tar` in place of the keycloak folder's.
+Use `{{BACKUP_PATH}}/stream-auth-{{DATETIME_STAMP}}`. This supersedes the keycloak folder's `compose.yaml`/`.env`/nginx configs and its dumps — restore this folder's artifacts after (not before) the Keycloak procedure, or simply use this folder's copies of `final-opt-keycloak.tar` and `final-etc-nginx-conf.d.tar` in place of the keycloak folder's.
 
 1. Everything in "Reconstructing the Keycloak OAuth server from backup" steps 1–4, but substituting this folder's `final-opt-keycloak.tar`, `final-var-backups-keycloak-postgres.tar`, and `final-etc-nginx-conf.d.tar`. The compose file here includes the oauth2-proxy service; `up -d` starts all three containers.
 2. Verify:
@@ -1079,11 +1100,11 @@ Runbook variables used:
 - `{{SERVER_FQDN}}`: `gmktec.home.arpa`
 - `{{FIRST_NAME}}` / `{{LAST_NAME}}` / `{{USER_EMAIL}}`: Stephen Rhodes / sr99622@gmail.com
 - `{{PASSWORD}}`: supplied by agent (see security note)
-- `{{SMB_PATH}} backup root`: `/mnt/taurus/Camera-System-Backup`
+- `{{BACKUP_PATH}}`: `/mnt/taurus/Camera-System-Backup`
 
 Backup folder:
 
-- `{{SMB_PATH}}/Camera-System-Backup/add-user-{{DATETIME_STAMP}}`
+- `{{BACKUP_PATH}}/add-user-{{DATETIME_STAMP}}`
 
 Backed up data:
 
@@ -1112,11 +1133,11 @@ Runbook: `{{REPO_PATH}}/onvif-mcp/docs/ADD_CLIENT_ON_SERVER.md`
 Runbook variables used:
 
 - `{{CLIENT_SOURCE_IP}}`: `192.168.68.57`
-- `{{SMB_PATH}} backup root`: `/mnt/taurus/Camera-System-Backup`
+- `{{BACKUP_PATH}}`: `/mnt/taurus/Camera-System-Backup`
 
 Backup folder:
 
-- `{{SMB_PATH}}/Camera-System-Backup/add-client-on-server-{{DATETIME_STAMP}}`
+- `{{BACKUP_PATH}}/add-client-on-server-{{DATETIME_STAMP}}`
 
 Backed up data:
 

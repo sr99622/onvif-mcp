@@ -2,11 +2,11 @@
 
 ## Purpose
 
-This configuration creates an isolated IPv4 network on {{EN_NAME}}:
+This configuration creates an isolated IPv4 network on {{PRVT_CAMERA_NET_EN_NAME}}:
 
 - Server address: `10.2.2.1/24`
 - DHCP pool: `10.2.2.100` through `10.2.2.200`
-- DHCP interface: {{EN_NAME}}
+- DHCP interface: {{PRVT_CAMERA_NET_EN_NAME}}
 - No default gateway supplied to clients
 - No DNS server supplied to clients
 - No routing between this subnet and the server's other network interface
@@ -16,16 +16,16 @@ The server's other interface and its existing LAN/Internet configuration are not
 ## Value provided by Agent
 | Value | Description |
 |---|---|
-| {{EN_NAME}} | Ethernet Adapter Interface name hosting the private camera subnet |
+| {{PRVT_CAMERA_NET_EN_NAME}} | Ethernet Adapter Interface name hosting the private camera subnet |
 
 This value is required for operation. Stop and prompt the user if it is not provided.
 
 ## Backup Requirements
 
-Before changing this server, create a timestamped backup directory under `{{SMB_PATH}}`, for example:
+Before changing this server, create a timestamped backup directory under `{{BACKUP_PATH}}`, for example:
 
 ```bash
-BACKUP_DIR="{{SMB_PATH}}/dhcp-$(date +%Y%m%d-%H%M%S)"
+BACKUP_DIR="{{BACKUP_PATH}}/dhcp-$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$BACKUP_DIR"
 ```
 
@@ -33,7 +33,7 @@ For this DHCP/Kea configuration, back up these files and state before making cha
 
 | Source | Why it matters |
 |---|---|
-| `/etc/NetworkManager/system-connections/` | NetworkManager connection profiles, including the generated `isolated` profile for `{{EN_NAME}}` |
+| `/etc/NetworkManager/system-connections/` | NetworkManager connection profiles, including the generated `isolated` profile for `{{PRVT_CAMERA_NET_EN_NAME}}` |
 | `/etc/kea/` | Kea DHCP server configuration, especially `/etc/kea/kea-dhcp4.conf` |
 | `/var/lib/kea/` | Kea lease database, including `/var/lib/kea/kea-leases4.csv` if leases exist |
 | `/etc/sysctl.d/90-isolated.conf` | Persistent IP forwarding isolation settings |
@@ -42,7 +42,7 @@ For this DHCP/Kea configuration, back up these files and state before making cha
 Recommended backup commands:
 
 ```bash
-BACKUP_DIR="{{SMB_PATH}}/dhcp-$(date +%Y%m%d-%H%M%S)"
+BACKUP_DIR="{{BACKUP_PATH}}/dhcp-$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$BACKUP_DIR"
 
 nmcli -f NAME,UUID,TYPE,DEVICE connection show > "$BACKUP_DIR/nmcli-connections.txt"
@@ -77,7 +77,7 @@ Create the isolated connection profile:
 ```bash
 sudo nmcli connection add \
   type ethernet \
-  ifname {{EN_NAME}} \
+  ifname {{PRVT_CAMERA_NET_EN_NAME}} \
   con-name isolated \
   ipv4.method manual \
   ipv4.addresses 10.2.2.1/24 \
@@ -102,21 +102,21 @@ Activate the profile:
 sudo nmcli connection up isolated
 ```
 
-If another NetworkManager profile is already active on {{EN_NAME}}, deactivate that profile before activating `isolated`:
+If another NetworkManager profile is already active on {{PRVT_CAMERA_NET_EN_NAME}}, deactivate that profile before activating `isolated`:
 
 ```bash
 sudo nmcli connection down "OLD-CONNECTION-NAME"
 sudo nmcli connection up isolated
 ```
 
-Note: a netplan-generated profile (e.g. `netplan-{{EN_NAME}}`) may already be active on {{EN_NAME}} even when the port shows no carrier — that is the expected "old" profile to deactivate.
+Note: a netplan-generated profile (e.g. `netplan-{{PRVT_CAMERA_NET_EN_NAME}}`) may already be active on {{PRVT_CAMERA_NET_EN_NAME}} even when the port shows no carrier — that is the expected "old" profile to deactivate.
 
 Verify the result:
 
 ```bash
-nmcli device show {{EN_NAME}}
-ip address show dev {{EN_NAME}}
-ip route show dev {{EN_NAME}}
+nmcli device show {{PRVT_CAMERA_NET_EN_NAME}}
+ip address show dev {{PRVT_CAMERA_NET_EN_NAME}}
+ip route show dev {{PRVT_CAMERA_NET_EN_NAME}}
 ```
 
 The interface should have `10.2.2.1/24`. Its route table should contain only the directly connected subnet, similar to:
@@ -125,7 +125,7 @@ The interface should have `10.2.2.1/24`. Its route table should contain only the
 10.2.2.0/24 proto kernel scope link src 10.2.2.1
 ```
 
-There must be no default route through {{EN_NAME}}.
+There must be no default route through {{PRVT_CAMERA_NET_EN_NAME}}.
 
 ## 2. Install Kea DHCPv4
 
@@ -166,7 +166,7 @@ Use this configuration:
 {
   "Dhcp4": {
     "interfaces-config": {
-      "interfaces": [ "{{EN_NAME}}" ]
+      "interfaces": [ "{{PRVT_CAMERA_NET_EN_NAME}}" ]
     },
 
     "lease-database": {

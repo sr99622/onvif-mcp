@@ -37,7 +37,7 @@ Wired clients
 
 ## Backup Requirements
 
-Before changing this server, create a timestamped backup directory under the SMB backup root (e.g. `{{SMB_PATH}}/Camera-System-Backup/dns-$(date +%Y%m%d-%H%M%S)` — never inside `/etc/dnsmasq.d/`, whose conf-dir glob would load stray files). For this DNS configuration, back up:
+Before changing this server, create a timestamped backup directory under the SMB backup root (e.g. `{{BACKUP_PATH}}/dns-$(date +%Y%m%d-%H%M%S)` — never inside `/etc/dnsmasq.d/`, whose conf-dir glob would load stray files). For this DNS configuration, back up:
 
 | Source | Why it matters |
 |---|---|
