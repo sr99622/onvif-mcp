@@ -44,9 +44,6 @@ Routes that must remain independent and must not receive browser
 
 These values are required for operation. Stop and prompt the user if they are not provided.
 
-Resolved in this deployment (verified by the 2026-09-08 preflight):
-`{{SERVER_FQDN}} = nuc.home.arpa`, `{{SERVER_IP}} = 10.1.1.6`.
-
 ## Symbolic deployment values
 
 Replace every symbolic value with the target environment's actual value.
@@ -66,7 +63,7 @@ Replace every symbolic value with the target environment's actual value.
 | `{{SNAPSHOT_PORT}}` | 8891 | Loopback snapshot proxy HTTP port |
 | `{{COMPOSE_DIR}}` | /opt/keycloak | Keycloak Compose project directory |
 | `{{ACTIVE_SITE_LINK}}` | — (no symlink; see preflight note) | Enabled Nginx site name; in this deployment the live config is a plain file in `/etc/nginx/conf.d/`, not a symlink |
-| `{{NGINX_SITE}}` | /etc/nginx/conf.d/nuc.home.arpa.conf | Active Nginx site for this deployment |
+| `{{NGINX_SITE}}` | /etc/nginx/conf.d/{{SERVER_FQDN}}.conf | Active Nginx site for this deployment |
 | `{{PRIVATE_CA_FILE}}` | /etc/nginx/tls/camera-system-root-ca.crt.pem | Public private-CA root certificate on the server |
 | `{{HERMES_SERVER_NAME}}` | camera-new | Existing Hermes MCP entry used for regression testing (resolve via `hermes mcp list`: the entry whose transport is `https://{{SERVER_FQDN}}/mcp`) |
 
@@ -211,14 +208,15 @@ Never run expanded Compose configuration in shared output because it resolves
 secret variables.
 
 Resolve the active Nginx site and inspect it before assuming its filename.
-In this deployment `/etc/nginx/sites-enabled/` is empty; the live site is a
-single file, `/etc/nginx/conf.d/nuc.home.arpa.conf`, included via
-`include /etc/nginx/conf.d/*.conf;`. Its HTTPS server listens on
-`10.1.1.6:443 ssl` with `server_name nuc.home.arpa` and contains all target
-locations (static apps, `/webrtc/`, `/snapshot/`, `/auth/`, `= /mcp`,
-`= /.well-known/oauth-protected-resource/mcp`). The port-80 server for the
-same name has no unprotected snapshot location — it redirects every path to
-`https://nuc.home.arpa$request_uri`, so Phase 7's HTTP-to-HTTPS snapshot
+Confirm whether `/etc/nginx/sites-enabled/` is empty; when it is, the live site
+is normally a single file, `/etc/nginx/conf.d/{{SERVER_FQDN}}.conf`, included via
+`include /etc/nginx/conf.d/*.conf;`. Confirm its HTTPS server's `listen`
+directive and `server_name {{SERVER_FQDN}}` against the live file (`nginx -T`)
+rather than assuming either, and confirm it contains all target locations
+(static apps, `/webrtc/`, `/snapshot/`, `/auth/`, `= /mcp`,
+`= /.well-known/oauth-protected-resource/mcp`). Inspect the port-80 server for
+the same name: if it has no unprotected snapshot location and redirects every
+path to `https://{{SERVER_FQDN}}$request_uri`, Phase 7's HTTP-to-HTTPS snapshot
 redirect is already in place.
 
 Note: `readlink -f` cannot fail on a nonexistent target — it returns the
@@ -281,13 +279,6 @@ body, and `/mcp` 401.
 
 ## 2. Prepare the browser login user
 
-Resolved in this deployment (2026-09-08 preflight): `mcp-user` exists exactly
-once in realm `mcp` and already satisfies every invariant — enabled, nonempty
-email, `emailVerified=true`, `requiredActions=[]` (UUID
-`7bc475f0-d001-40d7-9cbb-3d9f00761ce5`). Reuse it; no user mutation is needed.
-Re-run the resolution query if this section is re-executed later, and apply the
-update below only if `emailVerified` is false.
-
 Resolve `{{MCP_LOGIN_USER}}` by exact username in `{{MCP_REALM}}`. Require
 exactly one enabled user with a nonempty email address. Resolve via the list
 query (`/admin/realms/{realm}/users?username=...`) and filter for an exact
@@ -300,8 +291,7 @@ oauth2-proxy requests the `email` scope. Require:
 emailVerified = true
 requiredActions = []
 ```
-If the address was verified outside Keycloak but the flag is false, stop and
-prompt the user to enter an email account.
+If the emailVerified flag is false, stop and prompt the user to enter an email account.
 
 ## 3. Create the confidential browser client
 
@@ -377,7 +367,7 @@ missing values without checking the field.
 
 client's top-level representation might not return `authorizationServicesEnabled`
 That is the documented default-false omission; it is consistent
-with the `false` sent at creation, so no action was required.
+with the `false` sent at creation, so no action is required.
 
 The client secret is carried in the top-level field **`secret`**, not
 `clientSecret` (which is absent from this representation). Keycloak 26 also
@@ -447,15 +437,28 @@ clean retry.
 
 ## 5. Add oauth2-proxy to Compose
 
-Back up `compose.yaml` outside the active Compose model. Before pulling or
-starting, confirm two things directly: (a) the public chain — Nginx listens on
+Back up `compose.yaml` before editing it. Purpose: the §5 edit mutates the live
+Compose model in place, so the pre-change copy is the immediate-rollback path if
+the new service breaks the stack, and the provenance record for future diffs.
+Destination: `/opt/keycloak/compose.yaml.pre-oauth2-proxy` — a suffixed sibling
+in the project directory is safe (verified: `docker compose` loads only
+`compose.yaml`/`compose.override.yaml`; suffixed siblings never enter the model)
+and keeps it inside the `/opt/keycloak` tree so the Section 10 tar captures it
+into every downstream `final-opt-keycloak.tar` — no separate SMB copy needed.
+Never name it `compose.override.yaml`: that name IS the active Compose model.
+
+Before pulling or starting, confirm two things directly: (a) the public chain — Nginx listens on
 the public IP, not loopback — so use `openssl s_client -connect {{SERVER_IP}}:443 -servername {{SERVER_FQDN}}`, then verify the leaf against the CA file
 with `openssl verify -CAfile {{PRIVATE_CA_FILE}} ...`; if it does not verify, apply the
 troubleshooting-section fix rather than disabling verification. (b) which flags
 this docker build's `exec` actually supports (`docker exec --help`) before any
 later step relies on TTY or stdin patterns.
 
-Then back up `compose.yaml` outside the active Compose model and add:
+```bash
+sudo cp -a "{{COMPOSE_DIR}}/compose.yaml" "{{COMPOSE_DIR}}/compose.yaml.pre-oauth2-proxy"
+```
+
+Then add to `compose.yaml`:
 
 ```yaml
 services:
@@ -531,16 +534,33 @@ bound only to `{{LOOPBACK_IP}}`.
 
 ## 6. Add Nginx oauth2-proxy routes
 
-Back up the active site outside its include directory — every regular file
-beneath `sites-enabled/` or `conf.d/` becomes active configuration. In this
-deployment the live file is `{{NGINX_SITE}}` under `/etc/nginx/conf.d/`; copy
-the backup to a path outside both directories (e.g. under
-`/opt/keycloak/`).
+Back up the active site before editing it. Purpose: this phase rewrites the live
+HTTPS vhost in place; the pre-change copy is the rollback path if the oauth2
+routes break TLS serving, and the provenance record for §7's auth_request edits.
+
+Destination rules differ from §5's Compose backup: unlike Compose, nginx loads
+EVERY regular file beneath `sites-enabled/` and `conf.d/`, so an in-place
+suffixed sibling becomes a live duplicate `server_name` vhost. The backup must
+live outside both directories. Required location (same retention rationale as
+§5 — inside the tree that Section 10's tar sweeps into every downstream
+`final-opt-keycloak.tar`):
+
+```bash
+sudo cp -a "{{NGINX_SITE}}" "{{COMPOSE_DIR}}/{{SERVER_FQDN}}.conf.pre-stream-auth"
+```
+
+Verify the backup exists and the live site is untouched before editing:
+
+```bash
+sudo cmp "{{NGINX_SITE}}" "{{COMPOSE_DIR}}/{{SERVER_FQDN}}.conf.pre-stream-auth"
+```
 
 Add these blocks inside the HTTPS server before protected application routes.
 Canonical insertion anchor in this deployment: immediately before the
-`location /cameras/ {` line at line 19 of `/etc/nginx/conf.d/nuc.home.arpa.conf`
-— the first protected application route; verify
+`location /cameras/ {` block in `/etc/nginx/conf.d/{{SERVER_FQDN}}.conf`
+— the first protected application route. Locate the anchor by content:
+`sudo grep -n 'location /cameras/ {' "{{NGINX_SITE}}"` — expect exactly one
+match. Verify
 each new block sits after the `listen ... 443 ssl;` line and occurs exactly
 once. Do not reload Nginx after this phase: the single reload happens in
 Phase 7, after auth_request protection lands, so the site never runs with
@@ -795,6 +815,35 @@ sudo bash -c 'cat /var/backups/keycloak-postgres/DUMP_FILE.dump | \
   Require `pg_restore_exit=0`, then remove `/tmp/.chk.dump` from the container.
 - no unintended timer creation
 - all services healthy afterward
+
+The dump now exists ONLY at `/var/backups/keycloak-postgres/` (14-day local
+retention). Copying it to `{{BACKUP_PATH}}` does not happen automatically —
+no service or timer performs it — and this stage's checkpoint is worthless
+until it lands on the share. Close this stage now, per BACKUP.md's Procedure,
+into `{{BACKUP_PATH}}/stream-auth-{{DATETIME_STAMP}}` with:
+
+- `final-var-backups-keycloak-postgres.tar` — the dump set INCLUDING the
+  checkpoint dump just taken (this stage's dump is the restore source for
+  later stages until superseded by add-user/add-client).
+- `final-opt-keycloak.tar` — supersedes the keycloak folder's copy (compose
+  now has the oauth2-proxy service; `.env` has the client/cookie secrets);
+  same creation rules as KEYCLOAK.md §15b.
+- `final-etc-nginx-conf.d.tar` — newest complete conf.d (adds `/oauth2/*` +
+  `auth_request`); run the unpinned-listener check from CA_DISTRIBUTE.md
+  "Stage-close backup" BEFORE archiving — this folder's conf.d is what a
+  restore uses LAST, and the 2026-09-12 archive here carried the pinned
+  `listen` forward into the newest set (D6; the restore must otherwise
+  re-apply the amendment by hand).
+- pre/post change state files (`.env` key names + counts only, values never;
+  `.env.pre-oauth2-proxy.sha256` as the pre-change fingerprint — the pre-change
+  `.env` content itself stays in the keycloak folder's tar, no duplicate
+  secret copies on the share), `compose.yaml.pre-oauth2-proxy`,
+  `final-docs-BACKUP.md`, `SHA256SUMS`.
+
+Supersession: supersedes the keycloak folder's `final-opt-keycloak.tar`,
+dump set, and conf.d. Superseded later for opt-tar/dumps by add-user-*, then
+add-client-on-server-*. Verify before closing as in KEYCLOAK.md §15b (checksum
+round-trip, tar non-empty guards, dump catalog listing).
 
 ## Troubleshooting
 

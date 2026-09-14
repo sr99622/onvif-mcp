@@ -47,7 +47,47 @@ Before changing this server, create a timestamped backup directory under the SMB
 | `/etc/default/dnsmasq` | `IGNORE_RESOLVCONF=yes` |
 | `ss`/`dig`/`systemctl`/`dpkg-query` output | Rebuild evidence for listener placement, record answers, service state, package versions |
 
-After configuration is complete, archive the same items with `final-` prefixes, generate `SHA256SUMS`, and record the entry in BACKUP.md. No secrets are involved — everything here is reproducible topology data plus the runbook.
+After configuration is complete, archive the same items with `final-` prefixes, generate `SHA256SUMS`, and record the entry in BACKUP.md.
+
+Purpose and tier: Tier 1.5 — no secrets, but NOT casually regenerable. Two
+config pieces encode site decisions a naive reinstall will not reproduce: the
+systemd drop-in blanking `ExecStartPost=`/`ExecStop=` and
+`IGNORE_RESOLVCONF=yes` — without them dnsmasq re-registers itself with
+systemd-resolved and fights `/etc/resolv.conf`. And the whole HTTPS story
+resolves through this service: every client TLS verification of
+`{{SERVER_FQDN}}` is a DNS lookup first, so a "just reinstall it" resolver that
+differs in any binding silently breaks the apps, not just dig output.
+
+`post-change-state.txt` must capture the five restore-relevant assertions
+(these are the checks that prove a restore equivalent to §9/§10, not arbitrary
+command output): A record `{{SERVER_FQDN}}` → `{{SERVER_IP}}`, forwarded public
+answer, `*.home.arpa` NXDOMAIN isolation, the PTR answer, and the listener
+table proving dnsmasq is NOT bound on `10.2.2.1`, `0.0.0.0`, or loopback.
+
+Archive hazard (extends the conf-dir warning above): the tars themselves are a
+restoration-activation hazard — extracting `final-etc-dnsmasq.d.tar` with `-C
+/etc/dnsmasq.d` instead of `-C /` restores AND activates the config via the
+glob. Restore extracts to `/`, then `dnsmasq --test` before start; a valid but
+STALE restored file passes `--test`, so compare the restored
+`camera-system.conf` against this runbook §4 before enabling.
+
+Verify before closing (same pattern as SITE_CERT/CA_DISTRIBUTE/KEYCLOAK §15b):
+
+```bash
+BACKUP_DIR="{{BACKUP_PATH}}/dns-{{DATETIME_STAMP}}"
+( cd "$BACKUP_DIR" && sha256sum $(ls | grep -v SHA256SUMS) > SHA256SUMS \
+  && sha256sum -c SHA256SUMS )
+for t in final-etc-dnsmasq.conf final-etc-dnsmasq.d \
+         final-etc-systemd-system-dnsmasq.service.d final-etc-default-dnsmasq; do
+  tar -tf "$BACKUP_DIR/$t.tar" >/dev/null || echo "FATAL: $t.tar unreadable/empty"
+done
+```
+
+Supersession: none — this stage owns its four trees outright and no later
+stage edits them; nothing supersedes this folder, and nothing here supersedes
+any other folder. Ordering: the service must be running before client-side
+HTTPS is usable, so RESTORE.md sequences DNS mid-chain (stage 9, before
+Keycloak), not last.
 
 ## Client configurations
 

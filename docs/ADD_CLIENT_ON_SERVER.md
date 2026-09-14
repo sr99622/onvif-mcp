@@ -297,11 +297,42 @@ installed Keycloak provider accepts the intended CIDR syntax. Do not assume
 CIDR support, and do not disable Trusted Hosts merely to simplify
 onboarding.
 
+## Stage-close backup (add-client-on-server folder)
+
+The trusted-host addition lives ONLY in the Keycloak database — nothing else
+on this host records it. Close this stage after Step 4's verification, per
+BACKUP.md's Procedure, into
+`{{BACKUP_PATH}}/add-client-on-server-{{DATETIME_STAMP}}`:
+
+1. Fresh dump (must contain the policy write) + catalog check, same as
+   KEYCLOAK.md §15b:
+   ```bash
+   sudo systemctl start keycloak-postgres-backup.service
+   sudo systemctl status keycloak-postgres-backup.service --no-pager
+   ```
+2. Archive `final-var-backups-keycloak-postgres.tar` (complete dump directory,
+   root `keycloak-postgres-backups/` — D4). This folder's dump set is the
+   NEWEST restore source for the whole system — the authoritative copy of the
+   DCR policy as configured.
+3. `final-opt-keycloak.tar`: unchanged since the last stage (the policy lives
+   in the DB, not `/opt/keycloak`) — re-archive anyway for folder
+   self-sufficiency, and note "unchanged" in the entry so a restorer can tell.
+4. `post-change-state.txt`: before/after trusted-host lists (addresses are
+   policy data, not secrets — recording them is correct), the live-resolved
+   component UUID, both matching-control values, temp-artifact cleanup
+   confirmation, and the pending `201` DCR confirmation once the client logs
+   in. Tokens/passwords: never.
+5. Verify block from KEYCLOAK.md §15b (checksums, tar guards, dump catalog).
+
+Supersession: supersedes the prior stage's dump set (and opt-tar nominally,
+though identical). No later stage re-archives unless it also changes Keycloak
+state — this folder is the expected restore source until the next mutation.
+
 ## Troubleshooting
 
 - **`401` on the token endpoint** — wrong admin username or password file;
   check `{{KEYCLOAK_ADMIN_USER}}` against the permanent administrator created
-  per `KEYCLOAK_ADMIN.md`, and that `/opt/keycloak/admin.pass` is the current
+  per `KEYCLOAK.md` Section 5, and that `/opt/keycloak/admin.pass` is the current
   one. Never retry with a different realm than `master`.
 - **Zero components matching** — wrong realm, or the anonymous DCR policy was
   deleted/renamed by hand. Inspect all sub-types (`subType=anonymous`) before
@@ -325,3 +356,5 @@ onboarding.
 - Verification used a direct by-ID GET after the PUT and passed every assert.
 - Token, body, and JSON temp files are deleted; no secret is printed anywhere.
 - The client's next DCR attempt from the same address succeeds (`201`).
+- Stage-close backup complete: fresh dump containing the policy write
+  archived to `{{BACKUP_PATH}}`, checksums verify.
