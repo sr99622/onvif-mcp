@@ -586,11 +586,17 @@ Use these instructions with a selected backup folder such as `{{BACKUP_PATH}}/dh
    systemctl is-active kea-dhcp4-server
    ```
 
-   NOTE (2026-09-13 restore verification): do NOT verify Kea with
-   `ss -ulpn | grep ':67'` — Kea binds a raw AF_PACKET socket that is invisible to `ss`.
-   Use instead:
+   NOTE (2026-09-14 correction): `ss -ulpn | grep ':67'` IS the authoritative
+   listening check for Kea — it shows `10.2.2.1:67` plus the pid whenever Kea
+   has a socket open (an earlier note here claiming raw AF_PACKET sockets are
+   invisible to `ss` was a misdiagnosis: the empty result during the 2026-09-13
+   restore meant Kea had no socket open at all). Empty output = failure;
+   additionally confirm a fresh `DHCP4_LEASE_ALLOC` after a client connects.
+   Do NOT rely on lease-file rows alone — step 3 restores
+   `/var/lib/kea/kea-leases4.csv`, so stale rows are present by construction.
 
    ```bash
+   sudo ss -ulpn | grep ':67'   # must be non-empty
    journalctl -u kea-dhcp4-server --since "-2 min" --no-pager | grep -E 'DHCPREQUEST|DHCPACK'
    sudo grep -v '^#' /var/lib/kea/kea-leases4.csv   # active leases appear as rows
    ```

@@ -118,7 +118,14 @@ Ordering rules that caused real failures when ignored:
 6. Never display secret material (token files, dumps, .env values) in shared
    output; restore blind, assert modes/counts.
 7. A full restart (`restart`), not `reload`, is required for: nginx `user`
-   directive changes, `listen` directive changes, and dnsmasq directive changes.
+   directive changes, `listen` directive changes, dnsmasq directive changes,
+   and **Kea** — kea-dhcp4 reads its config file only at startup, so restoring
+   `/etc/kea/kea-dhcp4.conf` without `systemctl restart kea-dhcp4-server` is a
+   silent no-op (observed 2026-09-13: restored file on disk, daemon served the
+   packaged 192.0.2.0/24 example config for 24h with zero sockets open).
+   Note also that `apt-get install kea-dhcp4-server` auto-starts the daemon
+   with that packaged example config; any config restore must come AFTER the
+   install and must be followed by the restart.
 
 ## Known doc defects (found by executing this restore 2026-09-13)
 
@@ -126,8 +133,18 @@ Already patched into BACKUP.md:
 
 - **D1** `dhcp-*/final-etc-NetworkManager-system-connections.tar` is EMPTY.
   Recreate the profile with `nmcli connection add` per DHCP.md §1. **[verified]**
-- **D2** Kea verification via `ss -ulpn` never matches (raw AF_PACKET socket).
-  Use journalctl DHCPACK lines or lease-file rows. **[verified]**
+- **D2** ~~Kea verification via `ss -ulpn` never matches (raw AF_PACKET socket)~~
+  — **REVERSED (2026-09-14)**: the original D2 was a misdiagnosis. `ss -ulpn
+  | grep ':67'` DOES show Kea (`10.2.2.1:67` + pid) whenever it is actually
+  listening — it also did in the 2026-09-12 post-change state. During the
+  2026-09-13 restore it returned nothing because Kea had **no socket open**
+  (`DHCPSRV_NO_SOCKETS_OPEN`: the daemon kept the packaged 192.0.2.0/24 config
+  in memory; the restored file was never loaded). Empty `ss` output is the
+  authoritative *failure* signal, not a tool limitation. Verified 2026-09-14:
+  after `systemctl restart kea-dhcp4-server`, `ss -ulpn | grep ':67'` shows the
+  socket and the first client lease is allocated within seconds. Do NOT verify
+  with lease-file rows alone — the restore extracts `final-var-lib-kea.tar`, so
+  stale lease rows are present by construction.
 - **D3** No restore section removes `sites-enabled/default` (global rule 3).
 - **D4** Keycloak tars root at `keycloak/` and `keycloak-postgres-backups/`, not
   `/opt` and `/var/backups/keycloak-postgres` — fix `-C` targets, then move.
@@ -160,7 +177,7 @@ Still open (not yet patched):
 Until BACKUP.md is restructured, execute the matching "Reconstructing…"
 section in BACKUP.md for each stage, with the amendments above:
 
-1. DHCP/Kea → BACKUP.md "Reconstructing the DHCP/Kea server from backup" (apply D1, D2)
+1. DHCP/Kea → BACKUP.md "Reconstructing the DHCP/Kea server from backup" (apply D1; D2 corrected 2026-09-14 — use `ss -ulpn | grep ':67'` as the listening check). **[D1 verified; stage NOT verified on 2026-09-13 — Kea kept the packaged 192.0.2.0/24 config in memory after the file restore (no restart) and served zero leases until fixed 2026-09-14]**
 2. MediaMTX → "Reconstructing the MediaMTX server from backup" (add: remove default site)
 3. Snapshot → "Reconstructing the snapshot proxy from backup" (then overlay `snapshot-user-correction-*/final-etc-systemd-system-snapshot-proxy.service.tar` + `final-etc-onvif-mcp.tar`) **[verified]**
 4. Apps → "Reconstructing the camera applications from backup" **[verified — all checks passed]**
@@ -183,7 +200,12 @@ All four must pass before declaring the restore complete:
 2. `hermes mcp test camera-new` → connects, 29 tools **[verified]**
 3. Services table: kea-dhcp4-server, mediamtx, snapshot-proxy, onvif-mcp-http,
    dnsmasq, nginx, docker all enabled+active; keycloak/postgres/oauth2-proxy
-   containers up (postgres healthy) **[verified]**
+   containers up (postgres healthy) **[verified]** — but systemctl-active is
+   NOT sufficient evidence for daemons that can run with a broken config
+   (observed: kea-dhcp4-server "active" with zero sockets for 24h). Kea must
+   additionally pass the functional check:
+   `sudo ss -ulpn | grep ':67'` non-empty, ideally followed by a fresh
+   `DHCP4_LEASE_ALLOC` in journalctl after a client connects.
 4. Post-restore backups: fresh `keycloak-postgres-backup.service` run + new CA
    `after-*-cert` age archive copied to `{{BACKUP_PATH}}/Camera-CA-Backups/`
    (a restore that reissued the cert invalidated the previous CA archive's
