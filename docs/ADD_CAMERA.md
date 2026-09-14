@@ -28,7 +28,61 @@ The checked-in `apps/outputs/camera_registry.json` is a template only, and
 | {{USERNAME}}    | Camera username                             |
 | {{PASSWORD}}    | Camera password                             |
 
-These values are required for operation. Stop and prompt the user if any of thempl are not provided.
+These values are required for operation. Stop and prompt the user if any of them are not provided.
+
+## Backup Requirements
+
+Back up before every camera add/move/removal. These runtime files are the only
+copy of deployed camera state — the git checkout holds templates only — and
+they contain RTSP credentials.
+
+Create a timestamped folder under `{{BACKUP_PATH}}` (site value:
+`/mnt/taurus/Camera-System-Backup`; see BACKUP.md Required Values):
+
+```bash
+BACKUP_DIR="{{BACKUP_PATH}}/camera-config-$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$BACKUP_DIR"
+
+# Full directory tars (preserve perms/ACLs; files are 0640 with credentials)
+sudo tar --xattrs --acls --selinux -cpf "$BACKUP_DIR/pre-etc-onvif-mcp.tar" -C / etc/onvif-mcp
+sudo tar --xattrs --acls --selinux -cpf "$BACKUP_DIR/pre-etc-mediamtx.tar" -C / etc/mediamtx
+
+# Individual copies for easy diffing during the change
+sudo cp -a /etc/onvif-mcp/camera_registry.json "$BACKUP_DIR/pre-camera_registry.json"
+sudo cp -a /etc/onvif-mcp/snapshot_routes.json "$BACKUP_DIR/pre-snapshot_routes.json"
+sudo cp -a /etc/mediamtx/mediamtx.yml "$BACKUP_DIR/pre-mediamtx.yml"
+
+# Evidence of what was on the network before the change (detects moves vs adds)
+sudo cp /var/lib/kea/kea-leases4.csv "$BACKUP_DIR/pre-kea-leases4.csv"
+ip neigh show | grep -E '10\.2\.2\.|10\.1\.1\.' > "$BACKUP_DIR/ip-neigh-camera-net.txt"
+nmcli device status > "$BACKUP_DIR/nmcli-devices.txt"
+```
+
+Also save the raw `get_cameras` discovery output to
+`$BACKUP_DIR/pre-discovery.txt` — it is the authoritative "before" snapshot
+(device hostnames, serials, addresses) that Step 1 diffs against.
+
+After the change passes Step 5 verification, re-archive with `final-` prefixes
+and record what changed:
+
+```bash
+sudo cp -a /etc/onvif-mcp/camera_registry.json "$BACKUP_DIR/final-camera_registry.json"
+sudo cp -a /etc/onvif-mcp/snapshot_routes.json "$BACKUP_DIR/final-snapshot_routes.json"
+sudo cp -a /etc/mediamtx/mediamtx.yml "$BACKUP_DIR/final-mediamtx.yml"
+sudo tar --xattrs --acls --selinux -cpf "$BACKUP_DIR/final-etc-onvif-mcp.tar" -C / etc/onvif-mcp
+sudo tar --xattrs --acls --selinux -cpf "$BACKUP_DIR/final-etc-mediamtx.tar" -C / etc/mediamtx
+# write post-change-state.txt: date/time, cameras moved/added/removed, verification results
+( cd "$BACKUP_DIR" && sha256sum * > SHA256SUMS && sha256sum -c SHA256SUMS )
+```
+
+Restore after a failed change = extract the `pre-*` tars (`sudo tar -xpf <tar> -C /`),
+re-run the Step 5 verification script, and `sudo systemctl restart snapshot-proxy`
+(MediaMTX hot-reloads; the proxy does not).
+
+Note: the whole-system restore in RESTORE.md rebuilds `/etc/onvif-mcp` and
+`/etc/mediamtx` from `site-cert-*`/`mediamtx-*` stage tars, which predate later
+camera changes — after any whole-system restore, re-apply camera state from the
+newest `camera-config-*/final-*` artifacts.
 
 ## Step 1 — Discover the Camera on the Network
 
