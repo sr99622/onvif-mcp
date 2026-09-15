@@ -1,4 +1,4 @@
-# Camera Snapshot Service (Option 1: Direct Camera Endpoints)
+# Camera Snapshot Service
 
 This document describes how to build and test the snapshot service that lets
 remote clients retrieve a live JPEG from any camera in the fleet through one
@@ -42,72 +42,6 @@ location, the proxy's route table keys, and that scheme must all agree.
 | {{PASSWORD}}     | Camera password                                |
 
 These values are required for operation. Stop and prompt the user if any of them are not provided.
-
-## Backup Requirements
-
-Before changing this server, create a timestamped backup directory under `{{BACKUP_PATH}}`, for example:
-
-```bash
-BACKUP_DIR="{{BACKUP_PATH}}/snapshot-$(date +%Y%m%d-%H%M%S)"
-mkdir -p "$BACKUP_DIR"
-```
-
-For this snapshot proxy/nginx configuration, back up these files and state before making changes:
-
-| Source | Why it matters |
-|---|---|
-| `/etc/onvif-mcp/` | Site-specific snapshot route table, especially `/etc/onvif-mcp/snapshot_routes.json` |
-| `/etc/systemd/system/snapshot-proxy.service` | Systemd unit with runtime user, repo path, bind address, route file path, and camera credentials |
-| `/etc/nginx/sites-available/` and `/etc/nginx/sites-enabled/` | nginx `/snapshot/` reverse proxy endpoint and existing `/webrtc/` site |
-| `{{REPO_PATH}}/onvif-mcp/services/snapshot_proxy.py` | Version-controlled proxy source actually executed by the service |
-| `getent`/`id`/`getfacl`/`systemctl`/`ss`/`nginx -T` command output | Rebuild evidence for service user, ACLs, service state, listener state, and nginx config |
-
-Recommended backup commands:
-
-```bash
-BACKUP_DIR="{{BACKUP_PATH}}/snapshot-$(date +%Y%m%d-%H%M%S)"
-mkdir -p "$BACKUP_DIR"
-
-{
-  printf 'SERVER_FQDN: {{SERVER_FQDN}}\n'
-  printf 'REPO_PATH: {{REPO_PATH}}\n'
-  printf 'SERVER_USER: {{SERVER_USER}}\n'
-  printf 'USERNAME: {{USERNAME}}\n'
-  printf 'Timestamp: %s\n' "$(date --iso-8601=seconds)"
-  getent passwd {{SERVER_USER}} || true
-  id {{SERVER_USER}} || true
-  stat -c '%U:%G %a %n' \
-    {{REPO_PATH}} \
-    {{REPO_PATH}}/onvif-mcp \
-    {{REPO_PATH}}/onvif-mcp/services/snapshot_proxy.py \
-    {{REPO_PATH}}/onvif-mcp/.venv/bin/python 2>&1 || true
-  systemctl is-enabled snapshot-proxy 2>/dev/null || true
-  systemctl is-active snapshot-proxy 2>/dev/null || true
-  systemctl cat snapshot-proxy 2>/dev/null || true
-  sudo ss -tulpn | grep -E ':(80|8891)\b' || true
-  sudo nginx -T 2>/dev/null || true
-} > "$BACKUP_DIR/pre-change-state.txt"
-
-for item in \
-  /etc/onvif-mcp \
-  /etc/systemd/system/snapshot-proxy.service \
-  /etc/nginx/sites-available \
-  /etc/nginx/sites-enabled \
-  {{REPO_PATH}}/onvif-mcp/services/snapshot_proxy.py
-do
-  if [ -e "$item" ]; then
-    safe=$(printf '%s' "$item" | sed 's#^/##; s#/#-#g')
-    sudo tar --xattrs --acls --selinux -cpf "$BACKUP_DIR/${safe}.tar" -C / "${item#/}"
-  fi
-done
-
-sudo chown -R "$USER:$(id -gn)" "$BACKUP_DIR"
-( cd "$BACKUP_DIR" && find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%P\0' | sort -z | xargs -0 sha256sum > SHA256SUMS )
-```
-
-After configuration is complete, repeat the archive commands with `final-` prefixes so the backup contains both the pre-change state and the working configuration needed for reconstruction. Also copy the final `SNAPSHOT.md` and `BACKUP.md` into the backup folder.
-
-Security note: `/etc/systemd/system/snapshot-proxy.service` contains camera credentials in `Environment=` lines, and `/etc/onvif-mcp/snapshot_routes.json` exposes camera snapshot endpoints. Treat backups containing those files as sensitive.
 
 ## 1. Confirm the Service Source Exists in the Repository
 
