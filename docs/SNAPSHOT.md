@@ -109,7 +109,7 @@ After configuration is complete, repeat the archive commands with `final-` prefi
 
 Security note: `/etc/systemd/system/snapshot-proxy.service` contains camera credentials in `Environment=` lines, and `/etc/onvif-mcp/snapshot_routes.json` exposes camera snapshot endpoints. Treat backups containing those files as sensitive.
 
-## Step 1 — Confirm the Service Source Exists in the Repository
+## 1. Confirm the Service Source Exists in the Repository
 
 The service source is version-controlled in the repo:
 
@@ -135,7 +135,7 @@ dependencies). Bind and credentials come from environment:
 Do not edit credentials into the source file; the unit file passes them via
 `Environment=`.
 
-## Step 2 — Collect Each Camera's Real Snapshot URI
+## 2. Collect Each Camera's Real Snapshot URI
 
 NOTE: Not all cameras will support Digest Authentication. Some cameras will
 only support Basic Authentication. Digest is preferred, use Basic as the
@@ -176,7 +176,7 @@ Expectations and known fleet quirks (verified):
   upstream answer is actually a JPEG before serving it, so an occasional bad
   response surfaces as a 502 rather than a corrupted image.
 
-## Step 3 — Build the Route Table
+## 3. Build the Route Table
 
 In `/etc/onvif-mcp/snapshot_routes.json`, the `routes` object is the single
 source of mapping from external URL to upstream camera URI. It is generated
@@ -201,7 +201,7 @@ the proxy does exact string lookup, no normalization.
 Add explanatory comments for any non-obvious entry (shared-URI cameras,
 quirky endpoints).
 
-## Step 4 — Generate, Install, and Start the Service
+## 4. Generate, Install, and Start the Service
 
 Generate the unit file on the fly from the template below (deployment details
 vary per host). Substitute `{{SERVER_USER}}` with the user who owns `{{REPO_PATH}}`, 
@@ -250,7 +250,7 @@ The unit binds **127.0.0.1 only** — verify nothing else can reach it:
 sudo ss -lntpe | grep ':8891'    # expect a single listener on 127.0.0.1:8891
 ```
 
-## Step 5 — Standalone Test (no nginx involved)
+## 5. Standalone Test (no nginx involved)
 
 Every route must return a valid JPEG directly from the loopback port:
 
@@ -281,7 +281,7 @@ The proxy also validates the JPEG SOI marker (`\xff\xd8`) and retries once, so
 an HTML error page can never be served as an image; repeated failure returns
 502 with `snapshot unavailable from camera`.
 
-## Step 6 — Add the Nginx Endpoint
+## 6. Add the Nginx Endpoint
 
 Back up the site config first:
 
@@ -345,7 +345,7 @@ systemctl --no-pager status nginx.service
 If `nginx -t` fails, restore the backup (`sudo cp <backup> /etc/nginx/sites-available/mediamtx`)
 and re-test before reloading.
 
-## Step 7 — End-to-End Verification
+## 7. End-to-End Verification
 
 1. **Unauthenticated requests get a plain image** (there is no Keycloak gate
    yet on this host, so there is nothing to bounce — same open posture as

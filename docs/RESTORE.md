@@ -59,11 +59,6 @@ after a later one.
 
 | # | Stage | Backup folder | Restores | Supersedes (for) |
 |---|---|---|---|---|
-| 1 | DHCP/Kea | `dhcp-*` | Kea conf/leases, sysctl isolation, NM profile (*defect D1*) | — |
-| 2 | MediaMTX | `mediamtx-*` | binary, unit, conf, state; nginx sites | — |
-| 3 | Snapshot proxy | `snapshot-*` then `snapshot-user-correction-*` | routes, proxy source, unit; nginx sites | snapshot's unit+routes (typo fix) |
-| 4 | Apps | `apps-*` | nginx.conf (`user webcam;`), sites, registry, app sources | stages 2–3 nginx sites |
-| 5 | MCP HTTP | `mcp-http-*` | venv, unit, sites (adds `/mcp`) | stage 4 sites |
 | 6 | CA recovery | `Camera-CA-Backups/` (user-driven, GPG→pass→age) | Private-CA tree | — (see CREATE_CA_CERT.md §13) |
 | 7 | HTTPS cert | `site-cert-*` + live CA | reissued key+cert, conf.d (HTTPS), nginx.conf, onvif unit (https), tls dir | stage 5 unit/registry |
 | 8 | CA distribute | `ca-distribute-*` | `/srv/camera-pki/public`, sites+conf.d (adds `/ca/`) | stage 7 sites AND conf.d |
@@ -92,8 +87,6 @@ Ordering rules that caused real failures when ignored:
 
 | Artifact | Restore source |
 |---|---|
-| MediaMTX binary/config/unit/state | `mediamtx-*/final-etc-mediamtx.tar` etc. |
-| `nginx.conf` (`user webcam;`) | `apps-*/final-etc-nginx-nginx.conf.tar` |
 | nginx `sites-available` / `sites-enabled` | `keycloak-*/final-…` (newest complete set; identical in practice to ca-distribute + stage-10 edits) |
 | nginx `conf.d` (HTTPS vhost) | `stream-auth-*/final-etc-nginx-conf.d.tar` **then apply D6 sed** |
 | `/etc/onvif-mcp/` (registry + routes) | `site-cert-*/final-etc-onvif-mcp.tar` (registry https-flipped; routes from stage 3/4 chain) |
@@ -119,73 +112,16 @@ Ordering rules that caused real failures when ignored:
    output; restore blind, assert modes/counts.
 7. A full restart (`restart`), not `reload`, is required for: nginx `user`
    directive changes, `listen` directive changes, dnsmasq directive changes,
-   and **Kea** — kea-dhcp4 reads its config file only at startup, so restoring
-   `/etc/kea/kea-dhcp4.conf` without `systemctl restart kea-dhcp4-server` is a
-   silent no-op (observed 2026-09-13: restored file on disk, daemon served the
-   packaged 192.0.2.0/24 example config for 24h with zero sockets open).
-   Note also that `apt-get install kea-dhcp4-server` auto-starts the daemon
-   with that packaged example config; any config restore must come AFTER the
-   install and must be followed by the restart.
-
-## Known doc defects (found by executing this restore 2026-09-13)
-
-Already patched into BACKUP.md:
-
-- **D1** `dhcp-*/final-etc-NetworkManager-system-connections.tar` is EMPTY.
-  Recreate the profile with `nmcli connection add` per DHCP.md §1. **[verified]**
-- **D2** ~~Kea verification via `ss -ulpn` never matches (raw AF_PACKET socket)~~
-  — **REVERSED (2026-09-14)**: the original D2 was a misdiagnosis. `ss -ulpn
-  | grep ':67'` DOES show Kea (`10.2.2.1:67` + pid) whenever it is actually
-  listening — it also did in the 2026-09-12 post-change state. During the
-  2026-09-13 restore it returned nothing because Kea had **no socket open**
-  (`DHCPSRV_NO_SOCKETS_OPEN`: the daemon kept the packaged 192.0.2.0/24 config
-  in memory; the restored file was never loaded). Empty `ss` output is the
-  authoritative *failure* signal, not a tool limitation. Verified 2026-09-14:
-  after `systemctl restart kea-dhcp4-server`, `ss -ulpn | grep ':67'` shows the
-  socket and the first client lease is allocated within seconds. Do NOT verify
-  with lease-file rows alone — the restore extracts `final-var-lib-kea.tar`, so
-  stale lease rows are present by construction.
-- **D3** No restore section removes `sites-enabled/default` (global rule 3).
-- **D4** Keycloak tars root at `keycloak/` and `keycloak-postgres-backups/`, not
-  `/opt` and `/var/backups/keycloak-postgres` — fix `-C` targets, then move.
-  **[verified]**
-- **D5** `pg_restore … < /var/backups/…dump` fails (dumps are 0600 root; agent
-  shell redirect is unprivileged). Use `sudo cat dump | docker exec -i …`.
-  **[verified]**
-- **D6** The unpinned-443 amendment (2026-09-12) has no backup folder and was
-  never re-archived: every conf.d tar contains the pinned listen. Re-apply
-  (sed + `nginx.service.d/wait-for-network.conf`) after the last conf.d restore.
-  **[verified — the omission regressed the boot-race bug twice]**
-- **D7** `onvif-mcp-http --help` hangs (this build serves instead of printing
-  help); probe via `importlib.metadata` version or systemd status. **[verified]**
-- **D8** Hermes `ssl_verify` file is `/etc/ssl/certs/camera-system-root-ca.pem`
-  (update-ca-certificates renames `.crt` → `.pem`). **[verified]**
-- **D9** `mcp-http` venv tar over SMB exceeds short timeouts; background it.
-
-Still open (not yet patched):
-
-- ~~BACKUP.md's one-line tar-pipe pg_restore idiom remains present but unverified~~
-  — now marked unverified in-place; explicit sequence documented as preferred.
-- `snapshot-user-correction`, `add-user`, `add-client` still have no dedicated
-  BACKUP.md restore sections (their handling is encoded in the tables above);
-  runbook-side stage-close sections now exist for SITE_CERT, CA_DISTRIBUTE,
-  KEYCLOAK (§15b), and STREAM_AUTH (§10) as of 2026-09-13 — DNS, ADD_USER,
-  ADD_CLIENT_ON_SERVER, FIREWALL, SERVER_PREP are still thin/absent.
 
 ## Per-stage procedures
 
 Until BACKUP.md is restructured, execute the matching "Reconstructing…"
 section in BACKUP.md for each stage, with the amendments above:
 
-1. DHCP/Kea → BACKUP.md "Reconstructing the DHCP/Kea server from backup" (apply D1; D2 corrected 2026-09-14 — use `ss -ulpn | grep ':67'` as the listening check). **[D1 verified; stage NOT verified on 2026-09-13 — Kea kept the packaged 192.0.2.0/24 config in memory after the file restore (no restart) and served zero leases until fixed 2026-09-14]**
-2. MediaMTX → "Reconstructing the MediaMTX server from backup" (add: remove default site)
-3. Snapshot → "Reconstructing the snapshot proxy from backup" (then overlay `snapshot-user-correction-*/final-etc-systemd-system-snapshot-proxy.service.tar` + `final-etc-onvif-mcp.tar`) **[verified]**
-4. Apps → "Reconstructing the camera applications from backup" **[verified — all checks passed]**
-5. MCP HTTP → "Reconstructing the ONVIF MCP HTTP server from backup" (apply D7, D9) **[verified incl. full MCP handshake, 29 tools]**
-6. CA → CREATE_CA_CERT.md §13 (user runs GPG import + vault restore; then decrypt newest `after-*-cert` age archive) **[verified]**
-7. HTTPS → "Reconstructing the HTTPS configuration from backup" + key reissue per SITE_CERT.md §1–§8 **[verified — reissued serial 0x1001; re-archive new CA state to Camera-CA-Backups]**
-8. CA distribute → "Reconstructing the CA distribution endpoint from backup" **[verified incl. fingerprint match]**
-9. DNS → "Reconstructing the local DNS server from backup" **[verified — all four dig checks]**
+1. CA → CREATE_CA_CERT.md §13 (user runs GPG import + vault restore; then decrypt newest `after-*-cert` age archive) **[verified]**
+2. HTTPS → "Reconstructing the HTTPS configuration from backup" + key reissue per SITE_CERT.md §1–§8 **[verified — reissued serial 0x1001; re-archive new CA state to Camera-CA-Backups]**
+3. CA distribute → "Reconstructing the CA distribution endpoint from backup" **[verified incl. fingerprint match]**
+4. DNS → "Reconstructing the local DNS server from backup" **[verified — all four dig checks]**
 10–13. Keycloak chain → "Reconstructing the Keycloak OAuth server from backup" and "…browser authentication gate…" using **add-client's** `final-opt-keycloak.tar` + newest dump (apply D4, D5, global rules) **[verified — step-9 driver RESULT=PASS]**
 13b. Hermes client re-login → KEYCLOAK.md §13 (apply D8) **[verified — 29 tools]**
 14. Amendments → sed + drop-in (D6), then `systemctl restart nginx` **[verified]**
@@ -216,5 +152,3 @@ All four must pass before declaring the restore complete:
 - Live WebRTC video rendering (UDP ICE) is human-only verification.
 - Camera-net 403 negative checks (ca-distribute allow/deny) need an off-box
   source inside `10.2.2.0/24`.
-- The restore as a whole has been executed exactly once (2026-09-13); treat
-  unmarked steps as inferred-from-build, not restore-verified.

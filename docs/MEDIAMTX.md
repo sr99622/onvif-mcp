@@ -12,89 +12,6 @@ This document describes the MediaMTX RTSP-to-WebRTC/HLS streaming server. The se
 
 These values are required for operation. Stop and prompt the user if any of them are not provided.
 
-## Backup Requirements
-
-Before changing this server, create a timestamped backup directory under `{{BACKUP_PATH}}`, for example:
-
-```bash
-BACKUP_DIR="{{BACKUP_PATH}}/mediamtx-$(date +%Y%m%d-%H%M%S)"
-mkdir -p "$BACKUP_DIR"
-```
-
-For this MediaMTX/nginx configuration, back up these files and state before making changes:
-
-| Source | Why it matters |
-|---|---|
-| `/etc/mediamtx/` | MediaMTX configuration, including camera RTSP URLs with embedded credentials |
-| `/usr/local/bin/mediamtx` | Installed MediaMTX binary; preserves the exact deployed version |
-| `/etc/systemd/system/mediamtx.service` | Systemd unit used to run MediaMTX as a service |
-| `/var/lib/mediamtx/` | MediaMTX working directory/state |
-| `/var/log/mediamtx/` | MediaMTX log directory if file logging is enabled later |
-| `/etc/nginx/sites-available/` and `/etc/nginx/sites-enabled/` | nginx reverse proxy configuration for `/webrtc/` |
-| `systemctl`/`ss`/`nginx -T`/HTTP check output | Rebuild evidence for service state, ports, nginx config, and endpoint behavior |
-
-Recommended backup commands:
-
-```bash
-BACKUP_DIR="{{BACKUP_PATH}}/mediamtx-$(date +%Y%m%d-%H%M%S)"
-mkdir -p "$BACKUP_DIR"
-
-{
-  printf 'SERVER_FQDN: {{SERVER_FQDN}}\n'
-  printf 'USERNAME: {{USERNAME}}\n'
-  printf 'Timestamp: %s\n' "$(date --iso-8601=seconds)"
-  command -v mediamtx || true
-  mediamtx --version 2>/dev/null || true
-  systemctl is-enabled mediamtx 2>/dev/null || true
-  systemctl is-active mediamtx 2>/dev/null || true
-  systemctl cat mediamtx 2>/dev/null || true
-  sudo ss -tulpn | grep -E ':(80|8554|8889|8189|8888|1935|8890)\b' || true
-  sudo nginx -T 2>/dev/null || true
-} > "$BACKUP_DIR/pre-change-state.txt"
-
-for item in \
-  /etc/mediamtx \
-  /var/lib/mediamtx \
-  /var/log/mediamtx \
-  /etc/systemd/system/mediamtx.service \
-  /usr/local/bin/mediamtx \
-  /etc/nginx/sites-available \
-  /etc/nginx/sites-enabled
-do
-  if [ -e "$item" ]; then
-    safe=$(printf '%s' "$item" | sed 's#^/##; s#/#-#g')
-    sudo tar --xattrs --acls --selinux -cpf "$BACKUP_DIR/${safe}.tar" -C / "${item#/}"
-  fi
-done
-
-sudo chown -R "$USER:$(id -gn)" "$BACKUP_DIR"
-( cd "$BACKUP_DIR" && sha256sum * > SHA256SUMS )
-```
-
-After configuration is complete, repeat the archive commands with `final-` prefixes so the backup contains both the pre-change state and the working configuration needed for reconstruction.
-
-Security note: `/etc/mediamtx/mediamtx.yml` contains camera credentials in RTSP URLs. Treat any backup archive containing `/etc/mediamtx/` as sensitive.
-
-## Binary Executable
-
-location: https://github.com/bluenviron/mediamtx/releases
-
-look for the latest amd64 binary, it will look something like
-
-`mediamtx_v1.20.0_linux_amd64.tar.gz`
-
-In this example, the most recent version is 1.20.0, which can change. The generic representation of this name with the version represented symbolically and surrounded by curly braces would be:
-
-`mediamtx_v{version}_linux_amd64.tar.gz`
-
-Example Deployment steps (the symbolic version in curly braces should be replaced with the actual version):
-```bash
-# Download latest version
-curl -sL "https://github.com/bluenviron/mediamtx/releases/download/v{version}/mediamtx_v{version}_linux_amd64.tar.gz" | tar xz
-
-# Install binary
-sudo cp mediamtx /usr/local/bin/mediamtx && sudo chmod 755 /usr/local/bin/mediamtx
-```
 
 ## Deployment Details
 
@@ -105,14 +22,6 @@ sudo cp mediamtx /usr/local/bin/mediamtx && sudo chmod 755 /usr/local/bin/mediam
 | Config | `/etc/mediamtx/mediamtx.yml` |
 | Service | `sudo systemctl status mediamtx` (system service, multi-user.target) |
 | User | `mediamtx:mediamtx` (dedicated system user) |
-
-### Prerequisites: Create System User
-
-```bash
-sudo groupadd --system mediamtx
-sudo useradd --system --no-create-home --shell /usr/sbin/nologin -g mediamtx mediamtx
-sudo mkdir -p /etc/mediamtx /var/log/mediamtx
-```
 
 ## Protocols & Ports
 
@@ -185,7 +94,36 @@ number of profiles reported across all cameras before starting the service.
 
 MediaMTX uses **internal database mode** with permissive access rules — no password is required for any user (`pass:` is empty). The config grants full permissions (publish, read, playback) to all cameras. Access control is managed by the nginx proxy front end.
 
-## MediaMTX Configuration File (`/etc/mediamtx/mediamtx.yml`)
+## 1. Get Binary Executable
+
+location: https://github.com/bluenviron/mediamtx/releases
+
+look for the latest amd64 binary, it will look something like
+
+`mediamtx_v1.20.0_linux_amd64.tar.gz`
+
+In this example, the most recent version is 1.20.0, which can change. The generic representation of this name with the version represented symbolically and surrounded by curly braces would be:
+
+`mediamtx_v{version}_linux_amd64.tar.gz`
+
+Example Deployment steps (the symbolic version in curly braces should be replaced with the actual version):
+```bash
+# Download latest version
+curl -sL "https://github.com/bluenviron/mediamtx/releases/download/v{version}/mediamtx_v{version}_linux_amd64.tar.gz" | tar xz
+
+# Install binary
+sudo cp mediamtx /usr/local/bin/mediamtx && sudo chmod 755 /usr/local/bin/mediamtx
+```
+
+## 2. Create System User
+
+```bash
+sudo groupadd --system mediamtx
+sudo useradd --system --no-create-home --shell /usr/sbin/nologin -g mediamtx mediamtx
+sudo mkdir -p /etc/mediamtx /var/log/mediamtx
+```
+
+## 3. Create MediaMTX Configuration File (`/etc/mediamtx/mediamtx.yml`)
 
 * Camera credentials are embedded in RTSP URLs in the config file (`/etc/mediamtx/mediamtx.yml`). Keep this file protected (mode 640, owned by mediamtx:mediamtx).
 
@@ -231,7 +169,7 @@ paths:
   # ... one additional path per profile: the main stream AND every substream, for every camera
 ```
 
-## Systemd Service Setup
+## 4. Systemd Service Setup
 
 Service file at `/etc/systemd/system/mediamtx.service`:
 
@@ -269,7 +207,7 @@ sudo systemctl start mediamtx
 sudo systemctl status mediamtx  # verify active (running)
 ```
 
-## Nginx Reverse Proxy Configuration
+## 5. Nginx Reverse Proxy Configuration
 
 **Critical:** The nginx reverse proxy requires TWO specific directives that are often missing:
 
