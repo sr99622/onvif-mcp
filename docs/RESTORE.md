@@ -27,9 +27,6 @@ Authoritative values (from `BACKUP.md` Required Values table):
 | `{{CA_ROOT_PATH}}` | `/home/stephen/Private-CA` |
 | Camera creds | `admin` / from `~/.hermes/config.yaml` (never copy into docs) |
 
-Out-of-band trust anchor — verify before trusting any CA material:
-Root CA SHA-256 fingerprint `09:9F:3C:3B:90:C8:AF:8F:42:D2:B1:DA:53:E0:10:08:2F:BE:6C:5E:EA:11:51:8D:22:62:DF:F1:8E:89:A9:4F`
-
 ## Phase 0 — Preflight (do not skip)
 
 1. Mount the SMB backup and confirm it is writable: **[verified]**
@@ -56,6 +53,8 @@ The nginx configs, `/etc/systemd/system`, `/etc/onvif-mcp`, and `/opt/keycloak`
 overlap across stage folders. **Supersession is strict: a later row always wins
 over an earlier one for the artifacts listed.** Never restore an earlier folder
 after a later one.
+
+The first step of the restore is to rebuild the HTTP Services from section 2 of `Building the Server` in the onvif-mcp/README.md doc using the values in the Site Constants table above. Upon successful completion of HTTP Services, continue as listed below.
 
 | # | Stage | Backup folder | Restores | Supersedes (for) |
 |---|---|---|---|---|
