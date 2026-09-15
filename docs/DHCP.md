@@ -91,14 +91,6 @@ sudo apt update
 sudo apt install kea-dhcp4-server
 ```
 
-On Ubuntu 22.04, enable the Universe repository first if the package is unavailable:
-
-```bash
-sudo add-apt-repository universe
-sudo apt update
-sudo apt install kea-dhcp4-server
-```
-
 ## 3. Configure Kea
 
 Back up the packaged configuration:
