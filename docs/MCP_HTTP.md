@@ -109,7 +109,7 @@ systemctl restart onvif-mcp-http          # Restart after code changes
 sudo systemctl disable onvif-mcp-http     # Disable auto-start
 ```
 
-## MCP Protocol Usage (curl examples)
+## 3. Test MCP Protocol Usage (curl examples)
 
 The MCP Streamable HTTP transport uses a session-based handshake. All requests must carry the session ID from the initialize response.
 

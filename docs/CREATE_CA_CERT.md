@@ -512,10 +512,17 @@ it is step 1 of recovery (§13).
 
 In order:
 
-1. Import the GPG key (prompts for the user's passphrase):
+1. Import the GPG key. The user must run this in another terminal:
 
    ```bash
-   gpg --import ~/ca-vault-gpg.key.gpg
+    export GPG_TTY=$(tty)                                                                                                          
+    gpg --import ~/ca-vault-gpg.key.gpg    
+   ```
+
+   Using your sign on credentials
+
+   ```
+   gpg --pinentry-mode loopback --clearsign -u "{{FULL_NAME}} <{{EMAIL}}>" <<< prime
    ```
 
 2. Restore the store (per-entry `.gpg` files + `.gpg-id`):
