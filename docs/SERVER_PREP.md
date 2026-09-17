@@ -121,6 +121,35 @@ vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold", "CursorHo
 })
 ```
 
+## Install tmux
+
+tmux lets you split the screen into different prompts. This makes it super easy to run multiple prompts from the remote terminal.
+
+```
+sudo apt install tmux
+```
+
+The default tmux bindings can be awkword, so we customize.
+
+```
+nvim .tmux.conf
+```
+
+Add the follwing into the configuration file
+
+```
+unbind C-b
+set-option -g prefix C-a
+bind-key C-a send-prefix
+bind | split-window -h
+bind - split-window -v
+unbind '"'
+unbind %
+bind-key X kill-pane
+```
+
+Now, to split a screen horizontally, Ctl+a |, vertically, Ctl+a -
+
 ## Install VS Code
 
 VS Code can be useful when editing markdown files. Open this link in the browser to download the .deb file installer
@@ -153,7 +182,7 @@ sudo systemctl enable --now ssh
 ## Other packages needed only if you have not installed optional tools above
 
 ```bash
-sudo apt install curl tar xz-utils ripgrep
+sudo apt install git curl tar xz-utils ripgrep
 ```
 
 ## Install uv

@@ -272,8 +272,8 @@ The final TLS directory should have:
 Back up the site configuration and `nginx.conf` first:
 
 ```bash
-sudo cp --update=none /etc/nginx/sites-available/mediamtx \
-  "/etc/nginx/sites-available/mediamtx.backup-$(date +%F)"
+sudo cp --update=none /etc/nginx/sites-available/camera \
+  "/etc/nginx/sites-available/camera.backup-$(date +%F)"
 sudo cp --update=none /etc/nginx/nginx.conf \
   "/etc/nginx/nginx.conf.backup-$(date +%F)"
 ```

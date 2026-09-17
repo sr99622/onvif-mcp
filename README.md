@@ -59,7 +59,6 @@ Be mindful of model context size when running the configurations shown below. As
     | `{{PASSWORD}}` | Common password for cameras | - |
     | `{{REPO_PATH}}` | Parent directory of this repository | - |
     | `{{SERVER_USER}}` | Account name on the server under which Hermes is run | - |
-    | `{{BACKUP_PATH}}` | Backup folder | - |
 
     **Runbooks**
 

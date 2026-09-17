@@ -9,68 +9,8 @@
 | `{{PASSWORD}}`    | Camera Password                                 |
 | `{{REPO_PATH}}`   | Full Pathname of Repository Location            |
 | `{{SERVER_USER}}` | System user the service runs as (project owner) |
-| `{{BACKUP_PATH}}` | Backup folder                                   |
 
 These values are required for operation. Stop and prompt the user if any of them are not provided.
-
-## Backup Requirements
-
-Before changing this server, create a timestamped backup directory under `{{BACKUP_PATH}}`, for example:
-
-```bash
-BACKUP_DIR="{{BACKUP_PATH}}/mcp-http-$(date +%Y%m%d-%H%M%S)"
-mkdir -p "$BACKUP_DIR"
-```
-
-For this MCP HTTP server/nginx configuration, back up these files and state before making changes:
-
-| Source | Why it matters |
-|---|---|
-| `/etc/systemd/system/onvif-mcp-http.service` | Systemd unit with runtime user, repo path, bind address, and camera credentials in `Environment=` lines; not committed to the repo |
-| `/etc/nginx/sites-available/` and `/etc/nginx/sites-enabled/` | vhost receiving the merged `/mcp` locations — this runbook must merge into the existing `{{SERVER_FQDN}}` block, never create a second vhost |
-| `{{REPO_PATH}}/onvif-mcp/.venv` | Virtualenv containing the installed `onvif-mcp-http` executable and its dependency set |
-| `systemctl`/`ss`/`nginx -T`/HTTP check output | Rebuild evidence for service state, listener state, nginx config, and endpoint behavior |
-
-Recommended backup commands:
-
-```bash
-BACKUP_DIR="{{BACKUP_PATH}}/mcp-http-$(date +%Y%m%d-%H%M%S)"
-mkdir -p "$BACKUP_DIR"
-
-{
-  printf 'SERVER_FQDN: {{SERVER_FQDN}}\n'
-  printf 'REPO_PATH: {{REPO_PATH}}\n'
-  printf 'SERVER_USER: {{SERVER_USER}}\n'
-  printf 'Timestamp: %s\n' "$(date --iso-8601=seconds)"
-  systemctl is-enabled onvif-mcp-http 2>/dev/null || echo 'onvif-mcp-http: not-installed'
-  systemctl is-active onvif-mcp-http 2>/dev/null || true
-  ls -la {{REPO_PATH}}/onvif-mcp/.venv/bin/onvif-mcp-http 2>&1 || true
-  sudo ss -tlnp | grep ':8001' || echo 'no listener on 8001'
-  sudo nginx -T 2>/dev/null || true
-  for u in /cameras/ /multiview/ /outputs/camera_registry.json; do
-    printf '%-35s %s\n' "$u" "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1$u)"
-  done
-} > "$BACKUP_DIR/pre-change-state.txt"
-
-for item in \
-  /etc/systemd/system/onvif-mcp-http.service \
-  /etc/nginx/sites-available \
-  /etc/nginx/sites-enabled \
-  {{REPO_PATH}}/onvif-mcp/.venv
-do
-  if [ -e "$item" ]; then
-    safe=$(printf '%s' "$item" | sed 's#^/##; s#/#-#g')
-    sudo tar --xattrs --acls --selinux -cpf "$BACKUP_DIR/${safe}.tar" -C / "${item#/}"
-  fi
-done
-
-sudo chown -R "$USER:$(id -gn)" "$BACKUP_DIR"
-( cd "$BACKUP_DIR" && find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%P\0' | sort -z | xargs -0 sha256sum > SHA256SUMS )
-```
-
-After configuration is complete, repeat the archive commands with `final-` prefixes so the backup contains both the pre-change state and the working configuration needed for reconstruction. Also copy the final `MCP_HTTP.md` and `BACKUP.md` into the backup folder.
-
-Security note: `/etc/systemd/system/onvif-mcp-http.service` contains camera credentials in `Environment=` lines — treat any backup containing it as sensitive. The venv archive is large (~80 MB); keep it in the same restricted SMB share as the other backups.
 
 ## Overview
 
@@ -85,7 +25,7 @@ The `onvif-mcp-http` package provides an HTTP-based MCP (Model Context Protocol)
 
 ## 1. Nginx Proxy Configuration
 
-**File**: `/etc/nginx/sites-available/camera-mcp` (symlinked to `sites-enabled/`)
+All of this lives in one server block alongside the MediaMTX proxy and Camera App, at `/etc/nginx/sites-available/camera` (already present from the MEDIAMTX.md and APPS.md installs — extend it; do not create a second vhost):
 
 ```nginx
 server {
@@ -119,26 +59,6 @@ server {
 **Key points:**
 - Uses `location = /mcp` (exact match) because the MCP server redirects `/mcp/` to `/mcp`, and POST requests don't survive the redirect. Nginx must forward directly to `/mcp` without trailing slash.
 - Proxy headers include Upgrade/Connection for SSE, plus standard forwarded headers.
-
-* ### Merging into an existing vhost (important)
-
-  If a `server` block for `{{SERVER_FQDN}}` already exists on this host (e.g. from
-  `docs/MEDIAMTX.md` or `docs/APPS.md`, which both create one and instruct that no
-  second vhost be made), **merge these two locations into that existing block instead
-  of creating a second file**. Do not enable two separate files declaring the same
-  `listen 80` + `server_name`.
-
-  Observed failure mode on this host (two enabled blocks with identical name and
-  port): nginx logs only a warning —
-
-      [warn] conflicting server name "<FQDN>" on 0.0.0.0:80, ignored
-
-  — and `nginx -t` still exits 0 ("syntax is ok", "test is successful"). The later
-  block's server-name registration is discarded (files are parsed alphabetically),
-  so all of its locations stop working while requests for that host silently route
-  to whichever block was parsed first. In the incident on this box, `/cameras/`,
-  `/multiview/`, `/outputs/` and `/webrtc/` all returned 404 while only `/mcp`
-  worked; the breakage appeared in behavior, never in `nginx -t`.
 
   After installing the MCP locations, verify with:
 

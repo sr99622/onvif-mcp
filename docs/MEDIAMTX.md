@@ -9,72 +9,8 @@ This document describes the MediaMTX RTSP-to-WebRTC/HLS streaming server. The se
 | {{SERVER_FQDN}} | Server Fully Qualified Domain Name |
 | {{USERNAME}} | Camera Username |
 | {{PASSWORD}} | Camera Password |
-| `{{BACKUP_PATH}}` | Backup folder |
 
 These values are required for operation. Stop and prompt the user if any of them are not provided.
-
-## Backup Requirements
-
-Before changing this server, create a timestamped backup directory under `{{BACKUP_PATH}}`, for example:
-
-```bash
-BACKUP_DIR="{{BACKUP_PATH}}/mediamtx-$(date +%Y%m%d-%H%M%S)"
-mkdir -p "$BACKUP_DIR"
-```
-
-For this MediaMTX/nginx configuration, back up these files and state before making changes:
-
-| Source | Why it matters |
-|---|---|
-| `/etc/mediamtx/` | MediaMTX configuration, including camera RTSP URLs with embedded credentials |
-| `/usr/local/bin/mediamtx` | Installed MediaMTX binary; preserves the exact deployed version |
-| `/etc/systemd/system/mediamtx.service` | Systemd unit used to run MediaMTX as a service |
-| `/var/lib/mediamtx/` | MediaMTX working directory/state |
-| `/var/log/mediamtx/` | MediaMTX log directory if file logging is enabled later |
-| `/etc/nginx/sites-available/` and `/etc/nginx/sites-enabled/` | nginx reverse proxy configuration for `/webrtc/` |
-| `systemctl`/`ss`/`nginx -T`/HTTP check output | Rebuild evidence for service state, ports, nginx config, and endpoint behavior |
-
-Recommended backup commands:
-
-```bash
-BACKUP_DIR="{{BACKUP_PATH}}/mediamtx-$(date +%Y%m%d-%H%M%S)"
-mkdir -p "$BACKUP_DIR"
-
-{
-  printf 'SERVER_FQDN: {{SERVER_FQDN}}\n'
-  printf 'USERNAME: {{USERNAME}}\n'
-  printf 'Timestamp: %s\n' "$(date --iso-8601=seconds)"
-  command -v mediamtx || true
-  mediamtx --version 2>/dev/null || true
-  systemctl is-enabled mediamtx 2>/dev/null || true
-  systemctl is-active mediamtx 2>/dev/null || true
-  systemctl cat mediamtx 2>/dev/null || true
-  sudo ss -tulpn | grep -E ':(80|8554|8889|8189|8888|1935|8890)\b' || true
-  sudo nginx -T 2>/dev/null || true
-} > "$BACKUP_DIR/pre-change-state.txt"
-
-for item in \
-  /etc/mediamtx \
-  /var/lib/mediamtx \
-  /var/log/mediamtx \
-  /etc/systemd/system/mediamtx.service \
-  /usr/local/bin/mediamtx \
-  /etc/nginx/sites-available \
-  /etc/nginx/sites-enabled
-do
-  if [ -e "$item" ]; then
-    safe=$(printf '%s' "$item" | sed 's#^/##; s#/#-#g')
-    sudo tar --xattrs --acls --selinux -cpf "$BACKUP_DIR/${safe}.tar" -C / "${item#/}"
-  fi
-done
-
-sudo chown -R "$USER:$(id -gn)" "$BACKUP_DIR"
-( cd "$BACKUP_DIR" && sha256sum * > SHA256SUMS )
-```
-
-After configuration is complete, repeat the archive commands with `final-` prefixes so the backup contains both the pre-change state and the working configuration needed for reconstruction.
-
-Security note: `/etc/mediamtx/mediamtx.yml` contains camera credentials in RTSP URLs. Treat any backup archive containing `/etc/mediamtx/` as sensitive.
 
 ## Deployment Details
 
@@ -279,7 +215,7 @@ sudo systemctl status mediamtx  # verify active (running)
 
 Without these, MediaMTX returns a redirect like `302 Location: /camera/path/`, which nginx then tries to serve as a static file (causing 405 errors or broken behavior).
 
-Full nginx config at `/etc/nginx/sites-available/mediamtx`:
+Full nginx config at `/etc/nginx/sites-available/camera`:
 
 ```nginx
 server {
@@ -313,8 +249,8 @@ server {
 
 Installation:
 ```bash
-sudo cp mediamtx /etc/nginx/sites-available/mediamtx
-sudo ln -sf /etc/nginx/sites-available/mediamtx /etc/nginx/sites-enabled/mediamtx
+sudo cp camera /etc/nginx/sites-available/camera
+sudo ln -sf /etc/nginx/sites-available/camera /etc/nginx/sites-enabled/camera
 sudo rm -f /etc/nginx/sites-enabled/default  # if needed
 sudo nginx -t                              # test configuration
 sudo systemctl reload nginx                # apply changes

@@ -287,8 +287,8 @@ an HTML error page can never be served as an image; repeated failure returns
 Back up the site config first:
 
 ```bash
-sudo cp --update=none /etc/nginx/sites-available/mediamtx \
-  "/etc/nginx/sites-available/mediamtx.backup-$(date +%F)"
+sudo cp --update=none /etc/nginx/sites-available/camera \
+  "/etc/nginx/sites-available/camera.backup-$(date +%F)"
 ```
 
 Inside the existing `server` block (the one serving `/webrtc/`) add this
@@ -343,7 +343,7 @@ sudo systemctl reload nginx.service
 systemctl --no-pager status nginx.service
 ```
 
-If `nginx -t` fails, restore the backup (`sudo cp <backup> /etc/nginx/sites-available/mediamtx`)
+If `nginx -t` fails, restore the backup (`sudo cp <backup> /etc/nginx/sites-available/camera`)
 and re-test before reloading.
 
 ## 7. End-to-End Verification
