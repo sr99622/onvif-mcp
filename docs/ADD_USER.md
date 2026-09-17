@@ -22,6 +22,7 @@ that machine's observed source address, then continue here.
 |------|-------------|
 | `{{NEW_LOGIN_USER}}` | New login username supplied by agent, e.g. `mcp-user2` | — |
 | `{{SERVER_FQDN}}` | Server Fully Qualified Domain Name | `camera.home.arpa` |
+| `{{BACKUP_PATH}}` | Backup folder |
 | `{{FIRST_NAME}}` | New login first name, supplied by agent; must be non-empty (the realm runs an active `update-profile` required action — see Section 3a). For a machine-only account, repeat `{{NEW_LOGIN_USER}}`. | `Joe` |
 | `{{LAST_NAME}}` | New login last name, supplied by agent; must be non-empty (see Section 3a). For a machine-only account, repeat `{{NEW_LOGIN_USER}}`. | `Blow` |
 | `{{USER_EMAIL}}` | New login email address, supplied by agent; must be non-empty. For a machine-only account use `{{NEW_LOGIN_USER}}@{{SERVER_FQDN}}` (same convention as `{{MCP_LOGIN_USER}}`). | `joe.blow@example.com` |
@@ -30,7 +31,7 @@ that machine's observed source address, then continue here.
 
 ## Runbook values
 
-| Symbol | Meaning | Typical value in this deployment |
+| Symbol | Meaning | Default1 value in this deployment |
 |---|---|---|
 | `{{MCP_REALM}}` | Keycloak realm hosting the MCP login users | `mcp` |
 | `{{KEYCLOAK_ADMIN_USER}}` | Permanent administrator in the `master` realm | `keycloak-admin` |

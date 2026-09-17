@@ -78,9 +78,12 @@ For each server configuration we touch:
    otherwise shadows `gmktec.home.arpa` routes — observed symptoms: `/mcp/` 404,
    `/cameras/` served unauthenticated, `/auth/` 404).
 2. **Re-apply the unpinned-listener amendment LAST, after the final `conf.d` restore**
-   (see "HTTPS listener unpinned" below). The `site-cert-*` and `stream-auth-*`
-   `final-etc-nginx-conf.d.tar` archives both still contain the pinned
-   `listen 10.1.1.5:443;` line; restoring them regresses the boot-time bind race.
+   (see "HTTPS listener unpinned" below). Check first — the 2026-09-15 backup
+   set's `site-cert-*`/`stream-auth-*`/`keycloak-*` `final-etc-nginx-conf.d.tar`
+   archives are ALREADY unpinned (the sed is a no-op), while the 2026-09-12 set's
+   archives contain the pinned `listen 10.1.1.5:443;` line; restoring those
+   regresses the boot-time bind race. `grep -n 'listen 10.1.1.5:443'
+   /etc/nginx/conf.d/*.conf` decides whether the sed is needed.
 3. **Large tar restores over SMB (e.g. the 79 MB venv archive) take 2–3 minutes** due to
    small-file SMB latency; run them in the background or with a generous timeout.
 
@@ -694,7 +697,12 @@ Use these instructions with a selected backup folder such as `{{BACKUP_PATH}}/sn
 
    ```bash
    BACKUP_DIR="{{BACKUP_PATH}}/snapshot-{{DATETIME_STAMP}}"
-   sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-onvif-mcp.tar" -C /
+   # SKIP final-etc-onvif-mcp.tar (policy: camera-IP files are never restored
+   # from backup — they embed per-camera DHCP IPs. Regenerate
+   # camera_registry.json + snapshot_routes.json from a live get_cameras via
+   # scripts/generate_site_camera_config.py; see RESTORE.md "Camera-IP files:
+   # generate, don't restore". Keep this tar only for provenance/cross-check.)
+   # sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-onvif-mcp.tar" -C /
    sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-systemd-system-snapshot-proxy.service.tar" -C /
    SNAPSHOT_PROXY_ARCHIVE=$(find "$BACKUP_DIR" -maxdepth 1 -name 'final-*-onvif-mcp-services-snapshot_proxy.py.tar' -print -quit)
    sudo tar --xattrs --acls --selinux -xpf "$SNAPSHOT_PROXY_ARCHIVE" -C /
@@ -759,7 +767,12 @@ Use these instructions with a selected backup folder such as `{{BACKUP_PATH}}/ap
    sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-nginx-nginx.conf.tar" -C /
    sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-nginx-sites-available.tar" -C /
    sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-nginx-sites-enabled.tar" -C /
-   sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-onvif-mcp.tar" -C /
+   # SKIP final-etc-onvif-mcp.tar (policy: camera-IP files are never restored
+   # from backup — they embed per-camera DHCP IPs. Regenerate
+   # camera_registry.json + snapshot_routes.json from a live get_cameras via
+   # scripts/generate_site_camera_config.py; see RESTORE.md "Camera-IP files:
+   # generate, don't restore". Keep this tar only for provenance/cross-check.)
+   # sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-onvif-mcp.tar" -C /
    sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-home-{{SERVER_USER}}-onvif-mcp-apps.tar" -C /
    sudo chown root:{{SERVER_USER}} /etc/onvif-mcp/camera_registry.json
    sudo chmod 0640 /etc/onvif-mcp/camera_registry.json
@@ -867,7 +880,12 @@ The CA itself must be restored first per CREATE_CA_CERT.md §13 (GPG key → vau
    sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-nginx-conf.d.tar" -C /
    sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-nginx-sites-available.tar" -C /
    sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-nginx-sites-enabled.tar" -C /
-   sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-onvif-mcp.tar" -C /
+   # SKIP final-etc-onvif-mcp.tar (policy: camera-IP files are never restored
+   # from backup — they embed per-camera DHCP IPs. Regenerate
+   # camera_registry.json + snapshot_routes.json from a live get_cameras via
+   # scripts/generate_site_camera_config.py; see RESTORE.md "Camera-IP files:
+   # generate, don't restore". Keep this tar only for provenance/cross-check.)
+   # sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-onvif-mcp.tar" -C /
    sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-systemd-system-onvif-mcp-http.service.tar" -C /
    ```
 
@@ -875,7 +893,8 @@ The CA itself must be restored first per CREATE_CA_CERT.md §13 (GPG key → vau
 
    ```bash
    # RE-APPLY THE UNPINNED-LISTENER AMENDMENT (see "HTTPS listener unpinned" below):
-   # this backup's conf.d archive still contains `listen 10.1.1.5:443 ssl;`.
+   # 2026-09-12-set archives contain `listen 10.1.1.5:443 ssl;`; the 2026-09-15
+   # set is already unpinned, so the sed below is a harmless no-op there.
    sudo sed -i 's/listen 10.1.1.5:443 ssl;/listen 443 ssl;/' /etc/nginx/conf.d/{{SERVER_FQDN}}.conf
    sudo mkdir -p /etc/systemd/system/nginx.service.d
    printf '[Unit]\nWants=network-online.target\nAfter=network-online.target\n' | \
@@ -927,49 +946,57 @@ Deployment constants (KEYCLOAK.md §1, non-secret):
 - Images pinned: `postgres:17-alpine`, `quay.io/keycloak/keycloak:26.7.0`
 - Docker 29.1.3, Docker Compose 2.40.3 (Ubuntu `docker.io` + `docker-compose-v2`)
 
-Backup folder:
+Backup folder (actual, 2026-09-16):
 
-- `{{BACKUP_PATH}}/keycloak-{{DATETIME_STAMP}}`
+- `{{BACKUP_PATH}}/keycloak-20260916-175524`
+
+NOTE: the pre-change archives in this folder were staged at stage close (the
+folder is created after the work per §15b): pre-change conf.d is the
+runbook-mandated `.pre-keycloak` copy; pre-change sites/systemd are live trees
+with this stage's additions removed. The previous build's keycloak entry in
+this log (old UUIDs `51738624-…`/`c7bc563d-…`) was a laboratory artifact of an
+earlier build — all IDs below are from THIS deployment.
 
 Backed up data:
 
-- `pre-change-state.txt` — hostname/DNS/IP, docker absent, nginx, listener table, MCP service state, full `nginx -T`, `/opt/keycloak` absent.
+- `pre-change-state.txt` — hostname/DNS/IP, docker absent, nginx, listener table (80/443 nginx, 8001 MCP loopback, 8080 free), `/opt/keycloak` absent.
 - `etc-nginx-conf.d.tar` / `etc-nginx-sites-available.tar` / `etc-nginx-sites-enabled.tar` — pre-change nginx configs (no `/auth/` locations).
-- `etc-systemd-system.tar` — pre-change systemd units (no keycloak backup unit, no MCP oauth drop-in).
-- `post-change-state.txt` — variable mapping, file modes, container state, pinned image IDs, realm settings, realm users, client scope + mapper JSON, DCR policy component configs, DCR client list with active client_id, nginx `server_name` count, listener table, MCP OAuth env (non-secret), endpoint verification results, regression checks, dump listing, restore-test evidence, CA trust file, Hermes token file modes (contents never recorded).
-- `final-opt-keycloak.tar` — final `/opt/keycloak/` including `compose.yaml`, `.env`, `admin.pass`, `mcp-user.pass`. Sensitive: contains the PostgreSQL password and both account passwords in root-only files; restore must re-apply mode 750 dir / 600 secrets.
-- `final-var-backups-keycloak-postgres.tar` — the latest `keycloak-*.dump` (custom format, zstd). Sensitive: contains password hashes, the DCR registration access token, and the active Hermes client registration. This is the database restore source.
+- `etc-systemd-system.tar` — pre-change systemd tree (no keycloak backup unit, no MCP oauth drop-in).
+- `post-change-state.txt` — variable mapping, file modes, container state, pinned image IDs, realm settings, realm users, client scope + mapper JSON, DCR policy component configs, active Hermes DCR client_id, nginx `server_name` count, listener table, MCP OAuth env (drop-in lines only, non-secret), endpoint verification results, regression checks, dump listing, restore-test evidence, CA trust file, Hermes token file modes (contents never recorded).
+- `final-opt-keycloak.tar` — final `/opt/keycloak/` (root `keycloak/`, restore with `-C /opt`) including `compose.yaml`, `.env`, `admin.pass`, `mcp-user.pass`. Sensitive: contains the PostgreSQL password and both account passwords in root-only files; restore must re-apply mode 750 dir / 600 secrets. Contains NO token files.
+- `final-var-backups-keycloak-postgres.tar` — the dump set (root `keycloak-postgres-backups/`): `keycloak-20260916T215030Z.dump` (custom format, zstd, 520 catalog entries). Sensitive: contains password hashes, the DCR registration access token, and the active Hermes client registration. This is the database restore source.
 - `final-usr-local-sbin-backup-keycloak-postgres.tar` — backup script (mode 750).
-- `final-etc-systemd-system.tar` — units including `keycloak-postgres-backup.service` and `onvif-mcp-http.service.d/oauth.conf`. Sensitive: oauth drop-in is non-secret; earlier entries' unit credentials apply.
-- `final-etc-nginx-conf.d.tar` / `-sites-available.tar` / `-sites-enabled.tar` — final nginx configs with `/auth/` and `/.well-known/oauth-protected-resource/mcp`; newest complete nginx set — restore last among config-stage backups.
+- `final-etc-systemd-system.tar` — complete `/etc/systemd/system` tree including `keycloak-postgres-backup.service` and `onvif-mcp-http.service.d/oauth.conf`. Newest complete systemd set — restore last.
+- `final-etc-nginx-conf.d.tar` / `-sites-available.tar` / `-sites-enabled.tar` — final nginx configs with `/auth/` and `/.well-known/oauth-protected-resource/mcp`; newest complete nginx set — restore last among config-stage backups. conf.d is UNPINNED (`listen 443 ssl;` — the 2026-09-12-set pinned-listener problem does not recur from this archive).
 - `final-etc-nginx-backups.tar` — `/etc/nginx/backups/` including the runbook-mandated `gmktec.home.arpa.conf.pre-keycloak` copy.
-- `final-docs-KEYCLOAK.md` — final runbook.
+- `final-docs-KEYCLOAK.md`, `final-docs-BACKUP.md` — runbook + this log.
 - `SHA256SUMS` — checksums for files in the backup folder.
 
 Configuration completed:
 
-- Installed `docker.io` 29.1.3 + `docker-compose-v2` 2.40.3.
-- Deployed `/opt/keycloak/compose.yaml`: postgres:17-alpine (named volume `keycloak_keycloak_postgres_data`) + keycloak 26.7.0 bound `127.0.0.1:8080`, relative path `/auth`, hostname `https://gmktec.home.arpa/auth`, xforwarded proxies.
-- Permanent admin `keycloak-admin` (master, role `admin`, password in `/opt/keycloak/admin.pass`); bootstrap `admin` user and both `KC_BOOTSTRAP_ADMIN_*` variables removed; container force-recreated.
-- Realm `mcp`: ssoSessionIdle 8h, ssoSessionMax 7d, accessToken 300s, rotating single-use refresh tokens; login user `mcp-user` (password `/opt/keycloak/mcp-user.pass`).
-- Client scope `mcp:tools` (uuid `5c6dae4d-3e85-4ffd-a68a-5f7865aef59d`) with `mcp-server-audience` mapper → `https://gmktec.home.arpa/mcp`; all three scope attributes true.
-- Anonymous DCR policies: allowed scope `mcp:tools` + default scopes, trusted hosts `localhost, 127.0.0.1, 172.18.0.1 (compose gateway), 10.1.1.5 (server LAN IP)`, max clients 20.
-- nginx HTTPS vhost extended with `/auth/` proxy and `/.well-known/oauth-protected-resource/mcp` proxy; `/mcp/` redirect already HTTPS.
-- Private CA installed to `/usr/local/share/ca-certificates/camera-system-root-ca.crt`; discovery verified without `-k`.
-- MCP OAuth drop-in `/etc/systemd/system/onvif-mcp-http.service.d/oauth.conf` (issuer, resource URL, loopback JWKS).
-- DCR smoke test passed (201) and test client deleted.
-- Hermes `camera-new` OAuth client registered via headless login; token files at `~/.hermes/mcp-tokens/camera-new.*` (mode 600, never archived); `hermes mcp test` lists 29 tools.
-- PostgreSQL backup script + `keycloak-postgres-backup.service` (manual one-shot, 14-day retention); first dump taken after DCR client existed; isolated restore test passed (`realms=2 users=2 clients=14`) and test DB dropped.
+- Installed `docker.io` 29.1.3 + `docker-compose-v2` 2.40.3+ds1.
+- Deployed `/opt/keycloak/compose.yaml`: postgres:17-alpine (named volume `keycloak_keycloak_postgres_data`, not published) + keycloak 26.7.0 bound `127.0.0.1:8080`, relative path `/auth`, hostname `https://gmktec.home.arpa/auth`, xforwarded proxies, health endpoint.
+- Permanent admin `keycloak-admin` (master, realm-level `admin` role, password in `/opt/keycloak/admin.pass` 600 root); bootstrap `admin` user deleted (id resolved before delete) and both `KC_BOOTSTRAP_ADMIN_*` variables removed from `.env` and `compose.yaml`; keycloak container force-recreated; CLI config re-established afterward.
+- Realm `mcp`: ssoSessionIdle 28800, ssoSessionMax 604800, client sessions inherited (0), accessToken 300, `revokeRefreshToken=true`, `refreshTokenMaxReuse=0`; login user `mcp-user` (password in `/opt/keycloak/mcp-user.pass` 600 root).
+- Client scope `mcp:tools` (uuid `172bba24-bd7c-44d0-b3b4-45b268d33f4e`) with all three attributes true; audience mapper `mcp-server-audience` (uuid `b375c484-f298-47d9-99da-ef3b7b76404f`) → `https://gmktec.home.arpa/mcp` (access+introspection claims, no id token).
+- Anonymous DCR components (realm `mcp`): allowed-client-templates `d2f995ed-6db5-40ac-bdb4-c8aedc3a2df0` (`mcp:tools` + default scopes), trusted-hosts `eaea6b9f-9d50-4e02-a8e9-6c9e2e568161` (`localhost, 127.0.0.1, 172.18.0.1 (compose gateway), 10.1.1.5 (server LAN IP)`, both matching controls true), max-clients `dd100a3e-49ae-425e-bbc8-5209bd26e6a1` (20); consent-required `81b3ce31-44ff-4ee5-a1ea-881b030c288f` and scope (Full Scope Disabled) `c21cc43e-4612-4956-b776-26df797e09d0` present.
+- nginx HTTPS vhost `/etc/nginx/conf.d/gmktec.home.arpa.conf` extended with `= /auth` 301, `/auth/` proxy to `127.0.0.1:8080/auth/`, and `= /.well-known/oauth-protected-resource/mcp` proxy to `127.0.0.1:8001`; existing `/mcp` proxy and HTTPS `/mcp/` redirect retained.
+- Private CA installed to `/usr/local/share/ca-certificates/camera-system-root-ca.crt` (CA:TRUE verified); all endpoint checks without `-k`.
+- MCP OAuth drop-in `/etc/systemd/system/onvif-mcp-http.service.d/oauth.conf` (issuer, resource URL, loopback HTTP JWKS).
+- DCR smoke test passed (HTTP 201, scope `mcp:tools`); test client `temporary-dcr-verification` (`2ad904ca-30a3-46cd-b551-db871d5bc113`) verified by name then deleted; credential-bearing response file removed.
+- Hermes `camera-new` OAuth client registered via isolated-home headless login (`HERMES_HOME=/tmp/hermes-login-home`, display vars unset, single flow, listener 127.0.0.1:27890; `scripts/kc-headless-login-driver.py` delivered the `?code=&state=` callback). Entry was first written under the name `camera-https` and renamed to `camera-new` (with its three token files) to match the downstream runbooks' `{{HERMES_SERVER_NAME}}`; `mcp.auto_reload_on_config_change=false` set; entry `enabled: true` after test. Token files at `~/.hermes/mcp-tokens/camera-new.*` (mode 600, never archived).
+- PostgreSQL backup script + `keycloak-postgres-backup.service` (manual one-shot, 14-day retention); first dump `keycloak-20260916T215030Z.dump` (250148 bytes) taken after the real Hermes DCR client existed; isolated restore test into `keycloak_restore_test_20260916` passed (`realms=2 users=2 clients=14`) and test DB dropped.
 
 Verification performed:
 
-- Discovery 200 with exact issuer; `S256` and `mcp:tools` published.
-- Unauthenticated `/mcp` → 401 with `resource_metadata` pointing at `/.well-known/oauth-protected-resource/mcp`; metadata JSON exact.
+- Discovery 200 with exact issuer `https://gmktec.home.arpa/auth/realms/mcp`; `S256` in `code_challenge_methods_supported`; `mcp:tools` published; registration endpoint present.
+- Unauthenticated `/mcp` → 401 with `resource_metadata=https://gmktec.home.arpa/.well-known/oauth-protected-resource/mcp`; protected-resource metadata JSON exact.
 - DCR policies re-read per component ID (collection view collapses config to `{}`).
-- `/cameras/`, `/multiview/`, registry, snapshot JPEG regression all 200 over TLS.
-- Postgres containers healthy; `pg_restore --list` catalog readable; restore test nonzero row counts.
-- `post-change-state.txt` scanned for secret leakage — filenames and non-secret values only.
-- Backup checksums all passed.
+- `/cameras/`, `/multiview/`, registry, snapshot JPEG (1920×1080), WebRTC player regression all 200 over TLS; `server_name` count 2; unpinned-listener check 1 unpinned / 0 pinned.
+- Postgres healthy; `pg_restore --list` catalog readable (520 entries); restore test row counts nonzero; dump archived to this folder.
+- `hermes mcp test camera-new`: connects with saved state, 29 tools; no orphan DCR clients in realm `mcp` (active client `f3f20dfa-24ad-4929-9134-6caff61dc340` "Hermes Agent").
+- `post-change-state.txt` scanned for secret leakage — one initial leak (base-unit camera credentials in the MCP env line) caught and removed before close; final file holds key names and non-secret values only.
+- Backup checksums all passed (`sha256sum -c` clean; regenerated once after the state-file fix).
 
 ## Reconstructing the Keycloak OAuth server from backup
 
@@ -1108,27 +1135,39 @@ Runbook variables used:
 - `{{BACKUP_PATH}}`: `/mnt/taurus/Camera-System-Backup`
 - Defaults as documented: realm `mcp`, browser client `camera-web`, login user `mcp-user`, oauth2-proxy `v7.15.3` on `127.0.0.1:4180`
 
-Backup folder:
+Backup folder (actual, 2026-09-16):
 
-- `{{BACKUP_PATH}}/stream-auth-{{DATETIME_STAMP}}`
+- `{{BACKUP_PATH}}/stream-auth-20260916-180935`
+
+NOTE: the previous build's stream-auth entry in this log (folder
+`stream-auth-20260916-110947`, its "Re-close (2026-09-16)" paragraph, and its
+dump `keycloak-20260916T184123Z.dump`) was a laboratory artifact of an earlier
+build — that folder never existed on this host's share. This 2026-09-16
+`stream-auth-20260916-180935` folder is the authoritative record of THIS
+deployment's browser-auth stage.
 
 Backed up data:
 
-- `pre-change-state.txt` — services, container state, `.env` key names, listener table, full `nginx -T`, unauthenticated baseline.
-- `etc-nginx-conf.d.tar` — pre-change HTTPS site (no oauth2 locations); `compose.yaml.pre-oauth2-proxy` — compose before the oauth2-proxy service was added.
-- `.env.pre-oauth2-proxy.sha256` — hash of the pre-change `.env` only (content stays in the keycloak folder's `final-opt-keycloak.tar` — no duplicate secret copies on the share).
-- `post-change-state.txt` — container state, oauth2-proxy image pin, listeners, file modes, `.env` key names + counts (values never), `camera-web` client representation with secret redacted, loopback ping/auth results, unauthenticated 302 behavior for all protected routes, HTTP→HTTPS snapshot redirect, MCP env non-secrets, Phase-9 driver PASS evidence, MCP regression (cookie-independent `get_snapshot`), dump verification, deviations list.
-- `final-opt-keycloak.tar` — final `/opt/keycloak/` incl. updated `compose.yaml` (oauth2-proxy service), `.env` (+client/cookie secrets), `.env.pre-oauth2-proxy`, `gmktec.home.arpa.conf.pre-stream-auth` vhost copy, and the new `mcp-user.pass`-bearing set. Sensitive.
-- `final-var-backups-keycloak-postgres.tar` — dumps incl. `keycloak-20260912T234716Z.dump` taken after `camera-web` existed (STREAM_AUTH §10 checkpoint; `pg_restore_exit=0`). Restore source. Sensitive.
-- `final-etc-nginx-conf.d.tar` — HTTPS site with `/oauth2/*` support blocks and `auth_request` on all five protected route families; newest complete nginx config — restore last among config-stage backups.
-- `SHA256SUMS` — checksums for files in the backup folder.
+- `pre-change-state.txt` — services/listeners, `.env` key names (values never), compose services, nginx layout, snapshot preflight, unauthenticated baseline (roots + known snapshot path + HTTP entry), MCP `STREAM_SERVER_URL` and registry scheme counts.
+- `etc-nginx-conf.d.tar` — pre-change conf.d (sourced from `gmktec.home.arpa.conf.pre-stream-auth`, verified byte-identical to the live site at run start via `cmp`).
+- `etc-nginx-sites-available.tar` / `etc-nginx-sites-enabled.tar` — pre-change sites trees (untouched by this runbook).
+- `.env.pre-oauth2-proxy.sha256` — hash of the pre-change `.env` only; the pre-change `.env` content itself stays in the keycloak folder's `final-opt-keycloak.tar` — no duplicate secret copies on the share.
+- `compose.yaml.pre-oauth2-proxy` — pre-change compose (non-secret; the oauth2-proxy service not yet present).
+- `post-change-state.txt` — `.env` key names + counts (values never), oauth2-proxy image pin + listener, `camera-web` client representation (secret never printed), nginx location changes, unauthenticated 302 behavior for all five route families + HTTP→HTTPS snapshot redirect, Phase-9 driver PASS evidence, MCP regression (cookie-independent `get_snapshot`), checkpoint dump verification, deviations list.
+- `final-opt-keycloak.tar` — final `/opt/keycloak/` (root `keycloak/`, restore with `-C /opt`) incl. updated `compose.yaml` (oauth2-proxy service), `.env` (+ client/cookie secrets), `.env.pre-oauth2-proxy`, `compose.yaml.pre-oauth2-proxy`, `gmktec.home.arpa.conf.pre-stream-auth`, and both `.pass` files. Contains NO token files. Sensitive.
+- `final-var-backups-keycloak-postgres.tar` — complete dump set (root `keycloak-postgres-backups/`) incl. the §10 checkpoint `keycloak-20260916T220859Z.dump` (251321 bytes, `pg_restore --list` exit 0, 520 catalog entries). Restore source for this stage until superseded. Sensitive.
+- `final-etc-nginx-conf.d.tar` — newest complete conf.d set: `/oauth2/*` support blocks + `auth_request` on all five route families, `try_files "" =404;` amendment on `/outputs/`, UNPINNED `listen 443 ssl;` (unpinned-listener check: 1 unpinned / 0 pinned-IP). Restore last among config-stage backups.
+- `final-docs-STREAM_AUTH.md`, `final-docs-BACKUP.md` — runbook and this log.
+- `SHA256SUMS` — round-trip verified.
 
 Configuration completed:
 
-- Confidential client `camera-web` created via Admin REST (kcadm create path is unreliable per runbook); standard flow only, PKCE S256, exact redirect `https://{{SERVER_FQDN}}/oauth2/callback`, post-logout `/cameras/`, web origin exact, consent off; all 15 settings verified on the stored representation.
-- `OAUTH2_PROXY_CLIENT_SECRET` + 32-byte URL-safe `OAUTH2_PROXY_COOKIE_SECRET` appended to `/opt/keycloak/.env` (mode 600 preserved, keys occur exactly once, stored secret equals live Keycloak secret, cookie secret decodes to 32 bytes); `.env.pre-oauth2-proxy` created 600.
+- Login user `mcp-user` resolved in realm `mcp`: enabled, nonempty verified email, `requiredActions=[]`.
+- Confidential client `camera-web` (internal UUID `9863e51e-960f-4321-ac39-eb4a951dff8e`) created via host-side Admin REST (kcadm create path unreliable per runbook); standard flow only, PKCE S256, exact redirect `https://gmktec.home.arpa/oauth2/callback`, post-logout `/cameras/`, web origin exact, consent off; all 15 settings verified on the stored representation (secret carried in top-level `secret`, never printed).
+- `OAUTH2_PROXY_CLIENT_SECRET` (byte-compared equal to the live Keycloak client secret) + 32-byte URL-safe `OAUTH2_PROXY_COOKIE_SECRET` appended to `/opt/keycloak/.env` (mode 600 preserved, each key occurs exactly once, all values nonempty); `.env.pre-oauth2-proxy` created 600.
 - oauth2-proxy `v7.15.3` added to `/opt/keycloak/compose.yaml` (postgres/keycloak/volumes verified object-identical before write); bound `127.0.0.1:4180`; provider CA mounted read-only via `--provider-ca-file`.
-- nginx HTTPS site: `/oauth2/auth` (body-less auth subrequest), `/oauth2/` (32k/64k buffers), `@oauth2_signin` relative-`rd` redirect; `auth_request` + cookie-forwarding quartet added exactly once to `/cameras/`, `/multiview/`, `= /outputs/camera_registry.json`, `/outputs/`, `/webrtc/`, `/snapshot/`; snapshot proxy headers/timeouts/no-cache preserved. Single reload.
+- nginx HTTPS site: `/oauth2/auth` (body-less auth subrequest), `/oauth2/` (32k/64k buffers), `@oauth2_signin` relative-`rd` redirect; `auth_request` + cookie-forwarding quartet added to `/cameras/`, `/multiview/`, `= /outputs/camera_registry.json`, `/outputs/`, `/webrtc/`, `/snapshot/`; snapshot proxy headers/timeouts/no-cache preserved; single reload.
+- `/outputs/` fallback: `return 404` → `try_files "" =404;` so the auth access phase runs first (authenticated fallback remains 404).
 
 Verification performed:
 
@@ -1137,11 +1176,14 @@ Verification performed:
 - `/oauth2/start` reaches Keycloak authorize with all PKCE/param names present (values never printed).
 - Discovery still 200; `/mcp` still 401 with protected-resource metadata.
 - Phase-9 driver RESULT=PASS: login lands exactly on requested route, ping 202 `Authenticated`, multiview no second login, WebRTC pass-through, in-session and fresh-session snapshots real JPEGs with `no-store`.
-- MCP regression cookie-independent: `get_cameras` serves HTTPS-origin `web_snapshot_url` for all cameras; `get_snapshot` returns valid 1920×1080 JPEG via loopback; `SNAPSHOT_PROXY_URL` unset (loopback default); `hermes mcp test camera-new` connects with saved OAuth state, 29 tools.
-- Public TLS chain verified against the private CA; no `-k` used anywhere.
-- Backup checksums all passed.
+- MCP regression cookie-independent: `get_cameras` (8 cameras) serves HTTPS-origin `web_snapshot_url` for all cameras; `get_snapshot` returns a valid JPEG via loopback; `SNAPSHOT_PROXY_URL` unset (loopback default); `hermes mcp test camera-new` connects with saved OAuth state, 29 tools.
+- Public TLS chain verified against the private CA (`s_client` + `openssl verify` OK); no `-k` used anywhere.
+- §10 checkpoint dump taken after the browser client and login existed; `pg_restore --list` exit 0; no timer created; all services healthy afterward.
+- Backup checksums all passed (`sha256sum -c` clean).
 
-Known deviations (recorded in `post-change-state.txt`): bare `/outputs/` answers 404 before auth (the `return 404` guard runs pre-authorization but serves no content; the only real file redirects to login correctly); slash-less `= /cameras`/`= /multiview` 301s left unauthenticated (redirect-only, no content exposed).
+Known deviations (recorded in `post-change-state.txt`): none — the bare `/outputs/`
+answers 404 after auth (by design; the real file is protected separately) and the
+slash-less `= /cameras`/`= /multiview` 301s are redirect-only (no content exposed).
 
 Human-confirmation items (out of driver scope by design): live video rendering in a browser after login (UDP ICE path) and images visibly displaying inside `/cameras/` and `/multiview/`.
 
@@ -1181,27 +1223,36 @@ Runbook variables used:
 - `{{PASSWORD}}`: supplied by agent (see security note)
 - `{{BACKUP_PATH}}`: `/mnt/taurus/Camera-System-Backup`
 
-Backup folder:
+Backup folder (actual, 2026-09-16):
 
-- `{{BACKUP_PATH}}/add-user-{{DATETIME_STAMP}}`
+- `{{BACKUP_PATH}}/add-user-20260916-181555`
+
+NOTE: the prior build's add-user entry (folder `add-user-20260916-145556`, uuid
+`e1360b93-…`, dump `keycloak-20260916T185630Z.dump`) was a laboratory artifact of an
+earlier build. This `add-user-20260916-181555` folder is the authoritative record of
+THIS deployment.
 
 Backed up data:
 
-- `post-change-state.txt` — new user representation (username, names, email, `emailVerified=true`, `requiredActions=[]`, uuid `8ae46fcd-2fae-4343-9834-e69ed788e103`), credential type list, realm user list (existing `mcp-user` intact), secret file mode, driver PASS evidence for the new account, dump listing + catalog verification. Password value NOT recorded anywhere in the folder.
-- `final-opt-keycloak.tar` — final `/opt/keycloak/` now including `stephen.pass` (root 600). Sensitive.
-- `final-var-backups-keycloak-postgres.tar` — dumps including the post-user dump (`pg_restore_exit=0`). Newest restore source. Sensitive.
-- `SHA256SUMS` — verified.
+- `post-change-state.txt` — new user representation (username, names, email, `emailVerified=true`, `requiredActions=[]`, uuid `1bfb9d84-4506-40e9-a928-1eb874df3440`), credential type list, realm user list (existing `mcp-user` intact), secret file mode, §9 driver PASS evidence for the new account, dump listing + catalog verification, isolated restore test proof that the new user is IN the dump. Password value NOT recorded anywhere in the folder.
+- `final-opt-keycloak.tar` — final `/opt/keycloak/` (root `keycloak/`, restore with `-C /opt`) now including `stephen.pass` (root 600). Contains NO token files. Sensitive.
+- `final-var-backups-keycloak-postgres.tar` — complete dump set (root `keycloak-postgres-backups/`) including the post-user dump `keycloak-20260916T221600Z.dump` (251849 bytes, 520 catalog entries, `pg_restore --list` exit 0; isolated restore into scratch DB exit 0, both users present). Newest restore source. Sensitive.
+- `SHA256SUMS` — round-trip verified.
 
 Configuration completed:
 
-- One user `stephen` created in realm `mcp` with all identity fields atomic (`emailVerified=true`, no required actions), password from root-owned `/opt/keycloak/stephen.pass` via stdin pipe. No other object touched; no host-file changes outside `/opt/keycloak/stephen.pass`.
+- One user `stephen` created in realm `mcp` with all identity fields atomic (`emailVerified=true`, `requiredActions=[]`), password from root-owned `/opt/keycloak/stephen.pass` (umask 077) via the `exec -i` stdin pipe (`-T` is unavailable on this docker build). No other object touched; no host-file changes outside `/opt/keycloak/stephen.pass`.
 
 Verification performed:
 
-- Username absent before, exactly one match after, enabled; `PASSWORD` credential present; `mcp-user` unchanged.
-- Full browser login flow executed as `stephen` with the §9 driver: RESULT=PASS (lands on requested route, real JPEG with `no-store`).
+- Username absent before, exactly one match after, enabled; `password` credential present; `mcp-user` unchanged.
+- Full browser login flow executed as `stephen` with the §9 driver: RESULT=PASS (lands exactly on requested route, ping 202, real JPEG with `no-store`, fresh-session snapshot login returns to the requested image).
+- Isolated restore into `keycloak_restore_test_20260916_au` (exit 0) listed both `mcp-user` and `stephen` in the restored realm; test DB dropped with the explicit guard.
+- `hermes mcp test camera-new` still connects via saved OAuth state (MCP independent of the new account).
 
-Security note: the password was supplied through the agent chat channel; rotation is recommended once client onboarding completes (set new password via ADD_USER.md §5 idiom, overwrite `stephen.pass`).
+Security note: the password was supplied through the agent chat channel; rotation is
+recommended once client onboarding completes (set a new password per ADD_USER.md §5 and
+overwrite `stephen.pass`).
 
 This stage changes no nginx/systemd/compose state — the folder supersedes the stream-auth folder only for `final-opt-keycloak.tar` and the postgres dumps.
 
@@ -1211,28 +1262,34 @@ Runbook: `{{REPO_PATH}}/onvif-mcp/docs/ADD_CLIENT_ON_SERVER.md`
 
 Runbook variables used:
 
-- `{{CLIENT_SOURCE_IP}}`: `192.168.68.57`
+- `{{CLIENT_SOURCE_IP}}`: `10.1.1.4`
 - `{{BACKUP_PATH}}`: `/mnt/taurus/Camera-System-Backup`
 
-Backup folder:
+Backup folder (actual, 2026-09-16):
 
-- `{{BACKUP_PATH}}/add-client-on-server-{{DATETIME_STAMP}}`
+- `{{BACKUP_PATH}}/add-client-on-server-20260916-182219`
+
+NOTE: the prior build's entry for this stage (folder `add-client-on-server-20260916-150515`,
+component UUID `29e93f3d-…`) was a laboratory artifact of an earlier build. This
+`add-client-on-server-20260916-182219` folder is the authoritative record of THIS
+deployment (component UUID `eaea6b9f-…`).
 
 Backed up data:
 
-- `post-change-state.txt` — before/after trusted-host lists, live-resolved component UUID, token-lifetime-compliant single-command execution evidence, temp-artifact cleanup confirmation, pending client 201 confirmation.
-- `final-opt-keycloak.tar` — unchanged from add-user (policy lives in the DB, not the directory); kept for folder self-sufficiency. Sensitive.
-- `final-var-backups-keycloak-postgres.tar` — fresh dump taken after the policy write (`pg_restore_exit=0`); newest restore source. Sensitive.
-- `SHA256SUMS` — verified.
+- `post-change-state.txt` — before/after trusted-host lists (before: `127.0.0.1, 172.18.0.1, localhost, 10.1.1.5`; after: those four plus `10.1.1.4`), live-resolved component UUID `eaea6b9f-9d50-4e02-a8e9-6c9e2e568161`, both matching controls `["true"]`, single-process execution note, temp-artifact cleanup confirmation, pending `201` DCR confirmation. Tokens/passwords: never.
+- `final-opt-keycloak.tar` — unchanged since add-user-20260916-181555 (the policy lives in the DB, not the directory); re-archived for folder self-sufficiency. Sensitive.
+- `final-var-backups-keycloak-postgres.tar` — complete dump set (root `keycloak-postgres-backups/`) incl. post-write dump `keycloak-20260916T222227Z.dump` (252207 bytes, 520 catalog entries, `pg_restore --list` exit 0; isolated restore exit 0 with the `10.1.1.4` policy row present). Newest restore source. Sensitive.
+- `SHA256SUMS` — round-trip verified.
 
 Configuration completed:
 
-- Exactly one address `192.168.68.57` appended to the anonymous `trusted-hosts` component of realm `mcp` (mint→resolve→fetch→PUT→verify in one bounded command per the 60-second token rule); all four pre-existing hosts preserved; both matching controls asserted `["true"]`. No host files outside `/var/backups/keycloak-postgres/` changed.
+- Exactly one address `10.1.1.4` appended to the anonymous `trusted-hosts` component of realm `mcp` (mint→resolve→fetch→PUT(204)→second-GET verify, single bounded in-memory process — no temp token file, no shell substitution over the credential file); all four pre-existing hosts preserved; both matching controls `["true"]`. No host files changed at all (the policy lives only in the DB).
 
 Verification performed:
 
-- Preflight: health 200, exactly one anonymous trusted-hosts component; second direct by-ID GET after PUT passed every assert; all `/tmp` secret artifacts confirmed removed.
-- Pending: nginx `201` for the client's DCR POST from `192.168.68.57` — confirm when the client runs login (final checklist item).
+- Preflight: health 200; exactly one anonymous trusted-hosts component in realm `mcp` (the master realm's own component is a separate, untouched object); the client's pre-change 403 from `10.1.1.4` (18:18:53) corroborated the supplied address.
+- Second direct by-ID GET after the PUT passed every assert; `/tmp` confirmed free of all step artifacts (none were created).
+- Pending: nginx `201` for the client's DCR POST from `10.1.1.4` — confirm when the client retries login (final checklist item; its pre-change attempt logged `403` at 18:18:53).
 
 ### HTTPS listener unpinned (SITE_CERT §9 amendment)
 

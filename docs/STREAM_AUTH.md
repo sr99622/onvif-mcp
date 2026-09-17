@@ -41,6 +41,8 @@ Routes that must remain independent and must not receive browser
 |---|---|
 | `{{SERVER_FQDN}}` | Public DNS name shared by Nginx, Keycloak, and MCP |
 | `{{SERVER_IP}}` | Address on which Nginx accepts public HTTPS |
+| `{{BACKUP_PATH}}` | Backup folder |
+
 
 These values are required for operation. Stop and prompt the user if they are not provided.
 
@@ -707,13 +709,16 @@ status codes, parameter *names* only, and landing paths — never values.
 Run it from the repository root:
 
 ```bash
-python3 scripts/stream_auth_step9_driver.py
+python3 scripts/stream_auth_step9_driver.py --origin "https://{{SERVER_FQDN}}"
 ```
 
 All deployment-specific values are CLI parameters (`--origin`, `--target`,
 `--second-route`, `--snapshot-path`, `--webrtc-url`, `--realm`, `--username`,
-`--password-file`) that default to this deployment's verified values; override
-them for other deployments rather than editing the script.
+`--password-file`). `--origin` is mandatory: an inherited example hostname can
+send this deployment's password to another server. Other arguments retain example
+defaults; resolve the camera/profile paths locally and override them as needed.
+The driver verifies TLS using the system CA store; install the private root CA
+rather than disabling certificate or hostname verification.
 
 The driver reads `{{MCP_LOGIN_USER}}`'s password by itself, inside that one
 root-capable process (default source `/opt/keycloak/mcp-user.pass`). The
@@ -772,6 +777,25 @@ not yet been completed):
   `packages/core/src/onvif_mcp_core/streaming.py`).
 
 Finally verify Hermes MCP access remains independent:
+
+Before starting a new login, back up the existing OAuth state privately and check
+the actual authorization request includes `scope=mcp:tools` (and
+`offline_access` if refresh access is wanted). Registration metadata containing a
+scope does not prove that the authorization URL requests it. For this deployment:
+
+```bash
+hermes config set mcp_servers.camera-new.oauth.scope 'offline_access mcp:tools'
+hermes config set mcp_servers.camera-new.ssl_verify /etc/ssl/certs/ca-certificates.crt
+```
+
+Resolve the entry name first; do not blindly modify `camera-new` on another host.
+The CA bundle must contain the private root. Hermes' HTTP client may otherwise
+use a bundled public CA store instead of the host store. Do not set
+`ssl_verify=false`. Run only one login at a time: `hermes mcp login`/`reauth`
+clears saved OAuth state, so it is not a read-only diagnostic. Inspect non-secret
+claim summaries and require the MCP audience and scope before retrying a failed
+connection. Do not make MCP scopes realm-wide defaults to mask a missing scope
+parameter. See `STREAM_AUTH_RECOVERY.md` for the verified recovery and evidence.
 
 ```bash
 hermes mcp test {{HERMES_SERVER_NAME}}
@@ -846,6 +870,15 @@ add-client-on-server-*. Verify before closing as in KEYCLOAK.md §15b (checksum
 round-trip, tar non-empty guards, dump catalog listing).
 
 ## Troubleshooting
+
+### `/outputs/` returns 404 without a login redirect
+
+Nginx `return 404` executes in the rewrite phase, before `auth_request`. In a
+protected fallback location intended to serve no files, replace it with
+`try_files "" =404;` so the authentication access phase runs first. Preserve the
+separately protected exact `/outputs/camera_registry.json` location. Validate,
+reload, and check new requests after workers have adopted the configuration:
+unauthenticated fallback requests must redirect; authenticated ones remain 404.
 
 ### `curl --cacert {{PRIVATE_CA_FILE}}` reports "file does not exist"
 

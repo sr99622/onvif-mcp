@@ -25,8 +25,8 @@ host, user account, GPG key, or prior session.
 
 | Name | Meaning |
 |---|---|
-| `{{CA_ROOT_PATH}}` | Private CA root directory (e.g. `/home/stephen/Private-CA`) |
-| `{{BACKUP_PATH}}`     | Mounted SMB share path (e.g. `/mnt/taurus`) |
+| `{{CA_ROOT_PATH}}` | Private CA root directory |
+| `{{BACKUP_PATH}}`     | Mounted SMB share path |
 | `{{DATE}}`         | Current date for archive names (e.g. `2026-09-01`; never reuse a hardcoded value) |
 
 Passphrases are **not** supplied as variables and never echoed. Both live in the local
@@ -36,25 +36,6 @@ Passphrases are **not** supplied as variables and never echoed. Both live in the
 |---|---|
 | `camera-ca/root-key-passphrase` | The CA private key (used for signing) |
 | `camera-ca/age-archive-<DATE>` | The age archive from that date (local + SMB copy) |
-
-## Platform notes
-
-Tested on macOS and on Debian/Ubuntu Linux. Differences handled in this runbook:
-
-- Hash verification: use `sha256sum` on Linux; `shasum -a 256` on macOS.
-- Install `age`: `sudo apt install age` (Debian/Ubuntu) or `brew install age` (macOS).
-- Install `pass`: `sudo apt install pass` (Debian/Ubuntu) or a manual build on macOS. On a
-  box without a usable sudo TTY, a download-and-extract procedure is needed instead.
-
-### Expected versions (tested 2026-09-01 on Ubuntu 26.04)
-
-- `sudo` available non-interactively; OpenSSL 3.5.5; age 1.2.1; pass v1.7.4; gpg 2.4.8
-- The GPG key: ed25519 signing (`[SC]`) + cv25519 encryption subkey (`[E]`), no expiry,
-  user ID of your choosing (any valid `name <email>`). That user ID is what every later
-  `<user-id>` placeholder in this document refers to — the agent reads it from
-  `gpg --list-keys` after you create the key and substitutes it into commands. It is
-  long-lived infrastructure: once it guards the vault, treat it that way (do not rotate
-  casually; recovery in §13 depends on it).
 
 ## Site-specific values
 

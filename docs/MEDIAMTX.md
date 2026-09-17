@@ -9,6 +9,7 @@ This document describes the MediaMTX RTSP-to-WebRTC/HLS streaming server. The se
 | {{SERVER_FQDN}} | Server Fully Qualified Domain Name |
 | {{USERNAME}} | Camera Username |
 | {{PASSWORD}} | Camera Password |
+| `{{BACKUP_PATH}}` | Backup folder |
 
 These values are required for operation. Stop and prompt the user if any of them are not provided.
 
@@ -75,27 +76,6 @@ After configuration is complete, repeat the archive commands with `final-` prefi
 
 Security note: `/etc/mediamtx/mediamtx.yml` contains camera credentials in RTSP URLs. Treat any backup archive containing `/etc/mediamtx/` as sensitive.
 
-## Binary Executable
-
-location: https://github.com/bluenviron/mediamtx/releases
-
-look for the latest amd64 binary, it will look something like
-
-`mediamtx_v1.20.0_linux_amd64.tar.gz`
-
-In this example, the most recent version is 1.20.0, which can change. The generic representation of this name with the version represented symbolically and surrounded by curly braces would be:
-
-`mediamtx_v{version}_linux_amd64.tar.gz`
-
-Example Deployment steps (the symbolic version in curly braces should be replaced with the actual version):
-```bash
-# Download latest version
-curl -sL "https://github.com/bluenviron/mediamtx/releases/download/v{version}/mediamtx_v{version}_linux_amd64.tar.gz" | tar xz
-
-# Install binary
-sudo cp mediamtx /usr/local/bin/mediamtx && sudo chmod 755 /usr/local/bin/mediamtx
-```
-
 ## Deployment Details
 
 | Item | Value |
@@ -105,14 +85,6 @@ sudo cp mediamtx /usr/local/bin/mediamtx && sudo chmod 755 /usr/local/bin/mediam
 | Config | `/etc/mediamtx/mediamtx.yml` |
 | Service | `sudo systemctl status mediamtx` (system service, multi-user.target) |
 | User | `mediamtx:mediamtx` (dedicated system user) |
-
-### Prerequisites: Create System User
-
-```bash
-sudo groupadd --system mediamtx
-sudo useradd --system --no-create-home --shell /usr/sbin/nologin -g mediamtx mediamtx
-sudo mkdir -p /etc/mediamtx /var/log/mediamtx
-```
 
 ## Protocols & Ports
 
@@ -185,7 +157,36 @@ number of profiles reported across all cameras before starting the service.
 
 MediaMTX uses **internal database mode** with permissive access rules — no password is required for any user (`pass:` is empty). The config grants full permissions (publish, read, playback) to all cameras. Access control is managed by the nginx proxy front end.
 
-## MediaMTX Configuration File (`/etc/mediamtx/mediamtx.yml`)
+## 1. Get Binary Executable
+
+location: https://github.com/bluenviron/mediamtx/releases
+
+look for the latest amd64 binary, it will look something like
+
+`mediamtx_v1.20.0_linux_amd64.tar.gz`
+
+In this example, the most recent version is 1.20.0, which can change. The generic representation of this name with the version represented symbolically and surrounded by curly braces would be:
+
+`mediamtx_v{version}_linux_amd64.tar.gz`
+
+Example Deployment steps (the symbolic version in curly braces should be replaced with the actual version):
+```bash
+# Download latest version
+curl -sL "https://github.com/bluenviron/mediamtx/releases/download/v{version}/mediamtx_v{version}_linux_amd64.tar.gz" | tar xz
+
+# Install binary
+sudo cp mediamtx /usr/local/bin/mediamtx && sudo chmod 755 /usr/local/bin/mediamtx
+```
+
+## 2. Create System User
+
+```bash
+sudo groupadd --system mediamtx
+sudo useradd --system --no-create-home --shell /usr/sbin/nologin -g mediamtx mediamtx
+sudo mkdir -p /etc/mediamtx /var/log/mediamtx
+```
+
+## 3. Create MediaMTX Configuration File (`/etc/mediamtx/mediamtx.yml`)
 
 * Camera credentials are embedded in RTSP URLs in the config file (`/etc/mediamtx/mediamtx.yml`). Keep this file protected (mode 640, owned by mediamtx:mediamtx).
 
@@ -231,7 +232,7 @@ paths:
   # ... one additional path per profile: the main stream AND every substream, for every camera
 ```
 
-## Systemd Service Setup
+## 4. Systemd Service Setup
 
 Service file at `/etc/systemd/system/mediamtx.service`:
 
@@ -269,7 +270,7 @@ sudo systemctl start mediamtx
 sudo systemctl status mediamtx  # verify active (running)
 ```
 
-## Nginx Reverse Proxy Configuration
+## 5. Nginx Reverse Proxy Configuration
 
 **Critical:** The nginx reverse proxy requires TWO specific directives that are often missing:
 

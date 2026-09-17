@@ -17,6 +17,7 @@ The server's other interface and its existing LAN/Internet configuration are not
 | Value | Description |
 |---|---|
 | {{PRVT_CAMERA_NET_EN_NAME}} | Ethernet Adapter Interface name hosting the private camera subnet |
+| `{{BACKUP_PATH}}` | Backup folder |
 
 This value is required for operation. Stop and prompt the user if it is not provided.
 
@@ -62,6 +63,7 @@ sudo chown -R "$USER:$(id -gn)" "$BACKUP_DIR"
 ```
 
 After configuration is complete, repeat the archive commands with `final-` prefixes so the backup contains both the pre-change state and the working configuration needed for reconstruction.
+
 
 ## 1. Configure Private Network Interface with NetworkManager
 
@@ -130,14 +132,6 @@ There must be no default route through {{PRVT_CAMERA_NET_EN_NAME}}.
 ## 2. Install Kea DHCPv4
 
 ```bash
-sudo apt update
-sudo apt install kea-dhcp4-server
-```
-
-On Ubuntu 22.04, enable the Universe repository first if the package is unavailable:
-
-```bash
-sudo add-apt-repository universe
 sudo apt update
 sudo apt install kea-dhcp4-server
 ```

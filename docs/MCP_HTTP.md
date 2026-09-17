@@ -9,6 +9,7 @@
 | `{{PASSWORD}}`    | Camera Password                                 |
 | `{{REPO_PATH}}`   | Full Pathname of Repository Location            |
 | `{{SERVER_USER}}` | System user the service runs as (project owner) |
+| `{{BACKUP_PATH}}` | Backup folder                                   |
 
 These values are required for operation. Stop and prompt the user if any of them are not provided.
 
@@ -75,8 +76,6 @@ Security note: `/etc/systemd/system/onvif-mcp-http.service` contains camera cred
 
 The `onvif-mcp-http` package provides an HTTP-based MCP (Model Context Protocol) server for discovering and controlling ONVIF cameras on the local network. It exposes tools through a Streamable HTTP transport (SSE + POST), accessible both locally on port 8001 and externally through nginx at `http://{{SERVER_FQDN}}/mcp/`.
 
-## Current State
-
 - **Service**: `onvif-mcp-http.service` — running, enabled for auto-start on boot
 - **Local endpoint**: `http://127.0.0.1:8001/mcp`
 - **Nginx proxy**: `http://{{SERVER_FQDN}}/mcp/` (forwarded to port 8001)
@@ -84,7 +83,7 @@ The `onvif-mcp-http` package provides an HTTP-based MCP (Model Context Protocol)
 - **Executable**: `{{REPO_PATH}}/onvif-mcp/.venv/bin/onvif-mcp-http`
 - **Source**: `packages/http/src/onvif_mcp_http/main.py`
 
-## Nginx Proxy Configuration
+## 1. Nginx Proxy Configuration
 
 **File**: `/etc/nginx/sites-available/camera-mcp` (symlinked to `sites-enabled/`)
 
@@ -121,35 +120,35 @@ server {
 - Uses `location = /mcp` (exact match) because the MCP server redirects `/mcp/` to `/mcp`, and POST requests don't survive the redirect. Nginx must forward directly to `/mcp` without trailing slash.
 - Proxy headers include Upgrade/Connection for SSE, plus standard forwarded headers.
 
-### Merging into an existing vhost (important)
+* ### Merging into an existing vhost (important)
 
-If a `server` block for `{{SERVER_FQDN}}` already exists on this host (e.g. from
-`docs/MEDIAMTX.md` or `docs/APPS.md`, which both create one and instruct that no
-second vhost be made), **merge these two locations into that existing block instead
-of creating a second file**. Do not enable two separate files declaring the same
-`listen 80` + `server_name`.
+  If a `server` block for `{{SERVER_FQDN}}` already exists on this host (e.g. from
+  `docs/MEDIAMTX.md` or `docs/APPS.md`, which both create one and instruct that no
+  second vhost be made), **merge these two locations into that existing block instead
+  of creating a second file**. Do not enable two separate files declaring the same
+  `listen 80` + `server_name`.
 
-Observed failure mode on this host (two enabled blocks with identical name and
-port): nginx logs only a warning —
+  Observed failure mode on this host (two enabled blocks with identical name and
+  port): nginx logs only a warning —
 
-    [warn] conflicting server name "<FQDN>" on 0.0.0.0:80, ignored
+      [warn] conflicting server name "<FQDN>" on 0.0.0.0:80, ignored
 
-— and `nginx -t` still exits 0 ("syntax is ok", "test is successful"). The later
-block's server-name registration is discarded (files are parsed alphabetically),
-so all of its locations stop working while requests for that host silently route
-to whichever block was parsed first. In the incident on this box, `/cameras/`,
-`/multiview/`, `/outputs/` and `/webrtc/` all returned 404 while only `/mcp`
-worked; the breakage appeared in behavior, never in `nginx -t`.
+  — and `nginx -t` still exits 0 ("syntax is ok", "test is successful"). The later
+  block's server-name registration is discarded (files are parsed alphabetically),
+  so all of its locations stop working while requests for that host silently route
+  to whichever block was parsed first. In the incident on this box, `/cameras/`,
+  `/multiview/`, `/outputs/` and `/webrtc/` all returned 404 while only `/mcp`
+  worked; the breakage appeared in behavior, never in `nginx -t`.
 
-After installing the MCP locations, verify with:
+  After installing the MCP locations, verify with:
 
-```bash
-# must print exactly 1 per port — a second occurrence means a conflict
-sudo nginx -T | grep -c 'server_name {{SERVER_FQDN}}'
-# re-test every pre-existing endpoint (apps, web player, registry), not just /mcp
-```
+  ```bash
+  # must print exactly 1 per port — a second occurrence means a conflict
+  sudo nginx -T | grep -c 'server_name {{SERVER_FQDN}}'
+  # re-test every pre-existing endpoint (apps, web player, registry), not just /mcp
+  ```
 
-## systemd Service
+## 2. Configure systemd Service and Start
 
 **File**: `/etc/systemd/system/onvif-mcp-http.service`
 
@@ -176,7 +175,13 @@ RestartSec=5
 WantedBy=multi-user.target
 ```
 
-**Management commands:**
+Start the service and make it persistent
+
+```bash
+systemctl enable --now onvif-mcp-http
+```
+
+### Management commands:
 ```bash
 systemctl status onvif-mcp-http          # Check status
 journalctl -u onvif-mcp-http -f           # Follow logs

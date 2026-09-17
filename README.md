@@ -53,12 +53,13 @@ Be mindful of model context size when running the configurations shown below. As
 
     | Name | Description | Site Value |
     |------|-------------|------------|
-    | `{{EN_NAME}}` | Ethernet adapter hosting the private camera network | - |
+    | `{{PRVT_CAMERA_NET_EN_NAME}}` | Ethernet adapter hosting the private camera network | - |
     | `{{SERVER_FQDN}}` | Fully Qualified Domain Name of the server, e.g. camera.home.arpa | - |
     | `{{USERNAME}}` | Common username for cameras | - |
     | `{{PASSWORD}}` | Common password for cameras | - |
     | `{{REPO_PATH}}` | Parent directory of this repository | - |
     | `{{SERVER_USER}}` | Account name on the server under which Hermes is run | - |
+    | `{{BACKUP_PATH}}` | Backup folder | - |
 
     **Runbooks**
 
@@ -69,6 +70,11 @@ Be mindful of model context size when running the configurations shown below. As
     APPS.md
     MCP_HTTP.md
     ```
+    
+    **Agent Instructions**
+
+    The runbooks are intended to be executed in order. The DHCP server is set up first and should be given ample opportunity to assign addresses to cameras before querying the camera MCP server tool get_cameras to discover cameras on the network. A couple of minutes should be long enough. Always use the camera MCP server tool `get_cameras` to get camera data. It returns all the data needed in a delimited json format. Do not attempt to develop other methods to query the cameras directly. The camera MCP server is the most reliable method of finding the data.
+
     ---
 
 3. ### HTTPS Encryption
@@ -84,7 +90,7 @@ Be mindful of model context size when running the configurations shown below. As
     | Name | Description | Site Value |
     |------|-------------|------------|
     | `{{CA_ROOT_PATH}}` | Private CA root directory (e.g. $HOME/Private-CA) | - |
-    | `{{SMB_PATH}}` | SMB shared drive to be created on the local host (e.g. `/mnt/backup`) | - |
+    | `{{BACKUP_PATH}}` | SMB shared drive to be created on the local host (e.g. `/mnt/backup/Camera-System-Backup`) | - |
     | `{{SERVER_FQDN}}` | Fully Qualified Domain Name of the server, e.g. camera.home.arpa | - |
     | `{{SERVER_USER}}` | Account name on the server under which Hermes is run | - |
     | `{{REPO_PATH}}` | Parent directory of this repository | - |
@@ -100,6 +106,11 @@ Be mindful of model context size when running the configurations shown below. As
     CA_DISTRIBUTE.md
     DNS.md
     ```
+
+    **Agent Instructions**
+
+    When prompting the user to enter gpg credentials using `pg --full-gen-key`
+
     ---
 
 4. ### Install the Chrome Browser
@@ -135,13 +146,14 @@ Be mindful of model context size when running the configurations shown below. As
 
 5. ### Keycloak installation
 
-    The Keycloak server provides authentication services for the site. During installation a default user is created that can be used for testing the configuration. 
+    The Keycloak server provides authentication services for the site. During installation a default user is created that can be used for testing the configuration. A fresh context may be needed at this point, if so, re-intialize the agent context in the prompt by having them review this document again. 
 
     **Required Value**
 
     | Name | Description | Site Value |
     |------|-------------|------------|
     | `{{SERVER_FQDN}}` | Fully Qualified Domain Name of the server (e.g. camera.home.arpa) | - |
+    | `{{BACKUP_PATH}}` | Backup folder (e.g. /mnt/backup/Camera-System-Backup) | - |
 
     **Runbook**
 
@@ -152,12 +164,15 @@ Be mindful of model context size when running the configurations shown below. As
 
 6. ### Layer authentication on the rest of the site endpoints
 
+    This step will require that the camera-new http MCP server is available to the agent. This can be accomplished using the /reload-mcp directive before starting the runbook.
+
     **Required Values**
 
     | Name | Description |
     |---|---|
     | `{{SERVER_FQDN}}` | Public DNS name shared by Nginx, Keycloak, and MCP |
     | `{{SERVER_IP}}` | Address on which Nginx accepts public HTTPS |
+    | `{{BACKUP_PATH}}` | Backup folder (e.g. /mnt/backup/Camera-System-Backup) | - |
 
     **Runbook**
 
@@ -174,6 +189,7 @@ Be mindful of model context size when running the configurations shown below. As
     |---|---|
     | `{{NEW_LOGIN_USER}}` | New login username supplied by agent |
     | `{{SERVER_FQDN}}` | Server Fully Qualified Domain Name |
+    | `{{BACKUP_PATH}}` | Backup folder |
     | `{{FIRST_NAME}}` | New login first name |
     | `{{LAST_NAME}}` | New login last name |
     | `{{USER_EMAIL}}` | New login email address |

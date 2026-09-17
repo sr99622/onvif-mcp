@@ -5,10 +5,11 @@ only; asserts status codes, parameter NAMES (never values), landing paths, and
 JPEG magic bytes. Never prints credentials, tokens, code/state values, or
 cookies; never persists cookies to disk.
 
-All deployment-specific values are parameters with this deployment's verified
-defaults (2026-09-08). Run from the repository root:
+The public --origin is required: never submit a local deployment's password to
+an inherited example hostname. Other deployment-specific values are parameters.
+Run from the repository root:
 
-    python3 docs/stream_auth_step9_driver.py [--options]
+    python3 scripts/stream_auth_step9_driver.py --origin https://SERVER_FQDN [--options]
 
 The password is read by the driver itself from --password-file inside this one
 process; it must not be copied into chat, documentation, or a command line.
@@ -34,8 +35,6 @@ class NoRedir(urllib.request.HTTPRedirectHandler):
 
 def make_opener(jar, follow=True):
     ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
     handlers = [urllib.request.HTTPSHandler(context=ctx),
                 urllib.request.HTTPCookieProcessor(jar)]
     if not follow:
@@ -140,7 +139,7 @@ def is_jpeg(body):
 def main():
     p = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--origin", default="https://nuc.home.arpa",
+    p.add_argument("--origin", required=True,
                    help="public HTTPS origin ({{SERVER_FQDN}} with scheme)")
     p.add_argument("--target", default="/cameras/",
                    help="protected app route to land on after login")

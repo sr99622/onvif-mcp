@@ -5,6 +5,7 @@
 | Name | Description |
 |------|-------------|
 | `{{SERVER_FQDN}}` | Server Fully Qualified Domain Name e.g. camera.home.arpa |
+| `{{BACKUP_PATH}}` | Backup folder |
 
 ## Purpose
 

@@ -11,6 +11,7 @@ and pull live streams from the MediaMTX server
 |------------|------------|
 | `{{SERVER_FQDN}}` | Server Fully Qualified Domain Name e.g. camera.home.arpa |
 | `{{REPO_PATH}}` | Path Location of git repo, most likely $HOME |
+| `{{BACKUP_PATH}}` | Backup folder |
 
 These values are required for operation. Stop and prompt the user if they are not provided.
 
@@ -113,7 +114,7 @@ system nginx user, not under a per-user `python -m http.server` process.
      outputs/camera_registry.json               # shared registry (authoritative)
    ```
 
-## Step 1: Fix the camera registry URLs
+## 1. Fix the camera registry URLs
 
 `/etc/onvif-mcp/camera_registry.json` is the runtime source of truth for
 stream URLs. Nginx serves it at `/outputs/camera_registry.json`. The checked-in
@@ -156,7 +157,7 @@ Every path referenced by the registry must exist in `paths:` of
 `/etc/mediamtx/mediamtx.yml` (same serial/token naming). Add missing paths
 there and restart mediamtx before proceeding.
 
-## Step 2: Let nginx read the project folder
+## 2. Let nginx read the project folder
 
 nginx workers run as a system user that cannot traverse `/home/stephen`
 (mode `750`). Create a dedicated web user in the owner's group:
@@ -171,7 +172,7 @@ The group membership is what grants `x` (traverse) + `r` on
 `{{REPO_PATH}}/...`. No setuid bits or extra file permissions are
 needed.
 
-## Step 3: Configure the nginx vhost
+## 3. Configure the nginx vhost
 
 All of this lives in **one** server block alongside the MediaMTX proxy, at
 `/etc/nginx/sites-available/mediamtx` (already present from the
@@ -260,7 +261,7 @@ sudo systemctl reload nginx
 - **Single-line `return` strings.** A multi-line `"a\n" "b"` form in a
   `return` directive fails `nginx -t` with "invalid number of arguments".
 
-## Step 4: Verify
+## 4. Verify
 
 ```bash
 # All endpoints should be 200:

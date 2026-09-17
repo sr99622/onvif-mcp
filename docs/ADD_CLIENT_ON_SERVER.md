@@ -17,6 +17,7 @@ loopback Keycloak listener; nothing here touches the network-facing stack.
 | Symbol | Description |
 |--------|-------------|
 | `{{CLIENT_SOURCE_IP}}` | Client IP address as observed by the server. Note that clients running in a virtual machine or container may be observed by the server as coming from the client host computer. Attempt a login from the client prior to running these instructions to place the observed IP address in the server cache for verification. |
+| `{{BACKUP_PATH}}` | Backup folder |
 
 Runbook values used by this document:
 
