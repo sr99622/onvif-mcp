@@ -107,10 +107,6 @@ Be mindful of model context size when running the configurations shown below. As
     DNS.md
     ```
 
-    **Agent Instructions**
-
-    When prompting the user to enter gpg credentials using `pg --full-gen-key`
-
     ---
 
 4. ### Install the Chrome Browser

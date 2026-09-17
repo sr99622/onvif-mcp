@@ -60,10 +60,14 @@ overlap across stage folders. **Supersession is strict: a later row always wins
 over an earlier one for the artifacts listed.** Never restore an earlier folder
 after a later one.
 
-The first step of the restore is to rebuild the HTTP Services from section 2 of `Building the Server` in the onvif-mcp/README.md doc using the values in the Site Constants table above. Upon successful completion of HTTP Services, continue as listed below.
 
 | # | Stage | Backup folder | Restores | Supersedes (for) |
 |---|---|---|---|---|
+| 1 | DHCP/Kea | `dhcp-*` | Kea conf/leases, sysctl isolation, NM profile (*defect D1*) | — |
+| 2 | MediaMTX | `mediamtx-*` | binary, unit, conf, state; nginx sites | — |
+| 3 | Snapshot proxy | `snapshot-*` then `snapshot-user-correction-*` | routes, proxy source, unit; nginx sites | snapshot's unit+routes (typo fix) |
+| 4 | Apps | `apps-*` | nginx.conf (`user webcam;`), sites, registry, app sources | stages 2–3 nginx sites |
+| 5 | MCP HTTP | `mcp-http-*` | venv, unit, sites (adds `/mcp`) | stage 4 sites |
 | 6 | CA recovery | `Camera-CA-Backups/` (user-driven, GPG→pass→age) | Private-CA tree | — (see CREATE_CA_CERT.md §13) |
 | 7 | HTTPS cert | `site-cert-*` + live CA | reissued key+cert, conf.d (HTTPS), nginx.conf, onvif unit (https), tls dir | stage 5 unit/registry |
 | 8 | CA distribute | `ca-distribute-*` | `/srv/camera-pki/public`, sites+conf.d (adds `/ca/`) | stage 7 sites AND conf.d |
