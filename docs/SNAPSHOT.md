@@ -322,27 +322,6 @@ and re-test before reloading.
    set on `onvif-mcp-http`, call `get_cameras` and confirm each profile's
    `web_snapshot_url` equals the URL verified in step 1.
 
-> **When TLS + Keycloak are added later:** re-insert the keycloak lines from
-> Step 6 into the `/snapshot/` location, switch every client-facing URL above
-> to `https://{{SERVER_FQDN}}/...` (with a CA cert), and replace step 1 with
-> the gate check:
->
-> ```bash
-> curl --head -s --cacert /etc/nginx/tls/camera-system-root-ca.crt.pem \
->   "https://{{SERVER_FQDN}}/snapshot/<serial>/<token>/" | head -8
-> # expect: HTTP/1.1 302 with Location: .../oauth2/start?rd=/snapshot/<serial>/<token>/
-> ```
-
-## Adding a Camera Later
-
-The service needs no nginx changes — only:
-
-1. A new entry (or entries) in `/etc/onvif-mcp/snapshot_routes.json`, keyed
-   exactly like the registry/MediaMTX path name (Step 3).
-2. Restart the unit: `sudo systemctl restart snapshot-proxy`.
-3. Re-run the Step 5 standalone test for the new route(s), plus one browser
-   check from Step 7.
-
 ## Security Notes
 
 - The proxy binds to loopback only; the cameras are reached solely through it,
