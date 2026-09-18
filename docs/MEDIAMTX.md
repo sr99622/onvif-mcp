@@ -53,7 +53,7 @@ UDP 8189 carries encrypted WebRTC media, not the original unencrypted RTSP feed.
 
 ## Camera Streams
 
-Each camera exposes two or more named paths in the YAML config. The streams are declared in the `paths:` section of the `mediamtx.yml`. The camera stream path consists of a name and a `source:` field. The name is a combination of the camera serial number and profile token delimited by a slash character. The source is the camera RTSP endpoint, known as the stream_uri, modified to include the username and password credentials for authorization. Agents can collect the necessary camera data from the camera MCP server tool `get_cameras`.
+Each camera exposes two or more named paths in the YAML config. The streams are declared in the `paths:` section of the `mediamtx.yml`. The camera stream path consists of a name and a `source:` field. The name is a combination of the camera serial number and profile token delimited by a slash character. The source is the camera RTSP endpoint, known as the stream_uri, modified to include the username and password credentials for authorization. Agents can collect the necessary camera data from the stdio camera MCP server tool `get_cameras`, which returns camera data including profiles that will each have a web_player_url. The main stream is considered to be the first profile, and substream(s) follow in order.
 
 ### Example Camera Stream Path Construction
 

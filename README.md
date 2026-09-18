@@ -72,7 +72,15 @@ Be mindful of model context size when running the configurations shown below. As
     
     **Agent Instructions**
 
-    The runbooks are intended to be executed in order. The DHCP server is set up first and should be given ample opportunity to assign addresses to cameras before querying the camera MCP server tool get_cameras to discover cameras on the network. A couple of minutes should be long enough. Always use the camera MCP server tool `get_cameras` to get camera data. It returns all the data needed in a delimited json format. Do not attempt to develop other methods to query the cameras directly. The camera MCP server is the most reliable method of finding the data.
+    The runbooks are intended to be executed in order. 
+    
+    The DHCP server is set up first and should be given ample opportunity to assign addresses to cameras before querying the camera MCP server tool get_cameras to discover cameras on the network. A couple of minutes should be long enough. 
+    
+    Use the stdio camera MCP server tool `get_cameras` to get camera data. This server is already configured for your use. It returns all the data needed in a delimited json format. Do not attempt to develop methods to query the cameras directly using ONVIF or other methods. The camera MCP server is the most reliable method of finding the data.
+
+    There is another camera MCP server that is configured by the runbook MCP_HTTP.md. It is not intended to be used by you to gather camera data. That server is available for remote agents to access the camera system. You will be configuring and testing the HTTP MCP server, but you should use the stdio MCP server that you have already.
+
+    The SNAPSHOT.md runbook builds a server that is used to get camera snapshots. This server will query the cameras directly as a proxy to get jpg snapshots. You should not try to emulate the snapshot server. You should follow the runbook directions for testing closely. This server is intended for use by remote agents, similar to HTTP MCP.
 
     ---
 
