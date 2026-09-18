@@ -84,21 +84,32 @@ you expect, so **never guess it** — read it from ONVIF. For every camera
 returned by `get_cameras`, a list of profiles is returned, such that each 
 profile includes the token and the snapshot_uri.
 
-**Test every URI live** before trusting it. `curl --digest` handles both
-Basic and Digest automatically, so one test command covers all vendors:
+**Test every URI live** before trusting it. `curl --digest` handles Digest 
+authentication and `curl --basic` does Basic authentication. If --digest is
+unsuccessful, wait a few seconds then try --basic. Do not repeatedly hit the
+camera with requests in succession, you might crash it:
 
-```bash
-curl -s --digest -u {{USERNAME}}:{{PASSWORD}} --max-time 20 \
-  -o /tmp/snap.jpg -w '%{http_code} %{content_type}\n' '<snapshot_uri>'
-file /tmp/snap.jpg        # must say "JPEG image data"
-```
+* Digest Version of the Command
+
+  ```bash
+  curl -s --digest -u {{USERNAME}}:{{PASSWORD}} --max-time 20 \
+    -o /tmp/snap.jpg -w '%{http_code} %{content_type}\n' '<snapshot_uri>'
+  file /tmp/snap.jpg        # must say "JPEG image data"
+  ```
+
+* Basic Version of the Command
+
+  ```bash
+  curl -s --basic -u {{USERNAME}}:{{PASSWORD}} --max-time 20 \
+    -o /tmp/snap.jpg -w '%{http_code} %{content_type}\n' '<snapshot_uri>'
+  file /tmp/snap.jpg        # must say "JPEG image data"
+  ```
 
 Expectations and known fleet quirks (verified):
 
 - A correct answer is `200 image/jpeg` with a real JPEG body.
 - Some cameras require Digest (Dahua, LoReX, Amcrest, AXIS, Reolink — they
-  return 401 to plain Basic). The proxy handles this transparently; you only
-  need `curl --digest` for your own testing.
+  return 401 to plain Basic). The proxy handles this transparently.
 - A camera may report one snapshot_uri shared by multiple profiles (e.g.
   Speco maps all profile tokens to `/snapshot.JPG`; Reolink snapshots
   channel=0 only regardless of token). In that case several route entries
