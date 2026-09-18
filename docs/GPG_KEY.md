@@ -21,6 +21,10 @@ The exported secret key is stored at
 `{{BACKUP_PATH}}/Camera-CA-Backups/ca-vault-gpg.key.gpg`. The `.gpg` extension is
 the established backup filename; the file contents are ASCII armored OpenPGP.
 
+The backup path may not have been created yet. If the backup does not exist, 
+attempt to create it using `mkdir -p`. If you are unable to find or create the
+full backup path, stop and warn the user, do not continue with the runbook.
+
 ## 1. Configure terminal pinentry (AGENT-run)
 
 The agent performs this setup before handing the terminal to the user. It
@@ -48,28 +52,30 @@ gpgconf --reload gpg-agent
 grep -Fx 'pinentry-program /usr/bin/pinentry-curses' ~/.gnupg/gpg-agent.conf
 ```
 
+Verify that the ca-vault-gpg.key.gpg does not already exist.
+
 Do not run `gpg --full-gen-key` or enter a passphrase in the agent session.
 The user performs the next step in their own terminal.
 
 ## 2. Generate and identify the key (USER-run)
 
-The user opens a real terminal, or connects over SSH with a TTY (for example,
-`ssh -t host`). In **that terminal**, run:
+Prompt the user to open another terminal session and run this command set
+in that terminal. Display the command set to the user offset from other text 
+in the prompt so that the intent is clear. Do not clutter up the prompt with 
+meaningless explanations irrelevant to the task at hand.
 
 ```bash
-tty                         # must print a device such as /dev/pts/2
+tty
 export GPG_TTY=$(tty)
 gpg-connect-agent updatestartuptty /bye
 gpg --full-gen-key
 gpg --list-secret-keys --fingerprint
 ```
 
-Choose and enter a strong GPG passphrase at the terminal prompt. A session
-where `tty` says `not a tty` cannot display terminal pinentry. If a GUI prompt
-appears, stop and have the agent recheck step 1 before creating the key.
+Tell the user to run these commands accepting the default settings, then paste 
+the result in the prompt window for your evaluation. Wait for the user to 
+finish. They may have questions, so be prepared to respond in that event.
 
-Choose an encryption-capable key. On GnuPG 2.4.x, ECC (sign and encrypt) with
-Curve 25519 creates an Ed25519 primary key and a Curve25519 encryption subkey.
 Record the **full fingerprint** displayed below `sec`; use it to select the key
 for export and later for `pass init`. `gpg --list-keys` without an argument can
 also list the public keys and their `uid` names. A name or email is not needed
@@ -93,7 +99,6 @@ backup_dir="{{BACKUP_PATH}}/Camera-CA-Backups"
 local_export="$HOME/ca-vault-gpg.key.gpg"
 backup_export="$backup_dir/ca-vault-gpg.key.gpg"
 
-test "$(findmnt -T '{{BACKUP_PATH}}' -n -o FSTYPE)" = cifs
 test ! -e "$local_export"
 test ! -e "$backup_export"
 mkdir -p "$backup_dir"
@@ -103,6 +108,7 @@ chmod 600 "$local_export"
 install -m 600 "$local_export" "$backup_export"
 cmp -s "$local_export" "$backup_export"
 ```
+
 
 GPG may ask for the key's passphrase through `pinentry-curses`. The exported
 file is sensitive even though the key is passphrase protected. Do not print,
