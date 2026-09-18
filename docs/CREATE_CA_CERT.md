@@ -475,17 +475,6 @@ sha256sum \
   "{{BACKUP_PATH}}/Camera-CA-Backups/camera-system-ca-initial-{{DATE}}.tar.gz.age"   # hashes must match exactly
 ```
 
-Final SMB contents after a full run:
-
-```text
-{{BACKUP_PATH}}/Camera-CA-Backups/
-├── camera-system-ca-initial-{{DATE}}.tar.gz.age   # full CA state (age, passphrase)
-├── password-store-backup-{{DATE}}.tar.gz          # vault entries + .gpg-id (GPG-encrypted)
-└── pass-gpg-id.txt                                # the store's .gpg-id value
-```
-
-(`ca-vault-gpg.key.gpg` is added by §12.)
-
 ## 12. GPG private key export (USER-run only)
 
 Because the agent never holds the key's passphrase, only the user can export the secret
@@ -508,7 +497,22 @@ Losing `~/.gnupg` and this exported key at the same time is unrecoverable even i
 backup files survive. Perform it before relying on any backup — on a fresh box, importing
 it is step 1 of recovery (§13).
 
-## 13. Recovery procedure (fresh machine)
+## 13. Verify Backup Contents
+Final SMB contents after a full run:
+
+```text
+{{BACKUP_PATH}}/Camera-CA-Backups/
+├── camera-system-ca-initial-{{DATE}}.tar.gz.age   # full CA state (age, passphrase)
+├── ca-vault-gpg.key.gpg                           # gpg key **CRITICAL**
+├── password-store-backup-{{DATE}}.tar.gz          # vault entries + .gpg-id (GPG-encrypted)
+└── pass-gpg-id.txt                                # the store's .gpg-id value
+```
+
+All files must be present. This concludes the CA creation and backup.
+
+---
+
+## Recovery procedure (fresh machine)
 
 In order:
 
@@ -547,7 +551,7 @@ In order:
    shred -u /tmp/.ca-decrypted.tgz
    ```
 
-## 14. Pitfalls and notes (learned the hard way)
+## Pitfalls and notes (learned the hard way)
 
 - **Never generate the GPG key yourself.** The one time it was done agent-side with a
   placeholder passphrase, the user hit an "enter pass phrase" prompt for a secret nobody

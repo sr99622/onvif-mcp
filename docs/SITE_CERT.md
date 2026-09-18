@@ -193,8 +193,7 @@ openssl x509 -in "{{CA_ROOT_PATH}}/camera-system-ca/issued/{{SERVER_FQDN}}.crt.p
 ## 7. Back up updated CA state after issuance
 
 **Every issuance event requires a fresh archive — the initial build, a
-restore-time reissue after key loss (see "Reconstructing the HTTPS
-configuration" in BACKUP.md/RESTORE.md: the server key is deliberately never
+restore-time reissue after key loss. The server key is deliberately never
 archived, so a bare-metal restore regenerates it and signs a new serial), and
 §12 renewals.** A restore reissue that skips this step leaves
 `{{BACKUP_PATH}}/Camera-CA-Backups/` describing a CA whose `serial`/`index.txt`
