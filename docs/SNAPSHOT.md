@@ -189,12 +189,31 @@ sudo ss -lntpe | grep ':8891'    # expect a single listener on 127.0.0.1:8891
 Every route must return a valid JPEG directly from the loopback port:
 
 ```bash
-for r in <serial>/<token> ... ; do        # one per ROUTES entry
-  out=$(curl -s --max-time 30 -o /tmp/s.jpg -w '%{http_code} %{content_type}' \
-    "http://127.0.0.1:8891/snapshot/$r/")
-  printf '%-52s %-14s sz=%-8s %s\n' "$r" "$out" "$(stat -c%s /tmp/s.jpg)" \
-    "$(file -b /tmp/s.jpg | cut -c1-16)"
-done
+python3 - <<'PY'
+import json
+import os
+import subprocess
+
+routes = json.load(open('/etc/onvif-mcp/snapshot_routes.json'))['routes']
+failed = 0
+
+for route in routes:
+    out = '/tmp/s.jpg'
+    url = f'http://127.0.0.1:8891/snapshot/{route}/'
+    curl = subprocess.run(
+        ['curl', '-s', '--max-time', '30', '-o', out, '-w', '%{http_code} %{content_type}', url],
+        capture_output=True,
+        text=True,
+        timeout=35,
+    )
+    size = os.path.getsize(out) if os.path.exists(out) else 0
+    kind = subprocess.run(['file', '-b', out], capture_output=True, text=True).stdout.strip()
+    ok = curl.stdout.startswith('200 image/jpeg') and kind.startswith('JPEG image data')
+    failed += 0 if ok else 1
+    print(f'{route:60} {curl.stdout:18} sz={size:<8} {kind[:70]}')
+
+raise SystemExit(failed)
+PY
 ```
 
 Expected: every route shows `200 image/jpeg` and `JPEG image data`. Negatives:
