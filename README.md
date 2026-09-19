@@ -59,6 +59,7 @@ Be mindful of model context size when running the configurations shown below. As
     | `{{PASSWORD}}` | Common password for cameras | - |
     | `{{REPO_PATH}}` | Parent directory of this repository | - |
     | `{{SERVER_USER}}` | Account name on the server under which Hermes is run | - |
+    | `{{BACKUP_PATH}}` | Backup folder | - |
 
     **Runbooks**
 
@@ -88,7 +89,7 @@ Be mindful of model context size when running the configurations shown below. As
 
     Included are runbooks for generating and distributing a Certificate Authority (CA) and site certificate locally. The endpoints are re-mapped to provide encryption for the suite of services. The instructions include a backup to an SMB shared drive, so there should be one available on the local network to hold the certificates in the case of server failure. The backup can be skipped if necessary, but that is obviously not recommended.
 
-    During execution of the `CREATE_CA_CERT.md` runbook, you will be prompted for passwords three times. Firstly you will be prompted for the gpg key generation, use a key that you can remember to protect the certificate. The second prompt occurs during the backup and testing, use the option to save the key in the store when prompted to minimize the possibility of a stranded key. After the procedure has completed, you will be prompted to export the GPG keys, follow the agent instructions.
+    During execution of the `GPG_KEY.md` runbook, the user will be prompted for passwords twice. The use will open their own terminal for these actions. First a a prompt for the gpg key generation. A second prompt occurs during the backup and testing. During execution of CREATE_CA_CERT.md, the user may be prompted for a key to warm up the key cache.
 
     Following completion of this section, nginx will be serving the endpoints under SSL encryption and clients will need to authorize the keys from their certificate store. Instructions for client configuration are in the `CLIENT.md` runbook. The site certificate can be accessed through an unencrypted endpoint on the server.
 

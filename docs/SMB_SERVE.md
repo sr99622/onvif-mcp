@@ -73,7 +73,7 @@ sudo chmod 0600 /etc/cifs-utils/credentials/taurus-camera-ca
 sudo install -d -m 0700 /mnt/taurus-camera-ca
 ```
 
-Add this **new** line to `/etc/fstab` using `sudoedit`. Replace `LOCAL_UID` and `LOCAL_GID` with the numeric output of `id -u stephen` and `id -g stephen` on the camera host. Do not alter the existing `/mnt/taurus` entry.
+Add this **new** line to `/etc/fstab` using `sudoedit`. Replace `LOCAL_UID` and `LOCAL_GID` with the numeric output of `id -u stephen` and `id -g stephen` on the camera host.
 
 ```fstab
 //taurus.home.arpa/camera-ca-private /mnt/taurus-camera-ca cifs credentials=/etc/cifs-utils/credentials/taurus-camera-ca,vers=3.1.1,uid=LOCAL_UID,gid=LOCAL_GID,file_mode=0600,dir_mode=0700,nosuid,nodev,noexec,_netdev,noauto,x-systemd.automount 0 0

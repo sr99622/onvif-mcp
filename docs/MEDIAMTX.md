@@ -6,9 +6,10 @@ This document describes the MediaMTX RTSP-to-WebRTC/HLS streaming server. The se
 
 | Value | Description |
 |---|---|
-| {{SERVER_FQDN}} | Server Fully Qualified Domain Name |
-| {{USERNAME}} | Camera Username |
-| {{PASSWORD}} | Camera Password |
+| `{{SERVER_FQDN}}` | Server Fully Qualified Domain Name |
+| `{{USERNAME}}` | Camera Username |
+| `{{PASSWORD}}` | Camera Password |
+| `{{BACKUP_PATH}}` | Backup folder |
 
 These values are required for operation. Stop and prompt the user if any of them are not provided.
 

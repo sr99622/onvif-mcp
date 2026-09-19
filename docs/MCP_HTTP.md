@@ -9,6 +9,7 @@
 | `{{PASSWORD}}`    | Camera Password                                 |
 | `{{REPO_PATH}}`   | Full Pathname of Repository Location            |
 | `{{SERVER_USER}}` | System user the service runs as (project owner) |
+| `{{BACKUP_PATH}}` | Backup folder                                   |
 
 These values are required for operation. Stop and prompt the user if any of them are not provided.
 

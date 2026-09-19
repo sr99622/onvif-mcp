@@ -33,13 +33,14 @@ location, the proxy's route table keys, and that scheme must all agree.
 
 ## Values supplied by Agent
 
-| Value           | Description                                    |
-|-----------------|------------------------------------------------|
-| {{SERVER_FQDN}}  | Server Fully Qualified Domain Name            |
-| {{REPO_PATH}}    | Parent directory containing the onvif-mcp repository (repo lives at `{{REPO_PATH}}/onvif-mcp`) |
-| {{SERVER_USER}} | System user the proxy runs as (owner of `{{REPO_PATH}}`, so it can read the repo source and its venv) |
-| {{USERNAME}}     | Camera username                                |
-| {{PASSWORD}}     | Camera password                                |
+| Value             | Description                                    |
+|-------------------|------------------------------------------------|
+| `{{SERVER_FQDN}}`   | Server Fully Qualified Domain Name            |
+| `{{REPO_PATH}}`     | Parent directory containing the onvif-mcp repository (repo lives at `{{REPO_PATH}}/onvif-mcp`) |
+| `{{SERVER_USER}}`   | System user the proxy runs as (owner of `{{REPO_PATH}}`, so it can read the repo source and its venv) |
+| `{{USERNAME}}`      | Camera username                                |
+| `{{PASSWORD}}`      | Camera password                                |
+| `{{BACKUP_PATH}}`   | Backup folder                                  | 
 
 These values are required for operation. Stop and prompt the user if any of them are not provided.
 
