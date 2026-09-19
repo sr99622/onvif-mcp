@@ -5,26 +5,24 @@ from `BACKUP.md`'s reconstruction sections and the full end-to-end restore
 executed on 2026-09-13 (the only restore of this backup set performed to date;
 items marked **[verified]** were executed successfully in that restore).
 
-This document is the ordering authority. The per-stage mechanics currently
-still live in `BACKUP.md` ("Reconstructing…" sections) and in each runbook;
-this document tells you **what order to do them in, which artifacts supersede
-which, and what the docs currently get wrong.** The "Known doc defects"
-catalog (D1–D9) recorded in the 2026-09-13/14 restore was retired in commit
-`4967877` (2026-09-14): D3/D4/D5/D8 were absorbed into the runbooks and
-BACKUP.md, D1/D2/D9 no longer apply to the 2026-09-15 backup set, and D6 was
-superseded (see the D6 notes below) — the only defect still live is D7
-(`onvif-mcp-http --help` starts the server; never use it as a probe). Before
-starting any restore, re-verify the stage folders present against the
-supersession registry below — the set on disk, not this document, decides
-what applies.
+This document defines recovery ordering. Nginx configuration and nginx-specific
+systemd overrides come from one completed checkpoint through
+[NGINX_BACKUP.md](NGINX_BACKUP.md). Keycloak configuration and database come
+from one completed checkpoint through KEYCLOAK_BACKUP.md. Historical stage names
+and old verification records do not determine precedence for these targets.
+DNS configuration and dnsmasq-specific overrides come from one completed
+checkpoint through [DNS_BACKUP.md](DNS_BACKUP.md). Resolve the actual backup
+destination and site values before recovery.
 
 ## Site constants
 
-Authoritative values (from `BACKUP.md` Required Values table):
+Historical example values are shown below. Resolve current site values from
+the installation inputs before using commands; do not adopt these examples
+or BACKUP.md history as authoritative configuration.
 
 | Placeholder | Value |
 |---|---|
-| `{{BACKUP_PATH}}` | `/mnt/taurus/Camera-System-Backup` |
+| `{{BACKUP_PATH}}` | Current mounted backup root supplied for this installation |
 | `{{SERVER_FQDN}}` | `gmktec.home.arpa` |
 | `{{SERVER_IP}}` | `10.1.1.5` (LAN, `enp170s0`) |
 | `{{REPO_PATH}}` | `/home/stephen` |
@@ -37,17 +35,18 @@ Authoritative values (from `BACKUP.md` Required Values table):
 
 1. Mount the SMB backup and confirm it is writable: **[verified]**
    ```bash
-   ls /mnt/taurus/Camera-System-Backup/ && touch /mnt/taurus/Camera-System-Backup/.wtest && rm $_
+   findmnt -T "{{BACKUP_PATH}}"
+   test -d "{{BACKUP_PATH}}" && test -w "{{BACKUP_PATH}}"
    ```
-2. Verify every stage folder's `SHA256SUMS`: **[verified]**
-   ```bash
-   cd /mnt/taurus/Camera-System-Backup
-   for d in */; do (cd "$d" && [ -f SHA256SUMS ] && echo "$d: $(sha256sum -c SHA256SUMS 2>/dev/null | grep -c OK) OK"); done
-   ```
-   Any mismatch: stop, investigate, do not restore from that folder.
-3. Inventory the expected folder set (13 stage folders + `Camera-CA-Backups/`).
-   Missing folders = missing capabilities; check the supersession registry
-   below to see what is lost.
+2. Verify `SHA256SUMS` inside each selected target checkpoint and other backup
+   folder before extraction. Do not treat the parent `nginx/` or `keycloak/`
+   directory as a checkpoint; the same applies to `dns/`. A missing checksum or mismatch stops recovery.
+3. Inventory the selected checkpoints, their external dependencies, and other
+   required backup targets. If no complete nginx checkpoint exists, follow
+   NGINX_BACKUP.md's explicit legacy-reconstruction path; do not silently use
+   a partial procedure archive.
+
+
 4. Confirm host preconditions match the constants (hostname `gmktec`, LAN IP,
    `/etc/hosts` entry, repo checkout, camera creds present in Hermes config).
 5. Expect slow restores over SMB for large tars (venv ≈ 79 MB / 3754 files,
@@ -55,83 +54,51 @@ Authoritative values (from `BACKUP.md` Required Values table):
 
 ## Restore sequence (whole-system)
 
-The nginx configs, `/etc/systemd/system`, `/etc/onvif-mcp`, and `/opt/keycloak`
-overlap across stage folders. **Supersession is strict: a later row always wins
-over an earlier one for the artifacts listed.** Never restore an earlier folder
-after a later one.
+1. Prepare host packages, accounts, networking, DHCP, and the backup mount.
+   Restore DNS through DNS_BACKUP.md before dependent client HTTPS checks.
+2. Recover the CA and prepare a matching server certificate/key through
+   CREATE_CA_CERT.md and SITE_CERT.md. Private TLS keys are never backed up.
+3. Restore application binaries, web content, CA distribution content, and
+   non-nginx service units from their respective backups. Regenerate camera-IP
+   data as described below. Restore any whole-system unit archive before the
+   nginx restore and exclude nginx-specific overrides from it.
+4. Restore one Keycloak configuration/database pair through KEYCLOAK_BACKUP.md.
+   Check its compatibility with the selected nginx checkpoint's metadata.
+5. Restore one complete nginx checkpoint through NGINX_BACKUP.md, including
+   the exact nginx override set and any recorded external configuration.
+   Dependencies must be ready before nginx startup and endpoint validation.
+6. Run the final gates. Do not overlay nginx files from any earlier stage.
 
-
-| # | Stage | Backup folder | Restores | Supersedes (for) |
-|---|---|---|---|---|
-| 1 | DHCP/Kea | `dhcp-*` | Kea conf/leases, sysctl isolation, NM profile (*defect D1*) | — |
-| 2 | MediaMTX | `mediamtx-*` | binary, unit, conf, state; nginx sites | — |
-| 3 | Snapshot proxy | `snapshot-*` then `snapshot-user-correction-*` | routes, proxy source, unit; nginx sites | snapshot's unit+routes (typo fix) |
-| 4 | Apps | `apps-*` | nginx.conf (`user webcam;`), sites, registry, app sources | stages 2–3 nginx sites |
-| 5 | MCP HTTP | `mcp-http-*` | venv, unit, sites (adds `/mcp`) | stage 4 sites |
-| 6 | CA recovery | `Camera-CA-Backups/` (user-driven, GPG→pass→age) | Private-CA tree | — (see CREATE_CA_CERT.md §13) |
-| 7 | HTTPS cert | `site-cert-*` + live CA | reissued key+cert, conf.d (HTTPS), nginx.conf, onvif unit (https), tls dir | stage 5 unit/registry |
-| 8 | CA distribute | `ca-distribute-*` | `/srv/camera-pki/public`, sites+conf.d (adds `/ca/`) | stage 7 sites AND conf.d |
-| 9 | DNS | `dns-*` | dnsmasq conf, drop-in, defaults | — (independent) |
-| 10 | Keycloak | `keycloak-*` | docker deploy, DB dump, units (ALL), nginx dirs | stage 8 sites; earlier `/etc/systemd/system` |
-| 11 | Stream auth | `stream-auth-*` | `final-opt-keycloak.tar`, DB dumps, conf.d (oauth2) | stage 10 opt/conf.d/dumps |
-| 12 | Add user | `add-user-*` | `final-opt-keycloak.tar`, DB dumps | stage 11 opt/dumps |
-| 13 | Add client | `add-client-on-server-*` | `final-opt-keycloak.tar` (newest), DB dumps (**restore source**) | stage 12 opt/dumps |
-| 14 | Amendments | *no folder* (defect D6) | unpinned-443 verification + nginx drop-in; sed **only if** the last conf.d restore introduced a pinned listen (2026-09-15 set: verified no-op) | everything that touched conf.d |
-| 15 | Final gates | — | step-9 driver RESULT=PASS, `hermes mcp test camera-new` 29 tools | — |
-
-Ordering rules that caused real failures when ignored:
-
-- **After every `sites-enabled` tar: `sudo rm -f /etc/nginx/sites-enabled/default`**
-  **[verified]** — the stock `_` default vhost shadows FQDN routes
-  (observed: `/mcp/` 404, unauthenticated `/cameras/`, `/auth/` 404).
-- **Apply amendment D6 (unpinned 443) AFTER the LAST conf.d restore (stage
-  11)** **[verified — needed twice on the 2026-09-12 set; no-op on the
-  2026-09-15 set, whose conf.d archives are already unpinned — verify with
-  `grep 'listen 10.1.1.5:443' /etc/nginx/conf.d/*.conf` and act only if
-  present]** — every archived conf.d from the 2026-09-12 set still contains
-  the pinned `listen 10.1.1.5:443;` line.
-- **Keycloak-stage `/etc/systemd/system` restore brings every stage's units
-  forward at once** — do not restore older stage folders after stage 10+.
-- Stage 9 (DNS) and stage 1 (DHCP) are independent of the nginx chain and can
-  run anytime after their package installs.
-
-## Supersession registry — which artifact comes from where (final say)
+## Restore-source registry
 
 | Artifact | Restore source |
 |---|---|
-| nginx `sites-available` / `sites-enabled` | `keycloak-*/final-…` (newest complete set; identical in practice to ca-distribute + stage-10 edits) |
-| nginx `conf.d` (HTTPS vhost) | `stream-auth-*/final-etc-nginx-conf.d.tar` (+ D6 sed **only if** a pinned `listen` line is present — the 2026-09-15 set is already unpinned) |
+| Nginx configuration and nginx-specific unit overrides | Newest completed `nginx/YYYYMMDDHHMMSSZ/` checkpoint, verified and restored per NGINX_BACKUP.md |
 | `/etc/onvif-mcp/camera_registry.json` + `snapshot_routes.json` | **never restore from backup** — generate from a live `get_cameras` after the HTTPS stage (see "Camera-IP files: generate, don't restore"). `site-cert-*/final-etc-onvif-mcp.tar` is kept for provenance only. |
 | `/etc/mediamtx/mediamtx.yml` | **never restored (by design)** — not in any backup; generated from the same live `get_cameras` capture |
 | venv | `mcp-http-*/final-home-*-onvif-mcp-.venv.tar` |
 | `onvif-mcp-http.service` | `site-cert-*/…tar` (has `STREAM_SERVER_URL=https://…`) + `keycloak-*/etc-systemd` oauth drop-in |
 | `/srv/camera-pki` | `ca-distribute-*/final-srv-camera-pki.tar` |
-| dnsmasq set | `dns-*/` four tars |
-| `/opt/keycloak/` (compose, .env, pass files) | `add-client-on-server-*/final-opt-keycloak.tar` |
-| Keycloak DB | `add-client-on-server-*/final-var-backups-keycloak-postgres.tar` → newest dump (`keycloak-20260913T004014Z.dump` or later) |
-| Backup script + backup unit | `keycloak-*/final-usr-local-sbin-…` / `final-etc-systemd-system.tar` |
+| dnsmasq configuration and service overrides | Newest completed `dns/YYYYMMDDHHMMSSZ/` checkpoint per DNS_BACKUP.md |
+| `/opt/keycloak/` (compose, .env, pass files) | Selected completed `keycloak/YYYYMMDDHHMMSSZ/keycloak.tar` |
+| Keycloak DB | `keycloak-postgres.tar` from the same selected Keycloak checkpoint |
+| Backup script + backup unit | Install/recreate from repository and KEYCLOAK.md §14 |
 | CA (GPG vault → age archive) | `Camera-CA-Backups/` — newest `camera-system-ca-after-*-tar.gz.age` |
 | Server TLS key | **never backed up (by design)** — regenerate + reissue, SITE_CERT.md §1–§6 + §8 |
 
 ## Global restore rules
 
-1. Verify checksums (Phase 0.2) before any tar extraction.
-2. Restore `final-*` files only; pre-change tars are for provenance.
-3. Remove the nginx default site after any sites-enabled restore.
-4. ~~Apply D6 after the last conf.d restore.~~ **Verified no-op for the
-   2026-09-15 backup set**: all three `final-etc-nginx-conf.d.tar` archives in
-   that set already carry the unpinned `listen 443 ssl;` line (the D6 sed
-   finds nothing to change). Keep the check — run
-   `grep -n 'listen 10.1.1.5:443' /etc/nginx/conf.d/*.conf` after the last
-   conf.d restore; apply the sed only if a pinned line appears (older
-   backup sets, e.g. 2026-09-12, still carry the pin).
-5. Use the corrected commands embedded in the "Reconstructing…" sections of
-   BACKUP.md (they carry the 2026-09-13/14 restore fixes inline) — several
-   verbatim runbook commands elsewhere fail as written.
-6. Never display secret material (token files, dumps, .env values) in shared
-   output; restore blind, assert modes/counts.
-7. A full restart (`restart`), not `reload`, is required for: nginx `user`
-   directive changes, `listen` directive changes, dnsmasq directive changes,
+1. Verify checksums before extraction; inspect archive roots and symlinks.
+2. Nginx, DNS and Keycloak use their timestamped target histories. Other targets
+   retain their documented archive names. Pre-change files are rollback
+   evidence, not the default recovery source.
+3. Follow NGINX_BACKUP.md for clean-tree restoration, default-site removal,
+   unpinned-listener checks, TLS material, and service restart. No nginx
+   supersession chain or historical post-restore amendment is required.
+4. Never display secrets in shared output; verify modes and results without
+   printing passwords, private keys, tokens or database contents.
+5. Use a full nginx restart after configuration restoration; a reload does
+   not reliably apply service-user or listener changes.
 
 ## Camera-IP files: generate, don't restore (operator policy, 2026-09-15)
 
@@ -148,9 +115,9 @@ silently misroute snapshots to whichever camera now owns the archived
 address — a wrong-camera failure, worse than a broken one. (mediamtx.yml was
 never in any backup at all — it was already live-generated only.)
 
-Procedure (after the HTTPS stage's nginx/conf restore, before the Keycloak
-chain — the registry URLs must be `https://` and the vhost must already
-serve them):
+Procedure: generate the camera data once discovery is available, using the
+intended HTTPS origin. Verify serving behavior after the complete nginx
+checkpoint and its upstream services are restored:
 
 ```bash
 # 1. capture live discovery (one camera per JSON line; see MCP_HTTP.md for the handshake)
@@ -193,10 +160,10 @@ section in BACKUP.md for each stage, with the amendments above:
 1. CA → CREATE_CA_CERT.md §13, executing the GPG passphrase steps per "Headless CA recovery over SSH" below (the §13 interactive prompts do not work over SSH); then decrypt newest `after-*-cert` age archive **[verified — headless over SSH, 2026-09-15]**
 2. HTTPS → "Reconstructing the HTTPS configuration from backup" + key reissue per SITE_CERT.md §1–§8, **skipping the `final-etc-onvif-mcp.tar` extraction** (see "Camera-IP files: generate, don't restore" — regenerate registry+routes from live `get_cameras` after this stage) **[verified — reissued serial 0x1001; re-archive new CA state to Camera-CA-Backups]**
 3. CA distribute → "Reconstructing the CA distribution endpoint from backup" **[verified incl. fingerprint match]**
-4. DNS → "Reconstructing the local DNS server from backup" **[verified — all four dig checks]**
-10–13. Keycloak chain → "Reconstructing the Keycloak OAuth server from backup" and "…browser authentication gate…" using **add-client's** `final-opt-keycloak.tar` + newest dump (apply D4, D5, global rules) **[verified — step-9 driver RESULT=PASS]**
+4. DNS → DNS_BACKUP.md using the selected complete checkpoint; perform its listener, record, forwarding and client checks.
+10–13. Keycloak → KEYCLOAK_BACKUP.md using the selected shared checkpoint pair; nginx → NGINX_BACKUP.md using the compatible complete checkpoint.
 13b. Hermes client re-login → KEYCLOAK.md §13 (apply D8) **[verified — 29 tools]**
-14. Amendments → verify unpinned listen (grep; apply sed + drop-in only if pinned — no-op on the 2026-09-15 set), then `systemctl restart nginx` **[verified 2026-09-15: no-op sed, drop-in added, restart clean]**
+14. Nginx validation → NGINX_BACKUP.md; verify the listener and access controls for the selected checkpoint without applying historical configuration overlays.
 
 ## Final gates (whole-system acceptance)
 

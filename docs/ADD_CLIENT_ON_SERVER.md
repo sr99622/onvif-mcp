@@ -298,36 +298,29 @@ installed Keycloak provider accepts the intended CIDR syntax. Do not assume
 CIDR support, and do not disable Trusted Hosts merely to simplify
 onboarding.
 
-## Stage-close backup (add-client-on-server folder)
+## Keycloak backup checkpoint
 
-The trusted-host addition lives ONLY in the Keycloak database — nothing else
-on this host records it. Close this stage after Step 4's verification, per
-BACKUP.md's Procedure, into
-`{{BACKUP_PATH}}/add-client-on-server-{{DATETIME_STAMP}}`:
+After Step 4's verification, complete [KEYCLOAK_BACKUP.md](KEYCLOAK_BACKUP.md) 
+shared checkpoint procedure. Invoke the backup service through that procedure 
+and publish a new `{{BACKUP_PATH}}/keycloak/YYYYMMDDHHMMSSZ/` recovery point containing:
 
-1. Fresh dump (must contain the policy write) + catalog check, same as
-   KEYCLOAK.md §15b:
-   ```bash
-   sudo systemctl start keycloak-postgres-backup.service
-   sudo systemctl status keycloak-postgres-backup.service --no-pager
-   ```
-2. Archive `final-var-backups-keycloak-postgres.tar` (complete dump directory,
-   root `keycloak-postgres-backups/` — D4). This folder's dump set is the
-   NEWEST restore source for the whole system — the authoritative copy of the
-   DCR policy as configured.
-3. `final-opt-keycloak.tar`: unchanged since the last stage (the policy lives
-   in the DB, not `/opt/keycloak`) — re-archive anyway for folder
-   self-sufficiency, and note "unchanged" in the entry so a restorer can tell.
-4. `post-change-state.txt`: before/after trusted-host lists (addresses are
-   policy data, not secrets — recording them is correct), the live-resolved
-   component UUID, both matching-control values, temp-artifact cleanup
-   confirmation, and the pending `201` DCR confirmation once the client logs
-   in. Tokens/passwords: never.
-5. Verify block from KEYCLOAK.md §15b (checksums, tar guards, dump catalog).
+- `keycloak-postgres.tar`, containing only the fresh dump with the trusted-host
+  policy write.
+- `keycloak.tar`, captured again even when `/opt/keycloak/` is unchanged, so
+  the configuration and database can be recovered from one checkpoint.
+- `metadata.txt` and verified `SHA256SUMS`.
 
-Supersession: supersedes the prior stage's dump set (and opt-tar nominally,
-though identical). No later stage re-archives unless it also changes Keycloak
-state — this folder is the expected restore source until the next mutation.
+Record ADD_CLIENT_ON_SERVER.md as the trigger, the before/after trusted-host
+lists, resolved component UUID, matching-control values, and temporary-artifact
+cleanup result. Record whether the client's actual DCR/login verification is
+still pending. Tokens and passwords must never enter metadata or logs.
+If later client registration changes the database, take another checkpoint
+after that registration is verified; do not modify the completed checkpoint.
+
+Use KEYCLOAK_BACKUP.md's capture, verification, and publication rules. Do not create an
+`add-client-on-server-*` folder for Keycloak backups or rearchive the local
+dump history. Restore uses both archives from the newest completed shared
+checkpoint, without a runbook-based supersession policy.
 
 ## Troubleshooting
 

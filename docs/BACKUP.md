@@ -1,5 +1,18 @@
 # Camera System Backup Log
 
+## Current target-based backup procedures
+
+DNS backups and restores follow [DNS_BACKUP.md](DNS_BACKUP.md): complete
+`dns/YYYYMMDDHHMMSSZ/` checkpoints containing `dns.tar` and metadata.
+
+Nginx backups and restores follow [NGINX_BACKUP.md](NGINX_BACKUP.md): one
+complete `nginx/YYYYMMDDHHMMSSZ/` checkpoint, not per-runbook configuration
+fragments. Keycloak checkpoints follow [KEYCLOAK_BACKUP.md](KEYCLOAK_BACKUP.md).
+The entries below describe historical installations; their old artifact names
+are inventory evidence only, not instructions to create or select new nginx, DNS
+or Keycloak backups. Do not append new nginx/DNS/Keycloak execution logs here;
+record the operation in the checkpoint metadata.
+
 Backup destination: `{{BACKUP_PATH}}`
 
 For this server, `{{BACKUP_PATH}}` currently resolves to `/mnt/taurus-camera-ca/Camera-CA-Backups`.
@@ -26,11 +39,14 @@ Authoritative substitutions for every `{{PLACEHOLDER}}` used in this document an
 
 Excluded from this table by design:
 - Per-run identity inputs consumed by user/client onboarding runbooks (`ADD_USER.md`, `ADD_CLIENT_ON_SERVER.md`) — new Keycloak usernames, names, emails, and client source IPs. Those are site data persisted in the Keycloak database (and its `{{BACKUP_PATH}}` dumps); restoring the database restores them, so they are never configuration constants to track here.
-- DNS deployment values (`{{RVRS_SRV_IP}}`, `{{UPSTREAM_DNS}}`) defined in DNS.md. They are materialized inside `/etc/dnsmasq.d/camera-system.conf`, which the `dns-*` backup archives restore; `{{RVRS_SRV_IP}}` is also mechanically derived from `{{SERVER_IP}}` (its octets reversed). Resolved values live in DNS.md's own table and the live config, not here.
+- DNS deployment values (`{{RVRS_SRV_IP}}`, `{{UPSTREAM_DNS}}`) defined in DNS.md. They are materialized inside `/etc/dnsmasq.d/camera-system.conf`, which the checkpoints in DNS_BACKUP.md restore; `{{RVRS_SRV_IP}}` is also mechanically derived from `{{SERVER_IP}}` (its octets reversed). Resolved values live in DNS.md's own table and the live config, not here.
 
 ## Backup Naming Convention
 
-Each configuration backup is stored in a timestamped directory under `{{BACKUP_PATH}}`:
+For targets other than nginx, DNS and Keycloak, the legacy convention below remains.
+Nginx, DNS and Keycloak use the shared procedures linked above.
+
+Each other configuration backup is stored in a timestamped directory under `{{BACKUP_PATH}}`:
 
 ```text
 {{BACKUP_PATH}}/<runbook-name>-{{DATETIME_STAMP}}/
@@ -52,7 +68,7 @@ Within each backup directory:
 
 ## Procedure
 
-For each server configuration we touch:
+For targets other than nginx, DNS and Keycloak (which use their linked procedures):
 
 1. Identify the files, directories, services, credentials, package state, and command output needed to reconstruct the configuration.
 2. Create a timestamped folder under `{{BACKUP_PATH}}` before making changes.
@@ -62,23 +78,13 @@ For each server configuration we touch:
 6. Generate `SHA256SUMS` in the backup folder.
 7. Record the backup entry below with source paths, destination paths, commands used, and verification results.
 
-## Restore-stage global rules (added 2026-09-13, first full restore test)
+## Nginx restore rules
 
-1. **Always remove the nginx default site after restoring any sites-enabled set.**
-   The original build disabled `/etc/nginx/sites-enabled/default`, but tar restores cannot
-   remove a file a fresh nginx install recreates. After every `final-etc-nginx-sites-enabled.tar`
-   extraction run: `sudo rm -f /etc/nginx/sites-enabled/default` (the stock `_` vhost
-   otherwise shadows `gmktec.home.arpa` routes — observed symptoms: `/mcp/` 404,
-   `/cameras/` served unauthenticated, `/auth/` 404).
-2. **Re-apply the unpinned-listener amendment LAST, after the final `conf.d` restore**
-   (see "HTTPS listener unpinned" below). Check first — the 2026-09-15 backup
-   set's `site-cert-*`/`stream-auth-*`/`keycloak-*` `final-etc-nginx-conf.d.tar`
-   archives are ALREADY unpinned (the sed is a no-op), while the 2026-09-12 set's
-   archives contain the pinned `listen 10.1.1.5:443;` line; restoring those
-   regresses the boot-time bind race. `grep -n 'listen 10.1.1.5:443'
-   /etc/nginx/conf.d/*.conf` decides whether the sed is needed.
-3. **Large tar restores over SMB (e.g. the 79 MB venv archive) take 2–3 minutes** due to
-   small-file SMB latency; run them in the background or with a generous timeout.
+Use NGINX_BACKUP.md for checkpoint selection, clean-tree restoration, TLS-key
+recovery, nginx-specific unit overrides, and validation. Do not overlay nginx
+archives from historical procedure folders. The shared procedure prevents stale
+sites and default vhosts from surviving extraction. No post-restore amendment
+chain is required for a verified complete checkpoint.
 
 ## Backup Entries
 
@@ -102,12 +108,12 @@ Backup folders:
 Backed up data (site-cert folder):
 
 - `post-change-state.txt` — CA archive hash reference, issued certificate identity (serial `0x1000`, expires 2027-10-14), 443 listener pinning, `server_name` count, TLS chain verification, TLS dir listing, service states, `STREAM_SERVER_URL`, registry scheme count, nginx test result.
-- `final-etc-nginx-conf.d.tar` — the HTTPS server block `/etc/nginx/conf.d/gmktec.home.arpa.conf` (created by this runbook; exists in no earlier backup).
-- `final-etc-nginx-sites-available.tar` / `final-etc-nginx-sites-enabled.tar` — redirect-only `mediamtx` sites file plus the `.backup-2026-09-12` pre-HTTPS copies.
-- `final-etc-nginx-nginx.conf.tar` — main nginx config (plus its `.backup-2026-09-12` copy in the sites-available tar).
+- Historical nginx artifacts: see the original folder inventory. New captures and restore selection use NGINX_BACKUP.md.
+- Historical nginx artifacts: see the original folder inventory. New captures and restore selection use NGINX_BACKUP.md.
+- Historical nginx artifacts: see the original folder inventory. New captures and restore selection use NGINX_BACKUP.md.
 - `final-etc-onvif-mcp.tar` — registry flipped to `https://` (14 URLs) plus the same-day registry backup. Sensitive: exposes camera hostnames/IPs/endpoints.
 - `final-etc-systemd-system-onvif-mcp-http.service.tar` — unit with `STREAM_SERVER_URL=https://...`. Sensitive: camera credentials in `Environment=` lines.
-- `final-etc-nginx-tls-public.tar` — leaf, chain, root CA, CSR only. The **server key is deliberately NOT archived**: recovery regenerates it via SITE_CERT.md §1–§6 + §8 (or §12 renewal); keeping server keys off the SMB share limits exposure. It remains only at `/etc/nginx/tls/gmktec.home.arpa.key.pem` (root, 600).
+- Historical nginx artifacts: see the original folder inventory. New captures and restore selection use NGINX_BACKUP.md.
 - `final-docs-SITE_CERT.md` — final runbook (with §9 registry-location fix, §10 sudo-curl note, §11 sudo note).
 - `SHA256SUMS` — checksums for files in the backup folder.
 
@@ -145,7 +151,7 @@ Backed up data:
 
 - `post-change-state.txt` — out-of-band trust anchor (cert fingerprint `09:9F:3C:3B…89:A9:4F`, PEM file sha256 `6e9e7b24…ba8100`), distribution dir listing, checksum self-verify, all five endpoint checks, negative checks (camera-net 403, dir listing 403), non-CA redirect, nginx state.
 - `final-srv-camera-pki.tar` — the public distribution directory (cert ×2, checksums ×2, README). Public material only; contains no secrets.
-- `final-etc-nginx-sites-available.tar` / `final-etc-nginx-sites-enabled.tar` / `final-etc-nginx-conf.d.tar` — nginx config with the `/ca/` HTTP distribution location; these are the **newest complete nginx configs — restore from this folder last** among config-stage backups (supersedes the site-cert backup's sites configs). Includes the `mediamtx.backup-ca-2026-09-12` pre-edit copy.
+- Historical nginx artifacts: see the original folder inventory. New captures and restore selection use NGINX_BACKUP.md.
 - `final-docs-CA_DISTRIBUTE.md` — final runbook.
 - `SHA256SUMS` — checksums for files in the backup folder.
 
@@ -173,10 +179,7 @@ Use these instructions with `{{BACKUP_PATH}}/ca-distribute-{{DATETIME_STAMP}}`. 
 ```bash
 BACKUP_DIR="{{BACKUP_PATH}}/ca-distribute-{{DATETIME_STAMP}}"
 sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-srv-camera-pki.tar" -C /
-sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-nginx-sites-available.tar" -C /
-sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-nginx-sites-enabled.tar" -C /
-sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-nginx-conf.d.tar" -C /
-sudo nginx -t && sudo systemctl reload nginx
+# Restore nginx through NGINX_BACKUP.md before running endpoint checks.
 cd /srv/camera-pki/public && sha256sum --check *.sha256
 curl -s --resolve {{SERVER_FQDN}}:80:{{SERVER_IP}} -o /dev/null -w '%{http_code}\n' \
   http://{{SERVER_FQDN}}/ca/README.txt                                   # expect 200
@@ -231,115 +234,21 @@ Verification performed:
 
 ## Reconstructing the local DNS server from backup
 
-Use these instructions with `{{BACKUP_PATH}}/dns-{{DATETIME_STAMP}}`. No private keys are involved.
-
-1. Install dnsmasq using the mask procedure (the default service must not start unrestricted):
-
-   ```bash
-   sudo systemctl mask dnsmasq.service
-   sudo apt-get update && sudo apt-get install -y dnsmasq
-   ```
-
-2. Restore the configuration files, drop-in, and defaults (restores the conf-dir enable and camera config together):
-
-   ```bash
-   BACKUP_DIR="{{BACKUP_PATH}}/dns-{{DATETIME_STAMP}}"
-   sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-dnsmasq.conf.tar" -C /
-   sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-dnsmasq.d.tar" -C /
-   sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-systemd-system-dnsmasq.service.d.tar" -C /
-   sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-default-dnsmasq.tar" -C /
-   ```
-
-3. Unmask, validate, and start (full restart semantics — `reload` does not activate directives like `ptr-record`):
-
-   ```bash
-   sudo systemctl unmask dnsmasq.service
-   sudo systemctl daemon-reload
-   sudo dnsmasq --test
-   sudo systemctl enable --now dnsmasq.service
-   ```
-
-4. Verify reconstruction:
-
-   ```bash
-   sudo ss -lntup 'sport = :53'                       # dnsmasq on 10.1.1.5 only; resolved on loopback
-   dig @10.1.1.5 gmktec.home.arpa +noall +answer      # 10.1.1.5
-   dig @10.1.1.5 ubuntu.com +noall +answer            # forwarded answers
-   dig @10.1.1.5 x.home.arpa +noall +comments | grep -o NXDOMAIN
-   dig @10.1.1.5 -x 10.1.1.5 +noall +answer           # PTR to gmktec.home.arpa
-   ```
-
-Expected restored state matches `post-change-state.txt`: enabled+active service, private A/PTR records, upstream forwarding via 192.168.68.1, `home.arpa` NXDOMAIN isolation, binding to `10.1.1.5:53` only.
+Follow [DNS_BACKUP.md](DNS_BACKUP.md) to select and restore one complete
+`dns/YYYYMMDDHHMMSSZ/` checkpoint. That procedure covers package installation
+without default-service auto-start, clean configuration replacement, resolver
+integration, and DNS verification. Historical `dns-*` entries above are
+inventory evidence, not the current restore procedure.
 
 ## Reconstructing the HTTPS configuration from backup
 
-Use these instructions with a selected backup folder such as `{{BACKUP_PATH}}/site-cert-{{DATETIME_STAMP}}`. This backup holds the complete nginx configuration **as of HTTPS deployment** — if a `ca-distribute-*` backup also exists (CA_DISTRIBUTE.md), restore the sites configs from THAT folder instead (it adds the `/ca/` distribution location and supersedes these); restore HTTPS configs last among the HTTP/MCP-stage backups either way.
-
-The CA itself must be restored first per CREATE_CA_CERT.md §13 (GPG key → vault → age archive). The **server private key is not in any archive** — regenerate and reissue rather than restore:
-
-1. Restore the server key and reissue a certificate (SITE_CERT.md §1–§6 + §8): generate a fresh 3072-bit key in `/etc/nginx/tls/`, create the CSR, stage it into the restored CA, sign with `openssl ca`, verify chain/purpose/hostname and key match, then install cert/CA/chain with modes 600/644. (If the old key is still intact at `/etc/nginx/tls/`, skip regeneration and reuse it — verify its hash against the archived public cert in `final-etc-nginx-tls-public.tar`.)
-
-   ```bash
-   BACKUP_DIR="{{BACKUP_PATH}}/site-cert-{{DATETIME_STAMP}}"
-   # public material (leaf/CA/chain/CSR) for comparison or reuse if the key survived:
-   sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-nginx-tls-public.tar" -C /
-   ```
-
-2. Restore nginx configuration, site directory, and MCP unit:
-
-   ```bash
-   BACKUP_DIR="{{BACKUP_PATH}}/site-cert-{{DATETIME_STAMP}}"
-   sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-nginx-nginx.conf.tar" -C /
-   sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-nginx-conf.d.tar" -C /
-   sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-nginx-sites-available.tar" -C /
-   sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-nginx-sites-enabled.tar" -C /
-   # SKIP final-etc-onvif-mcp.tar (policy: camera-IP files are never restored
-   # from backup — they embed per-camera DHCP IPs. Regenerate
-   # camera_registry.json + snapshot_routes.json from a live get_cameras via
-   # scripts/generate_site_camera_config.py; see RESTORE.md "Camera-IP files:
-   # generate, don't restore". Keep this tar only for provenance/cross-check.)
-   # sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-onvif-mcp.tar" -C /
-   sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-systemd-system-onvif-mcp-http.service.tar" -C /
-   ```
-
-3. Reload everything:
-
-   ```bash
-   # RE-APPLY THE UNPINNED-LISTENER AMENDMENT (see "HTTPS listener unpinned" below):
-   # 2026-09-12-set archives contain `listen 10.1.1.5:443 ssl;`; the 2026-09-15
-   # set is already unpinned, so the sed below is a harmless no-op there.
-   sudo sed -i 's/listen 10.1.1.5:443 ssl;/listen 443 ssl;/' /etc/nginx/conf.d/{{SERVER_FQDN}}.conf
-   sudo mkdir -p /etc/systemd/system/nginx.service.d
-   printf '[Unit]\nWants=network-online.target\nAfter=network-online.target\n' | \
-     sudo tee /etc/systemd/system/nginx.service.d/wait-for-network.conf
-   sudo nginx -t
-   sudo systemctl daemon-reload
-   sudo systemctl restart nginx onvif-mcp-http
-   ```
-
-4. Verify reconstruction (CA file is root-readable only — use sudo):
-
-   ```bash
-   sudo ss -lntp 'sport = :443'                                # expect 0.0.0.0:443 (post-amendment; see unpinned-listener note)
-   sudo nginx -T | grep -c 'server_name {{SERVER_FQDN}}'       # expect 2 (redirect + 443 block)
-   sudo curl --resolve {{SERVER_FQDN}}:443:{{SERVER_IP}} \
-     --cacert /etc/nginx/tls/camera-system-root-ca.crt.pem \
-     --head -s -o /dev/null -w '%{http_code}\n' https://{{SERVER_FQDN}}/cameras/   # 200
-   sudo curl -s --resolve {{SERVER_FQDN}}:443:{{SERVER_IP}} \
-     --cacert /etc/nginx/tls/camera-system-root-ca.crt.pem \
-     -o /tmp/r.jpg -w '%{http_code} %{content_type}\n' \
-     https://{{SERVER_FQDN}}/snapshot/DS-2CD2142FWD-IS20171118BBWR129028868/Profile_1/   # 200 image/jpeg
-   curl -sI http://{{SERVER_IP}}/cameras/ | grep -i '^location'  # redirects to https://{{SERVER_FQDN}}/cameras/
-   systemctl show onvif-mcp-http --property=Environment | grep -o 'STREAM_SERVER_URL=[^ ]*'
-   ```
-
-Expected restored state:
-
-- HTTPS served on all interfaces at `:443` (post-amendment; `server_name` scopes the
-  vhost) — the original all-interfaces concern is noted under FIREWALL.md; port 80
-  redirects to the FQDN.
-- TLS chain verifies against the private CA (`Verify return code: 0`); cert/key hashes match.
-- Apps, registry (all-`https` player URLs), `/webrtc/`, `/snapshot/` work over TLS; `/mcp` proxied; `STREAM_SERVER_URL=https://{{SERVER_FQDN}}`.
+Restore the CA through CREATE_CA_CERT.md §13. Follow NGINX_BACKUP.md to select
+and restore one complete nginx checkpoint, including recovery/reissue of the
+server private key and matching certificate through SITE_CERT.md. The private
+key is excluded from backups. Restore the MCP service's HTTPS configuration
+from its separate service backup; regenerate camera-IP data per RESTORE.md.
+Validate TLS and the selected checkpoint's route/authentication behavior.
+Do not restore nginx fragments from site-cert or later procedure folders.
 
 ### Keycloak OAuth server
 
@@ -380,9 +289,9 @@ Backed up data:
 - `final-var-backups-keycloak-postgres.tar` — the dump set (root `keycloak-postgres-backups/`): `keycloak-20260916T215030Z.dump` (custom format, zstd, 520 catalog entries). Sensitive: contains password hashes, the DCR registration access token, and the active Hermes client registration. This is the database restore source.
 - `final-usr-local-sbin-backup-keycloak-postgres.tar` — backup script (mode 750).
 - `final-etc-systemd-system.tar` — complete `/etc/systemd/system` tree including `keycloak-postgres-backup.service` and `onvif-mcp-http.service.d/oauth.conf`. Newest complete systemd set — restore last.
-- `final-etc-nginx-conf.d.tar` / `-sites-available.tar` / `-sites-enabled.tar` — final nginx configs with `/auth/` and `/.well-known/oauth-protected-resource/mcp`; newest complete nginx set — restore last among config-stage backups. conf.d is UNPINNED (`listen 443 ssl;` — the 2026-09-12-set pinned-listener problem does not recur from this archive).
-- `final-etc-nginx-backups.tar` — `/etc/nginx/backups/` including the runbook-mandated `gmktec.home.arpa.conf.pre-keycloak` copy.
-- `final-docs-KEYCLOAK.md`, `final-docs-BACKUP.md` — runbook + this log.
+- Historical nginx artifacts: see the original folder inventory. New captures and restore selection use NGINX_BACKUP.md.
+- Historical nginx artifacts: see the original folder inventory. New captures and restore selection use NGINX_BACKUP.md.
+- `final-docs-KEYCLOAK.md` — runbook.
 - `SHA256SUMS` — checksums for files in the backup folder.
 
 Configuration completed:
@@ -413,128 +322,11 @@ Verification performed:
 
 ## Reconstructing the Keycloak OAuth server from backup
 
-Use these instructions with `{{BACKUP_PATH}}/keycloak-{{DATETIME_STAMP}}`. This backup holds the newest complete nginx configs (restore them last among config-stage backups) and the only copy of the Keycloak secrets and database.
+Follow KEYCLOAK_BACKUP.md for the shared Keycloak checkpoint and
+NGINX_BACKUP.md for nginx. Select compatible checkpoint references from their
+metadata; do not apply a chain of procedure-named nginx archives.
 
-1. Install Docker and Compose, then restore the deployment directory (secrets included):
 
-   ```bash
-   sudo apt-get update
-   sudo apt-get install -y docker.io docker-compose-v2
-   BACKUP_DIR="{{BACKUP_PATH}}/keycloak-{{DATETIME_STAMP}}"
-   # NOTE (2026-09-13 restore verification): the archive root is `keycloak/`, NOT `opt/...`.
-   # Extract into /opt directly (`-C / opt` fails with "Not found in archive"):
-   sudo mkdir -p /opt
-   sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-opt-keycloak.tar" -C /opt
-   sudo chown -R root:root /opt/keycloak
-   sudo chmod 750 /opt/keycloak
-   sudo chmod 600 /opt/keycloak/.env /opt/keycloak/admin.pass /opt/keycloak/mcp-user.pass
-   sudo chmod 640 /opt/keycloak/compose.yaml
-   ```
-
-2. Start the stack (the compose file pins image tags; `up -d` pulls them) and wait for readiness:
-
-   ```bash
-   sudo docker compose --project-directory /opt/keycloak up -d
-   curl --fail --retry 24 --retry-all-errors --retry-delay 5 \
-     -sS -o /dev/null -w 'HTTP %{http_code}\n' \
-     http://127.0.0.1:8080/auth/realms/master/.well-known/openid-configuration
-   ```
-
-   Note: the postgres data volume starts empty on a fresh host. Before or after first
-   start, restore the database from the archived dump into it:
-
-   ```bash
-   # stop keycloak first if it already started against an empty DB
-   sudo docker compose --project-directory /opt/keycloak stop keycloak
-   sudo docker compose --project-directory /opt/keycloak exec -i postgres \
-     createdb --username=keycloak keycloak 2>/dev/null || true
-   sudo sh -c 'tar -xOf "$0" var/backups/keycloak-postgres/$(tar -tf "$0" | grep -o "keycloak-[^/]*\.dump$" | head -1 | xargs basename) 2>/dev/null | docker compose --project-directory /opt/keycloak exec -i postgres pg_restore --username=keycloak --dbname=keycloak --exit-on-error' "$BACKUP_DIR/final-var-backups-keycloak-postgres.tar"
-   sudo docker compose --project-directory /opt/keycloak up -d keycloak
-   ```
-
-   Simpler alternative on a fresh host (RECOMMENDED — verified 2026-09-13): the dump tar's
-   root is `keycloak-postgres-backups/`, not `var/backups/keycloak-postgres/`, and dumps are
-   mode 600 root, so a plain `< file` redirect from an agent shell fails with permission
-   denied. Extract, move into the canonical path, then pipe via sudo:
-
-   ```bash
-   sudo tar -xf "$BACKUP_DIR/final-var-backups-keycloak-postgres.tar" -C /var/backups
-   sudo mkdir -p /var/backups/keycloak-postgres
-   sudo mv -n /var/backups/keycloak-postgres-backups/*.dump /var/backups/keycloak-postgres/
-   sudo rmdir /var/backups/keycloak-postgres-backups
-   sudo chmod 700 /var/backups/keycloak-postgres
-   # fresh postgres init already creates and owns the keycloak DB; drop+recreate for a
-   # clean restore:
-   sudo docker compose --project-directory /opt/keycloak exec -T postgres \
-     psql --username=keycloak --dbname=postgres -c "DROP DATABASE keycloak;"
-   sudo docker compose --project-directory /opt/keycloak exec -T postgres \
-     createdb --username=keycloak --owner=keycloak keycloak
-   sudo cat /var/backups/keycloak-postgres/<newest>.dump | \
-     sudo docker compose --project-directory /opt/keycloak exec -i postgres \
-     pg_restore --username=keycloak --dbname=keycloak --exit-on-error
-   sudo docker compose --project-directory /opt/keycloak up -d keycloak
-   ```
-
-   The one-line tar-pipe idiom above it has NOT been verified on restore; prefer the
-   explicit sequence.
-
-3. Restore the CA trust, backup script, systemd units, and nginx config:
-
-   ```bash
-   sudo install -m 644 /etc/nginx/tls/camera-system-root-ca.crt.pem \
-     /usr/local/share/ca-certificates/camera-system-root-ca.crt 2>/dev/null || true
-   sudo update-ca-certificates
-   sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-usr-local-sbin-backup-keycloak-postgres.tar" -C /
-   sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-systemd-system.tar" -C /
-   sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-nginx-conf.d.tar" -C /
-   sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-nginx-sites-available.tar" -C /
-   sudo tar --xattrs --acls --selinux -xpf "$BACKUP_DIR/final-etc-nginx-sites-enabled.tar" -C /
-   ```
-
-   Note: restoring the whole `/etc/systemd/system` and nginx dirs brings every
-   stage's units/config forward at once — this folder is the newest complete set;
-   do not restore older stage folders after it.
-
-4. Reload services:
-
-   ```bash
-   sudo systemctl daemon-reload
-   sudo systemctl restart onvif-mcp-http
-   sudo nginx -t && sudo systemctl restart nginx
-   ```
-
-5. Verify reconstruction:
-
-   ```bash
-   sudo docker compose --project-directory /opt/keycloak ps       # both up, postgres healthy
-   curl -sS -o /dev/null -w '%{http_code}\n' \
-     https://{{SERVER_FQDN}}/auth/realms/mcp/.well-known/openid-configuration   # 200
-   curl -sS -D - -o /dev/null https://{{SERVER_FQDN}}/mcp 2>&1 | grep -E '^HTTP|www-authenticate'  # 401 + resource_metadata
-   curl -sS https://{{SERVER_FQDN}}/.well-known/oauth-protected-resource/mcp    # exact metadata JSON
-   sudo ss -ltnp | grep ':8080'                                   # 127.0.0.1:8080 only
-   ```
-
-   Then re-authenticate `kcadm.sh` per KEYCLOAK.md §4 (password from
-   `/opt/keycloak/admin.pass`) and confirm the realm, scope, and DCR policy
-   components match `post-change-state.txt`. The archived database already
-   contains the active Hermes DCR client; existing Hermes token files on clients
-   remain valid only while the Keycloak signing keys are unchanged — a fresh
-   database restored from this dump includes the original keys. If the OAuth
-   client's tokens fail, re-run the KEYCLOAK.md §13 login.
-
-   NOTE (2026-09-13 restore verification): for the Hermes-side login (KEYCLOAK.md §13),
-   the `ssl_verify` path must be `/etc/ssl/certs/camera-system-root-ca.pem` —
-   `update-ca-certificates` installs the `.crt` source under a `.pem` link in
-   `/etc/ssl/certs`; the literal `<ca-name>.pem` placeholder in §13.1 resolves there.
-   Verified working flow: write the config entry (`enabled: false`), run the login under
-   `HERMES_HOME=<isolated-dir>` with `env -u DISPLAY -u WAYLAND_DISPLAY`, complete the
-   browser step with `scripts/kc-headless-login-driver.py <auth-url>`, copy the three
-   token files to `~/.hermes/mcp-tokens/` (mode 600), shred the isolated copies,
-   `hermes mcp test <name>` (expect 29 tools), then set `enabled: true`.
-
-Expected restored state matches `post-change-state.txt`: discovery 200, 401 with
-correct metadata, 29 tools for `camera-new`, regression endpoints 200 over TLS,
-Keycloak bound to loopback only.
 
 ### Browser authentication gate (STREAM_AUTH / oauth2-proxy)
 
@@ -568,9 +360,9 @@ Backed up data:
 - `compose.yaml.pre-oauth2-proxy` — pre-change compose (non-secret; the oauth2-proxy service not yet present).
 - `post-change-state.txt` — `.env` key names + counts (values never), oauth2-proxy image pin + listener, `camera-web` client representation (secret never printed), nginx location changes, unauthenticated 302 behavior for all five route families + HTTP→HTTPS snapshot redirect, Phase-9 driver PASS evidence, MCP regression (cookie-independent `get_snapshot`), checkpoint dump verification, deviations list.
 - `final-opt-keycloak.tar` — final `/opt/keycloak/` (root `keycloak/`, restore with `-C /opt`) incl. updated `compose.yaml` (oauth2-proxy service), `.env` (+ client/cookie secrets), `.env.pre-oauth2-proxy`, `compose.yaml.pre-oauth2-proxy`, `gmktec.home.arpa.conf.pre-stream-auth`, and both `.pass` files. Contains NO token files. Sensitive.
-- `final-var-backups-keycloak-postgres.tar` — complete dump set (root `keycloak-postgres-backups/`) incl. the §10 checkpoint `keycloak-20260916T220859Z.dump` (251321 bytes, `pg_restore --list` exit 0, 520 catalog entries). Restore source for this stage until superseded. Sensitive.
-- `final-etc-nginx-conf.d.tar` — newest complete conf.d set: `/oauth2/*` support blocks + `auth_request` on all five route families, `try_files "" =404;` amendment on `/outputs/`, UNPINNED `listen 443 ssl;` (unpinned-listener check: 1 unpinned / 0 pinned-IP). Restore last among config-stage backups.
-- `final-docs-STREAM_AUTH.md`, `final-docs-BACKUP.md` — runbook and this log.
+- `final-var-backups-keycloak-postgres.tar` — complete dump set (root `keycloak-postgres-backups/`) incl. the §10 checkpoint `keycloak-20260916T220859Z.dump` (251321 bytes, `pg_restore --list` exit 0, 520 catalog entries). Historical capture. Sensitive.
+- Historical nginx artifacts: see the original folder inventory. New captures and restore selection use NGINX_BACKUP.md.
+- `final-docs-STREAM_AUTH.md` — runbook.
 - `SHA256SUMS` — round-trip verified.
 
 Configuration completed:
@@ -633,9 +425,9 @@ Backed up data:
 - `compose.yaml.pre-oauth2-proxy` — pre-change compose (non-secret; no oauth2-proxy service yet).
 - `post-change-state.txt` — `.env` key names + counts (values never), oauth2-proxy image pin + loopback-only listener, `camera-web` representation settings (secret never printed), nginx location changes, unauthenticated 302 behavior for all five route families + HTTP→HTTPS snapshot redirect, phase-9 driver PASS evidence, MCP regression (cookie-independent `get_snapshot`), checkpoint dump verification, deviations list.
 - `final-opt-keycloak.tar` — final `/opt/keycloak/` (root `keycloak/`, restore with `-C /opt`) incl. updated `compose.yaml` (oauth2-proxy service), `.env` (+ client/cookie secrets), `.env.pre-oauth2-proxy`, `compose.yaml.pre-oauth2-proxy`, `gmktec.home.arpa.conf.pre-stream-auth`, and both `.pass` files. Contains NO token files. Sensitive.
-- `final-var-backups-keycloak-postgres.tar` — complete dump set (root `keycloak-postgres-backups/`) incl. the §10 checkpoint `keycloak-20260919T133018Z.dump` (251323 bytes, mode 0600 root:root, `pg_restore --list` exit 0, catalog readable). Restore source for this stage until superseded. Sensitive.
-- `final-etc-nginx-conf.d.tar` — newest complete conf.d set: `/oauth2/*` support blocks + `auth_request` on all five route families, `try_files "" =404;` amendment on `/outputs/`, UNPINNED `listen 443 ssl;` (unpinned-listener check run BEFORE archiving: 1 unpinned / 0 pinned-IP). Restore last among config-stage backups.
-- `final-docs-STREAM_AUTH.md`, `final-docs-BACKUP.md` — runbook and this log.
+- `final-var-backups-keycloak-postgres.tar` — complete dump set (root `keycloak-postgres-backups/`) incl. the §10 checkpoint `keycloak-20260919T133018Z.dump` (251323 bytes, mode 0600 root:root, `pg_restore --list` exit 0, catalog readable). Historical capture. Sensitive.
+- Historical nginx artifacts: see the original folder inventory. New captures and restore selection use NGINX_BACKUP.md.
+- `final-docs-STREAM_AUTH.md` — runbook.
 - `SHA256SUMS` — checksums for every backed-up file except itself; round-trip verified.
 
 Configuration completed:
@@ -665,9 +457,11 @@ Human-confirmation items (out of driver scope by design): live video rendering i
 
 ## Reconstructing the browser authentication gate from backup
 
-Use `{{BACKUP_PATH}}/stream-auth-{{DATETIME_STAMP}}`. This supersedes the keycloak folder's `compose.yaml`/`.env`/nginx configs and its dumps — restore this folder's artifacts after (not before) the Keycloak procedure, or simply use this folder's copies of `final-opt-keycloak.tar` and `final-etc-nginx-conf.d.tar` in place of the keycloak folder's.
+Restore a Keycloak checkpoint containing oauth2-proxy configuration using
+KEYCLOAK_BACKUP.md. Restore the compatible complete nginx checkpoint through
+NGINX_BACKUP.md after its upstream dependencies are available. No stream-auth
+nginx fragment or configuration overlay is required.
 
-1. Everything in "Reconstructing the Keycloak OAuth server from backup" steps 1–4, but substituting this folder's `final-opt-keycloak.tar`, `final-var-backups-keycloak-postgres.tar`, and `final-etc-nginx-conf.d.tar`. The compose file here includes the oauth2-proxy service; `up -d` starts all three containers.
 2. Verify:
 
    ```bash
@@ -730,7 +524,7 @@ Security note: the password was supplied through the agent chat channel; rotatio
 recommended once client onboarding completes (set a new password per ADD_USER.md §5 and
 overwrite `stephen.pass`).
 
-This stage changes no nginx/systemd/compose state — the folder supersedes the stream-auth folder only for `final-opt-keycloak.tar` and the postgres dumps.
+Historical checkpoint contents only; current Keycloak selection follows KEYCLOAK_BACKUP.md.
 
 ### Additional login account — re-execution on this host (ADD_USER, 2026-09-19)
 
@@ -777,7 +571,7 @@ recommended once client onboarding completes (set a new password per ADD_USER.md
 overwrite `stephen.pass`). Pending: client-side configuration per CLIENT.md and, if that
 machine is new, ADD_CLIENT_ON_SERVER.md trusted-hosts addition.
 
-This stage changes no nginx/systemd/compose state — the folder supersedes the stream-auth folder only for `final-opt-keycloak.tar` and the postgres dumps.
+Historical checkpoint contents only; current Keycloak selection follows KEYCLOAK_BACKUP.md.
 
 ### DCR trusted-host addition (ADD_CLIENT_ON_SERVER)
 
@@ -850,7 +644,7 @@ Verification performed:
 - Isolated restore proof that the `10.1.1.4` policy row is IN the new dump (scratch DB dropped with guard).
 - Pending: nginx `201` for the client's DCR POST from `10.1.1.4` — confirm when the client retries login (its pre-change attempt logged `403` at 10:04:45).
 
-This stage changes no host files — the folder supersedes the add-user folder only for the postgres dumps (the opt tar is byte-identical to it, re-archived for self-sufficiency).
+Historical checkpoint contents only; current Keycloak selection follows KEYCLOAK_BACKUP.md.
 
 ### HTTPS listener unpinned (SITE_CERT §9 amendment)
 
@@ -862,13 +656,9 @@ Backup:
 
 - `/etc/nginx/conf.d/gmktec.home.arpa.conf.backup-2026-09-12` — exact pre-change file (same-disk copy; no SMB folder for this one-line amendment).
 
-**Restore implication (verified 2026-09-13):** this amendment has NO backup folder, and
-every `final-etc-nginx-conf.d.tar` (site-cert, keycloak, stream-auth) still contains the
-pinned listen line. Whoever restores the LAST conf.d archive MUST re-apply this change
-immediately afterwards (sed + systemd drop-in, as in "Reconstructing the HTTPS
-configuration" step 3) — otherwise the system regresses to the boot-time bind race and
-oauth2-proxy crash-loops against a hostname-404ing vhost. A rebuild should also re-archive
-the amended conf.d into a fresh backup folder.
+Historical defect: fragmented backups once retained a pinned listener. New
+checkpoints validate the intended listener and capture nginx-specific unit
+overrides together; follow NGINX_BACKUP.md for restore.
 
 Configuration completed:
 

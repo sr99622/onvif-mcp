@@ -524,52 +524,31 @@ The root certificate (`/etc/nginx/tls/camera-system-root-ca.crt.pem` or the copy
 clients that will consume the HTTPS endpoints; the private key never leaves this
 host, and the vault passphrases stay GPG-encrypted in `~/.password-store`.
 
-## Stage-close backup (site-cert folder)
+## Stage-close backup
 
-This stage's changes must be archived to `{{BACKUP_PATH}}/<runbook-name>-{{DATETIME_STAMP}}`
-per BACKUP.md's Procedure before any later stage runs. Purpose: the HTTPS cutover
-touches nginx dirs, the registry, and the MCP unit simultaneously; without this
-folder the later stages' archives are the only record and they may not exist yet.
+After the HTTPS checks pass, create a complete nginx checkpoint using
+[NGINX_BACKUP.md](NGINX_BACKUP.md). Store it under
+`{{BACKUP_PATH}}/nginx/YYYYMMDDHHMMSSZ/` with `nginx.tar`, `metadata.txt`, and
+verified `SHA256SUMS`. Include the public TLS material; exclude the server
+private key. The post-issuance CA backup from §7 remains required for recovery.
 
-Required contents (BACKUP.md's site-cert entry defines the schema):
+Keep non-nginx artifacts separately in
+`{{BACKUP_PATH}}/site-cert-{{DATETIME_STAMP}}`: `final-etc-onvif-mcp.tar`
+(registry provenance), `final-etc-systemd-system-onvif-mcp-http.service.tar`,
+post-change verification notes, and verified `SHA256SUMS`. Record the nginx
+checkpoint path in those notes. Do not put nginx archives or runbook copies
+in that folder. Regenerate camera-IP data during recovery as described in
+RESTORE.md.
 
-- `post-change-state.txt` — issued cert identity (serial, expiry), 443 listener
-  pinning check (`0.0.0.0:443`), `server_name` count (exactly 2), TLS chain
-  verification, endpoint checks, service states, `STREAM_SERVER_URL`, registry
-  scheme counts.
-- `final-etc-nginx-conf.d.tar` — **archive the AMENDED conf.d**: verify first that
-  `grep -c 'listen 10.1.1.5:443' /etc/nginx/conf.d/{{SERVER_FQDN}}.conf` is 0 (or
-  any pinned `listen <IP>:443`). Every archived conf.d in the 2026-09-12 backup set
-  still contained the pinned listener because this check did not exist; a restore
-  that untars a pinned archive regresses the boot-time bind race documented in §9
-  (observed twice during the 2026-09-13 restore).
-- `final-etc-nginx-sites-available.tar` / `-sites-enabled.tar` — the redirect-only
-  sites state (pre-change copies kept alongside as `.backup-<date>`).
-- `final-etc-nginx-nginx.conf.tar`, `final-etc-onvif-mcp.tar` (https-flipped
-  registry), `final-etc-systemd-system-onvif-mcp-http.service.tar`
-  (`STREAM_SERVER_URL=https://…`).
-- `final-etc-nginx-tls-public.tar` — leaf, chain, root CA, CSR. **The server key is
-  deliberately EXCLUDED**: recovery regenerates it (§1–§6 + §8). This is by design;
-  the CA archive (§7) is what makes regeneration possible, so §7's fresh age
-  archive is a precondition of this folder being restorable.
-- `final-docs-SITE_CERT.md`, `SHA256SUMS`.
-
-Verify before closing:
-
-```bash
-( cd "{{BACKUP_PATH}}/site-cert-{{DATETIME_STAMP}}" && sha256sum \
-    $(ls | grep -v SHA256SUMS) > SHA256SUMS && sha256sum -c SHA256SUMS )
-tar -tf "{{BACKUP_PATH}}/site-cert-{{DATETIME_STAMP}}/final-etc-nginx-conf.d.tar" \
-  | grep -q conf.d/ || echo "FATAL: empty archive"
-sudo tar -xOf "{{BACKUP_PATH}}/site-cert-{{DATETIME_STAMP}}/final-etc-nginx-conf.d.tar" \
-  etc/nginx/conf.d/{{SERVER_FQDN}}.conf | grep -c 'listen 443 ssl;'   # expect 1, not a pinned IP
-```
-
-Later stages that edit conf.d (CA_DISTRIBUTE.md, KEYCLOAK.md, STREAM_AUTH.md) each
-re-archive it; their folders supersede this one. The unpinned-listener check above
-applies to EVERY stage's conf.d archive, not just this one.
+Later nginx changes create another complete checkpoint in the same history.
+Restore selects one completed nginx snapshot; it does not overlay later
+procedure folders.
 
 ## 12. Renewal procedure (use only at renewal time)
+
+After renewal and its endpoint checks pass, create a fresh nginx checkpoint
+per NGINX_BACKUP.md, including the new public certificate and updated CA backup
+reference. Keep private keys excluded.
 
 Before the 397-day site certificate expires:
 

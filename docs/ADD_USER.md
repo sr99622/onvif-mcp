@@ -248,38 +248,26 @@ The secret file remains on the server as a recovery copy. To rotate, set a
 new password per Section 5 and overwrite the file; the old value is then gone
 from both.
 
-## 8. Stage-close backup (add-user folder)
+## 8. Keycloak backup checkpoint
 
-The new user and its password exist only in the Keycloak database and in
-`/opt/keycloak/{{NEW_LOGIN_USER}}.pass` — both lost with the host. Close this
-stage immediately after §6/§7 verification, per BACKUP.md's Procedure, into
-`{{BACKUP_PATH}}/add-user-{{DATETIME_STAMP}}`:
+After §6/§7 verification, complete [KEYCLOAK_BACKUP.md](KEYCLOAK_BACKUP.md) shared checkpoint
+procedure. Invoke the backup service through that procedure and publish a
+new `{{BACKUP_PATH}}/keycloak/YYYYMMDDHHMMSSZ/` recovery point containing:
 
-1. Take a fresh dump (the new user must be IN it) and verify the catalog per
-   KEYCLOAK.md §15b's pattern:
-   ```bash
-   sudo systemctl start keycloak-postgres-backup.service
-   sudo systemctl status keycloak-postgres-backup.service --no-pager
-   ```
-   Require a new nonempty `keycloak-*.dump`, mode 0600 root:root.
-2. Archive to the folder: `final-var-backups-keycloak-postgres.tar` (the
-   COMPLETE dump directory — root is `keycloak-postgres-backups/`, D4) and
-   `final-opt-keycloak.tar` (now including `{{NEW_LOGIN_USER}}.pass`; creation
-   rules per KEYCLOAK.md §15b — `keycloak/` root, 0600 modes before tarring).
-   The password is archived ONLY as the root-600 file inside the tar; it never
-   enters `post-change-state.txt`, logs, or chat.
-3. `post-change-state.txt` records: the new user's representation (username,
-   names, email, `emailVerified=true`, `requiredActions=[]`, uuid), the
-   credential TYPE list, the full realm user list proving the pre-existing
-   login user intact, the secret file mode — and the §9 driver PASS evidence
-   if the browser flow was run for this account. Password value: never.
-4. `SHA256SUMS` + verify block from KEYCLOAK.md §15b (checksum round-trip,
-   tar non-empty guards, dump catalog listing).
+- `keycloak.tar`, including `/opt/keycloak/{{NEW_LOGIN_USER}}.pass` with mode
+  0600, along with the current configuration and other account secret files.
+- `keycloak-postgres.tar`, containing only the fresh dump with the new user.
+- `metadata.txt` and verified `SHA256SUMS`.
 
-Supersession: supersedes the prior stage's `final-opt-keycloak.tar` and dump
-set (it is the newest restore source); changes NO nginx/systemd/compose state,
-so it supersedes nothing else. Later stages (ADD_CLIENT_ON_SERVER.md)
-re-archive both artifacts again.
+Record ADD_USER.md as the trigger and include the new user's identity/UUID,
+credential types, verification that pre-existing users remain intact, secret
+file mode, and §9 browser verification result if performed. Never record the
+password value in metadata, logs, or chat.
+
+Use the shared capture, verification, and publication rules in KEYCLOAK_BACKUP.md. Do not
+create an `add-user-*` folder for Keycloak backups or rearchive older dumps.
+Both archives belong to the same checkpoint; restore uses the newest
+completed checkpoint regardless of which runbook created it.
 
 ## Troubleshooting
 

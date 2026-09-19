@@ -446,7 +446,7 @@ Destination: `/opt/keycloak/compose.yaml.pre-oauth2-proxy` — a suffixed siblin
 in the project directory is safe (verified: `docker compose` loads only
 `compose.yaml`/`compose.override.yaml`; suffixed siblings never enter the model)
 and keeps it inside the `/opt/keycloak` tree so the Section 10 tar captures it
-into every downstream `final-opt-keycloak.tar` — no separate SMB copy needed.
+into every downstream `keycloak.tar` — no separate SMB copy needed.
 Never name it `compose.override.yaml`: that name IS the active Compose model.
 
 Before pulling or starting, confirm two things directly: (a) the public chain — Nginx listens on
@@ -545,7 +545,7 @@ EVERY regular file beneath `sites-enabled/` and `conf.d/`, so an in-place
 suffixed sibling becomes a live duplicate `server_name` vhost. The backup must
 live outside both directories. Required location (same retention rationale as
 §5 — inside the tree that Section 10's tar sweeps into every downstream
-`final-opt-keycloak.tar`):
+`keycloak.tar`):
 
 ```bash
 sudo cp -a "{{NGINX_SITE}}" "{{COMPOSE_DIR}}/{{SERVER_FQDN}}.conf.pre-stream-auth"
@@ -814,60 +814,36 @@ OAuth state.
 
 ## 10. Backup checkpoint
 
-After the browser client and successful login exist, run the manual Keycloak
-backup service:
+After the browser client and successful login exist, complete the shared
+checkpoint procedure in [KEYCLOAK_BACKUP.md](KEYCLOAK_BACKUP.md). It invokes
+`keycloak-postgres-backup.service`, verifies a fresh dump, and publishes the
+archive pair under `{{BACKUP_PATH}}/keycloak/YYYYMMDDHHMMSSZ/`.
 
-```bash
-sudo systemctl start keycloak-postgres-backup.service
-sudo systemctl status keycloak-postgres-backup.service --no-pager
-```
+The checkpoint must contain:
 
-Require:
+- `keycloak.tar`: current `/opt/keycloak/`, including the oauth2-proxy Compose
+  service and client/cookie secrets in `.env`.
+- `keycloak-postgres.tar`: only the fresh database dump containing the browser
+  client and verified login state.
+- `metadata.txt` and `SHA256SUMS`, verified before publication per KEYCLOAK_BACKUP.md.
 
-- one new nonempty `keycloak-*.dump`
-- mode `0600`, owner/group `root:root`
-- safe basename without `/`
-- successful `pg_restore --list` with detail output suppressed. The dump is
-  root-owned mode `0600`, so the host shell must read it as root and stream it
-  into the postgres container:
+Record STREAM_AUTH.md as the trigger. Preserve pre-change configuration
+fingerprints and verification results without secret values. The previous
+completed Keycloak checkpoint holds the earlier configuration; do not select
+it by the name of the runbook that created it.
 
-```bash
-sudo bash -c 'cat /var/backups/keycloak-postgres/DUMP_FILE.dump | \
-  docker exec -i keycloak-postgres-1 sh -c "cat > /tmp/.chk.dump && pg_restore --list /tmp/.chk.dump >/dev/null 2>&1; echo pg_restore_exit=\$?"'
-```
+Create a complete nginx checkpoint per [NGINX_BACKUP.md](NGINX_BACKUP.md)
+under `{{BACKUP_PATH}}/nginx/YYYYMMDDHHMMSSZ/`. It includes all nginx
+configuration, including `/oauth2/*` and `auth_request`. Record the compatible
+Keycloak checkpoint path in nginx metadata and the nginx checkpoint path in
+Keycloak metadata; prepare both paths before checksumming and publication.
+Do not create a procedure-named nginx backup or a conf.d-only archive.
+Restore nginx using that shared procedure, with the authentication services
+ready before endpoint verification.
 
-  Require `pg_restore_exit=0`, then remove `/tmp/.chk.dump` from the container.
-- no unintended timer creation
-- all services healthy afterward
-
-The dump now exists ONLY at `/var/backups/keycloak-postgres/` (14-day local
-retention). Copying it to `{{BACKUP_PATH}}` does not happen automatically —
-no service or timer performs it — and this stage's checkpoint is worthless
-until it lands on the share. Close this stage now, per BACKUP.md's Procedure,
-into `{{BACKUP_PATH}}/stream-auth-{{DATETIME_STAMP}}` with:
-
-- `final-var-backups-keycloak-postgres.tar` — the dump set INCLUDING the
-  checkpoint dump just taken (this stage's dump is the restore source for
-  later stages until superseded by add-user/add-client).
-- `final-opt-keycloak.tar` — supersedes the keycloak folder's copy (compose
-  now has the oauth2-proxy service; `.env` has the client/cookie secrets);
-  same creation rules as KEYCLOAK.md §15b.
-- `final-etc-nginx-conf.d.tar` — newest complete conf.d (adds `/oauth2/*` +
-  `auth_request`); run the unpinned-listener check from CA_DISTRIBUTE.md
-  "Stage-close backup" BEFORE archiving — this folder's conf.d is what a
-  restore uses LAST, and the 2026-09-12 archive here carried the pinned
-  `listen` forward into the newest set (D6; the restore must otherwise
-  re-apply the amendment by hand).
-- pre/post change state files (`.env` key names + counts only, values never;
-  `.env.pre-oauth2-proxy.sha256` as the pre-change fingerprint — the pre-change
-  `.env` content itself stays in the keycloak folder's tar, no duplicate
-  secret copies on the share), `compose.yaml.pre-oauth2-proxy`,
-  `final-docs-BACKUP.md`, `SHA256SUMS`.
-
-Supersession: supersedes the keycloak folder's `final-opt-keycloak.tar`,
-dump set, and conf.d. Superseded later for opt-tar/dumps by add-user-*, then
-add-client-on-server-*. Verify before closing as in KEYCLOAK.md §15b (checksum
-round-trip, tar non-empty guards, dump catalog listing).
+Restore Keycloak state using both files from the newest completed shared
+checkpoint, as specified in KEYCLOAK_BACKUP.md; there is no runbook-based
+supersession chain for the database or `/opt/keycloak`.
 
 ## Troubleshooting
 

@@ -1048,52 +1048,19 @@ Create the protected backup directory:
 sudo install -d -m 700 -o root -g root /var/backups/keycloak-postgres
 ```
 
-Create `/usr/local/sbin/backup-keycloak-postgres`:
+Install the repository's generic backup script; do not recover it from a
+backup archive:
 
 ```bash
-#!/usr/bin/env bash
-set -Eeuo pipefail
-
-backup_dir="/var/backups/keycloak-postgres"
-timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
-final_file="${backup_dir}/keycloak-${timestamp}.dump"
-temp_file="$(mktemp "${backup_dir}/.keycloak-${timestamp}.XXXXXX.dump")"
-
-cleanup() {
-    rm -f -- "${temp_file}"
-}
-trap cleanup EXIT
-
-docker compose --project-directory /opt/keycloak exec -i postgres \
-    pg_dump \
-    --username=keycloak \
-    --dbname=keycloak \
-    --format=custom \
-    --compress=zstd:9 \
-    --no-owner \
-    --no-acl \
-    > "${temp_file}"
-
-chmod 600 "${temp_file}"
-mv -- "${temp_file}" "${final_file}"
-trap - EXIT
-
-find "${backup_dir}" \
-    -maxdepth 1 \
-    -type f \
-    -name 'keycloak-*.dump' \
-    -mtime +14 \
-    -delete
-
-printf '%s\n' "${final_file}"
+sudo install -o root -g root -m 750 \
+  "{{REPO_PATH}}/onvif-mcp/scripts/backup-keycloak-postgres" \
+  /usr/local/sbin/backup-keycloak-postgres
+sudo bash -n /usr/local/sbin/backup-keycloak-postgres
 ```
 
-Protect it:
-
-```bash
-sudo chmod 750 /usr/local/sbin/backup-keycloak-postgres
-sudo stat -c '%A %U %G %n' /usr/local/sbin/backup-keycloak-postgres
-```
+The script creates local, full database dumps with UTC timestamps and prunes
+old local dumps. It does not copy anything to the backup share. Complete §15b
+to create an off-host recovery point.
 
 Create `/etc/systemd/system/keycloak-postgres-backup.service`:
 
@@ -1208,86 +1175,29 @@ fi
 After the real OAuth client completes DCR and login, create another manual
 backup so the active client registration is included.
 
-## 15b. Stage-close backup (keycloak folder)
+## 15b. Keycloak backup checkpoint
 
-After §15's restore test passes and the post-login dump exists, close this
-stage by archiving to `{{BACKUP_PATH}}/keycloak-{{DATETIME_STAMP}}` per
-BACKUP.md's Procedure. Do not defer: the dump is the ONLY copy of the realm,
-users, clients, DCR policies, and Keycloak signing keys — none of it is
-replayable from any runbook, and local retention is only 14 days. The copy to
-`{{BACKUP_PATH}}` is a manual step performed by THIS section; nothing in the
-backup service or any timer performs it.
+After §15's isolated restore test and successful real-client DCR/login,
+complete [KEYCLOAK_BACKUP.md](KEYCLOAK_BACKUP.md). The new checkpoint must
+contain the verified realm, users, clients, policies, signing keys, and the
+matching `/opt/keycloak/` configuration. Record KEYCLOAK.md as the trigger.
+Backup and restore mechanics are defined in that shared document.
 
-Required contents:
+### Installation-stage host configuration backup
 
-- Pre/post change state files (`pre-change-state.txt`, `post-change-state.txt`):
-  record `.env` KEY NAMES and counts only — never values, never token or dump
-  contents. The original deployment passed a secret-leak scan on
-  `post-change-state.txt`; reproduce that standard.
-- `final-opt-keycloak.tar` — the ONLY archive of `compose.yaml`, `.env`
-  (postgres password + oauth2-proxy secrets), and the `.pass` files. Rules:
-  the tar must root at `keycloak/` (restore extracts with `-C /opt`, not
-  `-C / opt` — D4), secret files must already be mode 600 / compose 640 BEFORE
-  tarring (tar preserves modes; the restore re-applies them), and the archive
-  must contain NO token files — `~/.hermes/mcp-tokens/*` are never archived on
-  any host.
-- `final-var-backups-keycloak-postgres.tar` — the dump set (restore source for
-  this and every later stage until superseded). Root is
-  `keycloak-postgres-backups/` — state it in the folder's notes; the restore
-  side moves files into `/var/backups/keycloak-postgres/` (D4).
-- `final-usr-local-sbin-backup-keycloak-postgres.tar` (script, mode 750),
-  `final-etc-systemd-system.tar` (includes this stage's `keycloak-postgres-
-  backup.service` + the MCP `oauth.conf` drop-in), `final-etc-nginx-conf.d.tar`
-  / `-sites-available.tar` / `-sites-enabled.tar` (with `/auth/` +
-  `/.well-known/oauth-protected-resource/mcp`),
-  `final-etc-nginx-backups.tar` (runbook-mandated pre-keycloak copy),
-  `final-docs-KEYCLOAK.md`, `final-docs-BACKUP.md`, `SHA256SUMS`.
+After nginx validation, create a complete nginx checkpoint per
+[NGINX_BACKUP.md](NGINX_BACKUP.md), under
+`{{BACKUP_PATH}}/nginx/YYYYMMDDHHMMSSZ/`. Record its path in the Keycloak
+checkpoint metadata. The nginx checkpoint records the compatible Keycloak
+checkpoint; prepare both paths during capture and publish only after each
+checkpoint's checks pass.
 
-Before archiving conf.d, run the mandatory unpinned-listener check
-(CA_DISTRIBUTE.md "Stage-close backup" has the two greps; expect 1 unpinned /
-0 pinned-IP). This stage edits conf.d, and every conf.d archive in the
-2026-09-12 backup set — including this folder's — carried the pin forward
-(D6). If the check fails, fix the live file first (sed +
-`nginx.service.d/wait-for-network.conf`) and archive the fixed version.
-
-Newest-complete-set contract: this folder archives the ENTIRE
-`/etc/systemd/system` and nginx directories, making it the restore authority
-for those trees — later stages that need them inherit them here. Any later
-stage that re-archives these directories assumes the same obligation: complete
-copies only, or none (partial archives poison the newest-wins rule). Stages
-that archive only subsets (e.g. a later conf.d-only archive) must record their
-substitution in BACKUP.md's entry so the restore side knows which artifact
-wins per tree.
-
-Supersession: supersedes all earlier nginx/systemd archives. Superseded later
-for `final-opt-keycloak.tar` and the dump set by stream-auth-*, then
-add-user-*, then add-client-on-server-* (each re-archives after its own
-changes). Do not restore older stage folders after this one for systemd/nginx.
-
-Verify before closing:
-
-```bash
-BACKUP_DIR="{{BACKUP_PATH}}/keycloak-{{DATETIME_STAMP}}"
-( cd "$BACKUP_DIR" && sha256sum $(ls | grep -v SHA256SUMS) > SHA256SUMS \
-  && sha256sum -c SHA256SUMS )
-for t in final-opt-keycloak final-var-backups-keycloak-postgres \
-         final-etc-systemd-system final-etc-nginx-conf.d; do
-  tar -tf "$BACKUP_DIR/$t.tar" >/dev/null || echo "FATAL: $t.tar unreadable/empty"
-done
-tar -tf "$BACKUP_DIR/final-opt-keycloak.tar" | grep -E '^keycloak/\.env$|admin\.pass|mcp-user\.pass'
-D=$(sudo find /var/backups/keycloak-postgres -maxdepth 1 -name 'keycloak-*.dump' | sort | tail -1)
-# pg_restore cannot read stdin (needs a seekable file): copy in, list, wipe — §10 idiom
-sudo cat "$D" | sudo docker compose --project-directory /opt/keycloak exec -i postgres \
-  sh -c 'cat > /tmp/.chk.dump && pg_restore --list /tmp/.chk.dump | grep -c "^[0-9]"; rm -f /tmp/.chk.dump'
-grep -Ec 'secret|password|token' "$BACKUP_DIR/post-change-state.txt"   # inspect matches: names only, no values
-```
-
-Note on §15's `sudo sh -c "... < file"` shape: the redirect must execute
-INSIDE the root shell. A bare `sudo cmd < file` opens the redirect with the
-unprivileged caller's rights and fails on the 600-root dumps (D5) — do not
-simplify the idiom. (For `pg_restore --list` specifically, note the tool needs
-a seekable FILE, not stdin — hence the copy-in/wipe pattern in the block
-above, and the file redirect inside §15's root shell.)
+Keep `final-etc-systemd-system.tar`, pre/post state notes, and verified
+`SHA256SUMS` separately in `{{BACKUP_PATH}}/keycloak-{{DATETIME_STAMP}}` for
+non-nginx host units. Exclude `nginx.service` and `nginx.service.d` from that
+archive: the nginx checkpoint owns those overrides, including their absence.
+Do not store nginx archives, the Keycloak pair, or the backup script in this
+host-unit folder. Reinstall the backup script and unit using §14.
 
 ## 16. Final verification checklist
 
@@ -1321,8 +1231,9 @@ Required outcomes:
 - The MCP client discovers the expected tools.
 - A post-login database backup exists, its catalog is readable, and an
   isolated restore test has succeeded.
-- Stage-close backup complete per §15b: keycloak folder present on
-  `{{BACKUP_PATH}}`, checksums verify, dumps archived off-host.
+- Shared checkpoint complete per §15b: timestamped directory published under
+  `{{BACKUP_PATH}}/keycloak/`, both archives verified, and host configuration
+  backup referenced in metadata.
 
 
 # Addendum
