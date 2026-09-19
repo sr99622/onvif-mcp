@@ -600,6 +600,69 @@ slash-less `= /cameras`/`= /multiview` 301s are redirect-only (no content expose
 
 Human-confirmation items (out of driver scope by design): live video rendering in a browser after login (UDP ICE path) and images visibly displaying inside `/cameras/` and `/multiview/`.
 
+### Browser authentication gate — re-execution on this host (STREAM_AUTH, 2026-09-19)
+
+Runbook: `{{REPO_PATH}}/onvif-mcp/docs/STREAM_AUTH.md`
+
+Runbook variables used (all verified against system reality):
+
+- `{{SERVER_FQDN}}`: `gmktec.home.arpa` (`hostname -f` → `gmktec`; `getent hosts` → `10.1.1.5`; matches the site certificate SAN)
+- `{{SERVER_IP}}`: `10.1.1.5` (`enp170s0`)
+- `{{REPO_PATH}}`: `/home/stephen`
+- `{{BACKUP_PATH}}`: `/mnt/taurus-camera-ca/Camera-CA-Backups` (cifs mount rw; write probe passed)
+- Defaults: realm `mcp`, login user `mcp-user`, browser client `camera-web`, oauth2-proxy `v7.15.3` on `127.0.0.1:4180`
+
+Backup folder (actual):
+
+- `{{BACKUP_PATH}}/stream-auth-20260919-091744`
+
+NOTE (2026-09-19): the earlier stream-auth entry in this log (folder
+`stream-auth-20260916-180935`) was a laboratory artifact — that folder never
+existed on this host's share. This `stream-auth-20260919-091744` folder is the
+authoritative record of THIS deployment's browser-auth stage (fresh deployment;
+prior folders untouched). Tar roots match this host's existing convention:
+`conf.d/`, `sites-available/`, `sites-enabled/`, `keycloak/` (restore with `-C /opt`),
+`keycloak-postgres-backups/`.
+
+Backed up data:
+
+- `pre-change-state.txt` — services/listeners, `.env` key names only (`POSTGRES_PASSWORD` single line; no `OAUTH2_PROXY_*` keys yet — guard satisfied), compose services (no oauth2-proxy yet), nginx layout (unpinned 443 site with all target locations, no oauth2/auth_request yet), snapshot preflight (known path `4B0013BPAABE264/MediaProfile000` → 200 valid JPEG), unauthenticated baseline (roots + known snapshot path + `/mcp` 401), `STREAM_SERVER_URL` and registry scheme counts.
+- `etc-nginx-conf.d.tar` — pre-change conf.d (sourced from `gmktec.home.arpa.conf.pre-stream-auth`, byte-identical to live site at run start via `cmp`). Root `conf.d/`.
+- `etc-nginx-sites-available.tar` / `etc-nginx-sites-enabled.tar` — pre-change sites trees (untouched by this runbook).
+- `.env.pre-oauth2-proxy.sha256` — hash of the pre-change `.env` only; its content stays in the keycloak folder's `final-opt-keycloak.tar` (no duplicate secret copies on the share).
+- `compose.yaml.pre-oauth2-proxy` — pre-change compose (non-secret; no oauth2-proxy service yet).
+- `post-change-state.txt` — `.env` key names + counts (values never), oauth2-proxy image pin + loopback-only listener, `camera-web` representation settings (secret never printed), nginx location changes, unauthenticated 302 behavior for all five route families + HTTP→HTTPS snapshot redirect, phase-9 driver PASS evidence, MCP regression (cookie-independent `get_snapshot`), checkpoint dump verification, deviations list.
+- `final-opt-keycloak.tar` — final `/opt/keycloak/` (root `keycloak/`, restore with `-C /opt`) incl. updated `compose.yaml` (oauth2-proxy service), `.env` (+ client/cookie secrets), `.env.pre-oauth2-proxy`, `compose.yaml.pre-oauth2-proxy`, `gmktec.home.arpa.conf.pre-stream-auth`, and both `.pass` files. Contains NO token files. Sensitive.
+- `final-var-backups-keycloak-postgres.tar` — complete dump set (root `keycloak-postgres-backups/`) incl. the §10 checkpoint `keycloak-20260919T133018Z.dump` (251323 bytes, mode 0600 root:root, `pg_restore --list` exit 0, catalog readable). Restore source for this stage until superseded. Sensitive.
+- `final-etc-nginx-conf.d.tar` — newest complete conf.d set: `/oauth2/*` support blocks + `auth_request` on all five route families, `try_files "" =404;` amendment on `/outputs/`, UNPINNED `listen 443 ssl;` (unpinned-listener check run BEFORE archiving: 1 unpinned / 0 pinned-IP). Restore last among config-stage backups.
+- `final-docs-STREAM_AUTH.md`, `final-docs-BACKUP.md` — runbook and this log.
+- `SHA256SUMS` — checksums for every backed-up file except itself; round-trip verified.
+
+Configuration completed:
+
+- Login user `mcp-user` resolved in realm `mcp` by exact username: exactly one match, enabled, nonempty verified email, `requiredActions=[]`.
+- Confidential client `camera-web` created via host-side Admin REST (zero existing matches first — re-run guard held; kcadm create path unreliable per runbook); standard flow only, PKCE S256, exact redirect `https://gmktec.home.arpa/oauth2/callback`, post-logout `/cameras/`, web origin exact, consent off; all settings verified on the re-fetched representation (secret carried in top-level `secret` / dedicated client-secret endpoint, never printed).
+- `OAUTH2_PROXY_CLIENT_SECRET` (byte-compared equal to the live Keycloak client secret) + 32-byte URL-safe `OAUTH2_PROXY_COOKIE_SECRET` appended to `/opt/keycloak/.env` (mode 600 preserved; each key occurs exactly once; all values nonempty); `.env.pre-oauth2-proxy` created 0600 root-owned.
+- oauth2-proxy `v7.15.3` added to `/opt/keycloak/compose.yaml` (postgres/keycloak/volumes verified parsed-object-identical vs the pre-change copy before write); bound `127.0.0.1:4180`; provider CA mounted read-only via `--provider-ca-file`.
+- nginx HTTPS site: `/oauth2/auth` (body-less auth subrequest), `/oauth2/` (32k×8 / 64k buffers), `@oauth2_signin` relative-`rd` redirect; `auth_request` + cookie-forwarding quartet added to `/cameras/`, `/multiview/`, `= /outputs/camera_registry.json`, `/webrtc/`, `/snapshot/`; snapshot proxy headers/timeouts/no-cache preserved; single reload (done once, after auth_request landed).
+- `/outputs/` fallback: `return 404` → `try_files "" =404;` so the auth access phase runs first (authenticated fallback remains 404 by design).
+
+Verification performed:
+
+- oauth2-proxy loopback ping 200; unauthenticated auth check 401; listener `127.0.0.1:4180` only (public IP connection refused).
+- All protected routes (including the registry file and the known snapshot path) 302 → `/oauth2/start?rd=<path>` with original path preserved; no image content unauthenticated; HTTP snapshot entry 301→HTTPS then 302→login (port-80 vhost already redirects every path — verified, no edit needed); 4180 not publicly exposed.
+- `/oauth2/start` reaches Keycloak authorize with all PKCE parameter names present (values never printed).
+- Discovery 200; `/mcp` still 401 with protected-resource metadata; all containers healthy.
+- Phase-9 driver (`scripts/stream_auth_step9_driver.py --origin https://gmktec.home.arpa`, known snapshot + WebRTC paths) RESULT=PASS: login lands exactly on the requested route, ping 202 `Authenticated`, multiview no second login, WebRTC pass-through, in-session and fresh-session snapshots real JPEGs with `no-store` (fresh-session returns to the requested image, not the site root).
+- MCP regression cookie-independent: `get_cameras` (4 cameras / 9 profiles) all HTTPS-origin; `get_snapshot` for `4B0013BPAABE264/MediaProfile000` returned a valid JPEG with no browser cookies; `SNAPSHOT_PROXY_URL` unset on the MCP service (loopback default applies); registry 8/8 URLs `https://`; `hermes mcp test camera-new` connected via saved OAuth state, 29 tools.
+- Public TLS chain verified against the private CA (`s_client` + `openssl verify -CAfile` OK; no `-k` anywhere).
+- §10 checkpoint dump taken after the browser client and login existed; mode 0600 root:root; `pg_restore --list` exit 0 (temp file removed from container); no timer created; all services healthy afterward.
+- Backup checksums all passed (`sha256sum -c` clean).
+
+Known deviations (recorded in `post-change-state.txt`): none functional — the bare `/outputs/` answers 404 after auth (by design; the real file is protected separately) and the slash-less `= /cameras`/`= /multiview` 301s are redirect-only. One bookkeeping note: `compose.yaml` mode was briefly set to 640 by a staging install, then restored to the original 644 (final state verified).
+
+Human-confirmation items (out of driver scope by design): live video rendering in a browser after login (UDP ICE path) and images visibly displaying inside `/cameras/` and `/multiview/`.
+
 ## Reconstructing the browser authentication gate from backup
 
 Use `{{BACKUP_PATH}}/stream-auth-{{DATETIME_STAMP}}`. This supersedes the keycloak folder's `compose.yaml`/`.env`/nginx configs and its dumps — restore this folder's artifacts after (not before) the Keycloak procedure, or simply use this folder's copies of `final-opt-keycloak.tar` and `final-etc-nginx-conf.d.tar` in place of the keycloak folder's.
@@ -669,6 +732,53 @@ overwrite `stephen.pass`).
 
 This stage changes no nginx/systemd/compose state — the folder supersedes the stream-auth folder only for `final-opt-keycloak.tar` and the postgres dumps.
 
+### Additional login account — re-execution on this host (ADD_USER, 2026-09-19)
+
+Runbook: `{{REPO_PATH}}/onvif-mcp/docs/ADD_USER.md`
+
+Runbook variables used:
+
+- `{{NEW_LOGIN_USER}}`: `stephen`
+- `{{FIRST_NAME}}` / `{{LAST_NAME}}`: Stephen / Rhodes
+- `{{USER_EMAIL}}`: sr99622@gmail.com (user-supplied)
+- `{{PASSWORD}}`: supplied by the user via chat; archived only as the root-0600 `stephen.pass` file inside the tar — never in state files, logs, or chat after hand-back.
+- `{{SERVER_FQDN}}`: `gmktec.home.arpa` (verified)
+- `{{BACKUP_PATH}}`: `/mnt/taurus-camera-ca/Camera-CA-Backups`
+
+Backup folder (actual):
+
+- `{{BACKUP_PATH}}/add-user-20260919-095228`
+
+NOTE (2026-09-19): the prior add-user entry in this log (folder
+`add-user-20260916-181555`) was a laboratory artifact — that folder never existed on this
+host's share. This `add-user-20260919-095228` folder is the authoritative record of THIS
+deployment (uuid `5867f360-…`).
+
+Backed up data:
+
+- `post-change-state.txt` — new user representation (username, names, email, `emailVerified=true`, `requiredActions=[]`, uuid `5867f360-043d-4004-809f-451b67ddf56c`), credential type list `["password"]`, realm user list (existing `mcp-user` intact, uuid `47324b5f-…`), client/scope sets unchanged, secret file mode (0600 root:root, 8 bytes), kcadm session-expiry recovery note, §9 driver PASS evidence for the new account, dump listing + catalog verification, isolated restore test proof that the new user is IN the dump. Password value NOT recorded anywhere in the folder.
+- `final-opt-keycloak.tar` — final `/opt/keycloak/` (root `keycloak/`, restore with `-C /opt`) now including `stephen.pass` (root 600). Contains NO token files. Sensitive.
+- `final-var-backups-keycloak-postgres.tar` — complete dump set (root `keycloak-postgres-backups/`) including the post-user dump `keycloak-20260919T135552Z.dump` (251845 bytes, 0600 root:root; catalog `pg_restore --list` exit 0; isolated restore into `keycloak_restore_test_20260919_au` exit 0 with all three users present; scratch DB dropped). Newest restore source. Sensitive.
+- `SHA256SUMS` — round-trip verified.
+
+Configuration completed:
+
+- One user `stephen` created in realm `mcp` with all identity fields atomic (`emailVerified=true`, `requiredActions=[]`), password from root-owned `/opt/keycloak/stephen.pass` (written via staged install + shred of the staging copy; umask 077 equivalent) set via the `exec -i` stdin pipe (`-T` unavailable on this docker build). No other object touched; no host-file changes outside `/opt/keycloak/stephen.pass`.
+
+Verification performed:
+
+- Username absent before, exactly one match after, enabled; `password` credential present; `mcp-user` unchanged; client/scope lists identical to the pre-existing set.
+- Full browser login flow executed as `stephen` with the §9 driver: RESULT=PASS (lands exactly on requested route, ping 202, real JPEG with `no-store`, fresh-session snapshot login returns to the requested image).
+- Isolated restore into `keycloak_restore_test_20260919_au` (exit 0) listed `mcp-user` and `stephen` in the restored realm; test DB dropped with the explicit guard.
+- `hermes mcp test camera-new` still connects via saved OAuth state (MCP independent of the new account, 29 tools).
+
+Security note: the password was supplied through the agent chat channel; rotation is
+recommended once client onboarding completes (set a new password per ADD_USER.md §5 and
+overwrite `stephen.pass`). Pending: client-side configuration per CLIENT.md and, if that
+machine is new, ADD_CLIENT_ON_SERVER.md trusted-hosts addition.
+
+This stage changes no nginx/systemd/compose state — the folder supersedes the stream-auth folder only for `final-opt-keycloak.tar` and the postgres dumps.
+
 ### DCR trusted-host addition (ADD_CLIENT_ON_SERVER)
 
 Runbook: `{{REPO_PATH}}/onvif-mcp/docs/ADD_CLIENT_ON_SERVER.md`
@@ -703,6 +813,44 @@ Verification performed:
 - Preflight: health 200; exactly one anonymous trusted-hosts component in realm `mcp` (the master realm's own component is a separate, untouched object); the client's pre-change 403 from `10.1.1.4` (18:18:53) corroborated the supplied address.
 - Second direct by-ID GET after the PUT passed every assert; `/tmp` confirmed free of all step artifacts (none were created).
 - Pending: nginx `201` for the client's DCR POST from `10.1.1.4` — confirm when the client retries login (final checklist item; its pre-change attempt logged `403` at 18:18:53).
+
+NOTE (2026-09-19): this prior-build entry's folder (`add-client-on-server-20260916-182219`,
+component UUID `29e93f3d-…`) never existed on this host's share — laboratory artifact.
+The authoritative record of THIS deployment's trusted-host addition is below.
+
+### DCR trusted-host addition — re-execution on this host (ADD_CLIENT_ON_SERVER, 2026-09-19)
+
+Runbook: `{{REPO_PATH}}/onvif-mcp/docs/ADD_CLIENT_ON_SERVER.md`
+
+Runbook variables used:
+
+- `{{CLIENT_SOURCE_IP}}`: `10.1.1.4` (user-supplied; corroborated by the nginx DCR access log — a `403` from `10.1.1.4` at 2026-09-19 10:04:45, while two earlier `201` registrations came from `10.1.1.5`)
+- `{{BACKUP_PATH}}`: `/mnt/taurus-camera-ca/Camera-CA-Backups`
+
+Backup folder (actual):
+
+- `{{BACKUP_PATH}}/add-client-on-server-20260919-100610`
+
+Backed up data:
+
+- `post-change-state.txt` — before/after trusted-host lists (before: `10.1.1.5, 127.0.0.1, 172.18.0.1, localhost`; after: those four plus `10.1.1.4`), live-resolved component UUID `4e3388de-4ff6-4a41-9564-eab3fbd91646`, both matching controls `["true"]`, single-process execution note (no temp token files; header built in memory), temp-artifact cleanup confirmation, pending `201` DCR confirmation. Tokens/passwords: never.
+- `final-opt-keycloak.tar` — unchanged since add-user-20260919-095228 (the policy lives in the DB, not the directory); re-archived for folder self-sufficiency. Sensitive.
+- `final-var-backups-keycloak-postgres.tar` — complete dump set (root `keycloak-postgres-backups/`) incl. post-write dump `keycloak-20260919T141015Z.dump` (252035 bytes, 0600 root:root; catalog exit 0; isolated restore into `keycloak_restore_test_20260919_ac3` reached the realm-`mcp` component by ID and listed all five trusted-host values including `10.1.1.4` with both matching controls present; scratch DB dropped). Newest restore source. Sensitive.
+- `SHA256SUMS` — round-trip verified.
+
+Configuration completed:
+
+- Exactly one address `10.1.1.4` appended to the anonymous `trusted-hosts` component of realm `mcp` (single bounded root process: mint → resolve → fetch-by-ID → append → PUT 204 → second by-ID GET verify); all four pre-existing hosts preserved; both matching controls `["true"]`. No host files changed at all (the policy lives only in the DB).
+
+Verification performed:
+
+- Preflight: health 200; exactly one anonymous trusted-hosts component in realm `mcp` (a second, separate one exists in the master realm — untouched by design); the client's pre-change 403 from `10.1.1.4` corroborated the supplied address.
+- Second direct by-ID GET after the PUT passed every assert (new host present, all prior hosts preserved, both controls true).
+- /tmp confirmed free of all step artifacts (none were created; the single step script was removed after success).
+- Isolated restore proof that the `10.1.1.4` policy row is IN the new dump (scratch DB dropped with guard).
+- Pending: nginx `201` for the client's DCR POST from `10.1.1.4` — confirm when the client retries login (its pre-change attempt logged `403` at 10:04:45).
+
+This stage changes no host files — the folder supersedes the add-user folder only for the postgres dumps (the opt tar is byte-identical to it, re-archived for self-sufficiency).
 
 ### HTTPS listener unpinned (SITE_CERT §9 amendment)
 
