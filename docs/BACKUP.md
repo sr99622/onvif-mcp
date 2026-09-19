@@ -2,7 +2,7 @@
 
 Backup destination: `{{BACKUP_PATH}}`
 
-For this server, `{{BACKUP_PATH}}` currently resolves to `/mnt/taurus/Camera-System-Backup`.
+For this server, `{{BACKUP_PATH}}` currently resolves to `/mnt/taurus-camera-ca/Camera-CA-Backups`.
 
 This document records backup actions taken before and during server configuration changes. Runbooks should refer to the backup location as `{{BACKUP_PATH}}` so future agents can substitute the correct SMB-mounted backup folder.
 
@@ -12,7 +12,7 @@ Authoritative substitutions for every `{{PLACEHOLDER}}` used in this document an
 
 | Placeholder | Required value | Notes |
 |---|---|---|
-| `{{BACKUP_PATH}}` | `/mnt/taurus/Camera-System-Backup` | Backup root **includes** `Camera-System-Backup/`; backup folders are `{{BACKUP_PATH}}/<runbook-name>-{{DATETIME_STAMP}}/`. Verify the mount is present and writable first. |
+| `{{BACKUP_PATH}}` | `/mnt/taurus-camera-ca/Camera-CA-Backups` | Backup root **includes** `Camera-CA-Backups/`; backup folders are `{{BACKUP_PATH}}/<runbook-name>-{{DATETIME_STAMP}}/`. Verify the mount is present and writable first. |
 | `{{SERVER_FQDN}}` | `gmktec.home.arpa` | Must match the site certificate SAN (SITE_CERT.md §4). |
 | `{{SERVER_IP}}` | `10.1.1.5` | LAN interface address (`enp170s0`). Not used for nginx binding — 443 listens on all interfaces (SITE_CERT.md §9). |
 | `{{REPO_PATH}}` | `/home/stephen` | Parent directory of the `onvif-mcp/` checkout. |
@@ -92,7 +92,7 @@ Runbook variables used:
 - `{{SERVER_IP}}`: `10.1.1.5`
 - `{{REPO_PATH}}`: `/home/stephen`
 - `{{CA_ROOT_PATH}}`: `/home/stephen/Private-CA`
-- `{{BACKUP_PATH}}`: `/mnt/taurus/Camera-System-Backup`
+- `{{BACKUP_PATH}}`: `/mnt/taurus-camera-ca/Camera-CA-Backups`
 
 Backup folders:
 
@@ -135,7 +135,7 @@ Runbook variables used:
 
 - `{{SERVER_FQDN}}`: `gmktec.home.arpa`
 - `{{SERVER_IP}}`: `10.1.1.5`
-- `{{BACKUP_PATH}}`: `/mnt/taurus/Camera-System-Backup`
+- `{{BACKUP_PATH}}`: `/mnt/taurus-camera-ca/Camera-CA-Backups`
 
 Backup folder:
 
@@ -198,7 +198,7 @@ Runbook variables used:
 - `{{SERVER_IP}}`: `10.1.1.5`
 - `{{RVRS_SRV_IP}}`: `5.1.1.10`
 - `{{UPSTREAM_DNS}}`: `192.168.68.1`
-- `{{BACKUP_PATH}}`: `/mnt/taurus/Camera-System-Backup`
+- `{{BACKUP_PATH}}`: `/mnt/taurus-camera-ca/Camera-CA-Backups`
 
 Backup folder:
 
@@ -351,7 +351,7 @@ Runbook variables used:
 - `{{SERVER_IP}}`: `10.1.1.5`
 - `{{REPO_PATH}}`: `/home/stephen`
 - `{{SERVER_USER}}`: `stephen`
-- `{{BACKUP_PATH}}`: `/mnt/taurus/Camera-System-Backup`
+- `{{BACKUP_PATH}}`: `/mnt/taurus-camera-ca/Camera-CA-Backups`
 
 Deployment constants (KEYCLOAK.md §1, non-secret):
 
@@ -545,7 +545,7 @@ Runbook variables used:
 - `{{SERVER_FQDN}}`: `gmktec.home.arpa` (user-supplied value `gmktc.home.arpa` was a typo — it does not resolve and is outside the certificate SAN; corrected with user awareness, standard placeholder-verification procedure)
 - `{{SERVER_IP}}`: `10.1.1.5`
 - `{{REPO_PATH}}`: `/home/stephen`
-- `{{BACKUP_PATH}}`: `/mnt/taurus/Camera-System-Backup`
+- `{{BACKUP_PATH}}`: `/mnt/taurus-camera-ca/Camera-CA-Backups`
 - Defaults as documented: realm `mcp`, browser client `camera-web`, login user `mcp-user`, oauth2-proxy `v7.15.3` on `127.0.0.1:4180`
 
 Backup folder (actual, 2026-09-16):
@@ -634,7 +634,7 @@ Runbook variables used:
 - `{{SERVER_FQDN}}`: `gmktec.home.arpa`
 - `{{FIRST_NAME}}` / `{{LAST_NAME}}` / `{{USER_EMAIL}}`: Stephen Rhodes / sr99622@gmail.com
 - `{{PASSWORD}}`: supplied by agent (see security note)
-- `{{BACKUP_PATH}}`: `/mnt/taurus/Camera-System-Backup`
+- `{{BACKUP_PATH}}`: `/mnt/taurus-camera-ca/Camera-CA-Backups`
 
 Backup folder (actual, 2026-09-16):
 
@@ -676,7 +676,7 @@ Runbook: `{{REPO_PATH}}/onvif-mcp/docs/ADD_CLIENT_ON_SERVER.md`
 Runbook variables used:
 
 - `{{CLIENT_SOURCE_IP}}`: `10.1.1.4`
-- `{{BACKUP_PATH}}`: `/mnt/taurus/Camera-System-Backup`
+- `{{BACKUP_PATH}}`: `/mnt/taurus-camera-ca/Camera-CA-Backups`
 
 Backup folder (actual, 2026-09-16):
 
