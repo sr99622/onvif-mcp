@@ -108,6 +108,7 @@ Be mindful of model context size when running the configurations shown below. As
     **Runbooks**
 
     ```
+    GPG_KEY.md
     CREATE_CA_CERT.md
     SITE_CERT.md
     CA_DISTRIBUTE.md
