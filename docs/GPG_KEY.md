@@ -86,10 +86,24 @@ key just to retry the backup.
 
 ## 3. Export and back up the secret key (USER-run)
 
-Replace `YOUR_FULL_FINGERPRINT` with the full fingerprint from step 2. Resolve
-`{{BACKUP_PATH}}` before running the commands; do not type the braces literally.
-Check that the backup share is mounted and the destination does not already
-exist. A failure must stop the sequence rather than leaving a false backup.
+Replace `YOUR_FULL_FINGERPRINT` with the full fingerprint from step 2. The 
+fingerprint is the string under the sec line from `gpg --list-secret-keys --fingerprint`
+surrounded by double quotes to escape the spaces. For example, if the output 
+is
+
+```
+--------------------------------
+sec   ed25519 2026-09-18 [SC]
+      AC3C 1053 FEFE 526E 26BD  3895 7247 25B2 87EE 7E5D
+uid           [ultimate] Stephen Rhodes <sr99622@gmail.com>
+ssb   cv25519 2026-09-18 [E]
+```
+
+Then YOUR_FULL_FINGERPRINT is "AC3C 1053 FEFE 526E 26BD  3895 7247 25B2 87EE 7E5D".
+
+Resolve`{{BACKUP_PATH}}` before running the commands; do not type the braces 
+literally. Check that the backup share is mounted and the destination does not 
+already exist. A failure must stop the sequence rather than leaving a false backup.
 
 ```bash
 set -e
