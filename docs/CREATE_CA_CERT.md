@@ -466,7 +466,7 @@ All files must be present. This concludes the CA creation and backup.
 
 ---
 
-## Recovery procedure (fresh machine)
+## Recovery
 
 In order:
 
