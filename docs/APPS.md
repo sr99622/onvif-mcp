@@ -11,7 +11,6 @@ and pull live streams from the MediaMTX server
 |------------|------------|
 | `{{SERVER_FQDN}}` | Server Fully Qualified Domain Name e.g. camera.home.arpa |
 | `{{REPO_PATH}}` | Path Location of git repo, most likely $HOME |
-| `{{BACKUP_PATH}}` | Backup folder |
 
 These values are required for operation. Stop and prompt the user if they are not provided.
 
@@ -250,15 +249,3 @@ or a registry URL with the wrong serial/token or a missing trailing slash.
   `auth_basic`) on the app locations and/or `/webrtc/` if that is not
   acceptable.
 
-
-## Nginx backup checkpoint
-
-After this runbook's nginx and endpoint checks pass, and after later nginx
-configuration changes, create a complete checkpoint per
-[NGINX_BACKUP.md](NGINX_BACKUP.md). Resolve `{{BACKUP_PATH}}` from the
-installation's backup destination and use
-`{{BACKUP_PATH}}/nginx/YYYYMMDDHHMMSSZ/` with `nginx.tar`, `metadata.txt`, and
-verified `SHA256SUMS`. Capture the entire nginx configuration, not just this
-runbook's edited files. Record this runbook as the trigger and its upstream
-services/web content as dependencies. Other service backups remain separate.
-Do not store nginx configuration archives in procedure-named backup folders.

@@ -40,7 +40,6 @@ location, the proxy's route table keys, and that scheme must all agree.
 | `{{SERVER_USER}}`   | System user the proxy runs as (owner of `{{REPO_PATH}}`, so it can read the repo source and its venv) |
 | `{{USERNAME}}`      | Camera username                                |
 | `{{PASSWORD}}`      | Camera password                                |
-| `{{BACKUP_PATH}}`   | Backup folder                                  | 
 
 These values are required for operation. Stop and prompt the user if any of them are not provided.
 
@@ -349,15 +348,3 @@ and re-test before reloading.
 - Camera credentials are also embedded in plaintext in `/etc/mediamtx/mediamtx.yml`
   (pre-existing condition, see docs/MEDIAMTX.md) — keep that file protected.
 
-
-## Nginx backup checkpoint
-
-After this runbook's nginx and endpoint checks pass, and after later nginx
-configuration changes, create a complete checkpoint per
-[NGINX_BACKUP.md](NGINX_BACKUP.md). Resolve `{{BACKUP_PATH}}` from the
-installation's backup destination and use
-`{{BACKUP_PATH}}/nginx/YYYYMMDDHHMMSSZ/` with `nginx.tar`, `metadata.txt`, and
-verified `SHA256SUMS`. Capture the entire nginx configuration, not just this
-runbook's edited files. Record this runbook as the trigger and its upstream
-services/web content as dependencies. Other service backups remain separate.
-Do not store nginx configuration archives in procedure-named backup folders.

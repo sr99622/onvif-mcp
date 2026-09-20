@@ -9,7 +9,6 @@ This document describes the MediaMTX RTSP-to-WebRTC/HLS streaming server. The se
 | `{{SERVER_FQDN}}` | Server Fully Qualified Domain Name |
 | `{{USERNAME}}` | Camera Username |
 | `{{PASSWORD}}` | Camera Password |
-| `{{BACKUP_PATH}}` | Backup folder |
 
 These values are required for operation. Stop and prompt the user if any of them are not provided.
 
@@ -313,15 +312,3 @@ WAR [path DS-2CD2142022579764/Profile_1] 23 processing errors, last was: invalid
 
 These are common with Hikvision cameras and do not prevent streaming. The streams remain available despite the warnings. Amcrest cameras on certain substreams may show similar behavior.
 
-
-## Nginx backup checkpoint
-
-After this runbook's nginx and endpoint checks pass, and after later nginx
-configuration changes, create a complete checkpoint per
-[NGINX_BACKUP.md](NGINX_BACKUP.md). Resolve `{{BACKUP_PATH}}` from the
-installation's backup destination and use
-`{{BACKUP_PATH}}/nginx/YYYYMMDDHHMMSSZ/` with `nginx.tar`, `metadata.txt`, and
-verified `SHA256SUMS`. Capture the entire nginx configuration, not just this
-runbook's edited files. Record this runbook as the trigger and its upstream
-services/web content as dependencies. Other service backups remain separate.
-Do not store nginx configuration archives in procedure-named backup folders.

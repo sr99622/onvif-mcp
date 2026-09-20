@@ -9,7 +9,6 @@
 | `{{PASSWORD}}`    | Camera Password                                 |
 | `{{REPO_PATH}}`   | Full Pathname of Repository Location            |
 | `{{SERVER_USER}}` | System user the service runs as (project owner) |
-| `{{BACKUP_PATH}}` | Backup folder                                   |
 
 These values are required for operation. Stop and prompt the user if any of them are not provided.
 
@@ -216,17 +215,3 @@ External clients  │                     │   natively uses MCP protocol.
           │             │
           └─────────────┘
 ```
-
-
-
-## Nginx backup checkpoint
-
-After this runbook's nginx and endpoint checks pass, and after later nginx
-configuration changes, create a complete checkpoint per
-[NGINX_BACKUP.md](NGINX_BACKUP.md). Resolve `{{BACKUP_PATH}}` from the
-installation's backup destination and use
-`{{BACKUP_PATH}}/nginx/YYYYMMDDHHMMSSZ/` with `nginx.tar`, `metadata.txt`, and
-verified `SHA256SUMS`. Capture the entire nginx configuration, not just this
-runbook's edited files. Record this runbook as the trigger and its upstream
-services/web content as dependencies. Other service backups remain separate.
-Do not store nginx configuration archives in procedure-named backup folders.
