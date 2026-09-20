@@ -370,27 +370,6 @@ curl \
   --show-error \
   http://{{SERVER_FQDN}}/ca/README.txt
 ```
-
-## Stage-close backup
-
-After endpoint and access-control checks pass, create a complete nginx
-checkpoint per [NGINX_BACKUP.md](NGINX_BACKUP.md), under
-`{{BACKUP_PATH}}/nginx/YYYYMMDDHHMMSSZ/`. It includes all nginx configuration,
-including the `/ca/` location, not only the files changed by this stage.
-
-Separately archive `final-srv-camera-pki.tar`, `post-change-state.txt`, and
-verified `SHA256SUMS` under
-`{{BACKUP_PATH}}/ca-distribute-{{DATETIME_STAMP}}`. Verify the distribution
-archive contains both certificate filenames, checksums and README; check
-certificate fingerprints against the authoritative CA. Record the nginx
-checkpoint path in the notes and the distribution backup path in nginx
-metadata. This public-content archive does not contain nginx configuration.
-
-The recorded certificate fingerprint is a consistency reference. The trusted
-out-of-band value must come from the administrator, not the same share that
-holds the certificate. Nginx restore uses one completed shared checkpoint per
-NGINX_BACKUP.md, with this distribution content restored as a dependency.
-
 ## Operational maintenance
 
 When the root CA certificate changes:
@@ -403,9 +382,6 @@ When the root CA certificate changes:
 6. Run `nginx -t` if the URL or Nginx mapping changes.
 7. Test all five HTTP endpoints locally.
 8. Test download and verification from Windows, macOS, and Linux clients as applicable.
-9. Re-run the stage-close backup above — the archived folder is a snapshot; a
-   CA re-root that skips this step leaves clients following the archived README
-   toward a dead certificate.
 
 Do not place any of the following under `/srv/camera-pki/public`:
 

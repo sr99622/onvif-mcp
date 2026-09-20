@@ -55,40 +55,90 @@ Stop if `testparm` reports an error or if the effective settings differ. Do not 
 
 ## 2. Add a separate client mount (camera host)
 
-Confirm the new mount point and credentials path do not already hold data or a different mount. Use a separate credentials file with mode `0600`. Enter its contents with `sudoedit`, interactively, in this form:
+Run these commands on the **camera host**. On Ubuntu/Debian, install the CIFS mount helper first:
+
+```bash
+sudo apt install cifs-utils
+getent ahosts taurus.home.arpa
+```
+
+Require the hostname lookup to return taurus's address before continuing. `cifs-utils` supplies the mount helper that handles the hostname and credentials file.
+
+Confirm `/mnt/taurus-camera-ca` and `/etc/cifs-utils/credentials/taurus-camera-ca` are not already used for another purpose. For a partially completed setup, reuse and correct its existing configuration. Leave `/mnt/taurus` untouched.
+
+Create the credentials directory and file without erasing existing credentials, set restrictive permissions, and open the file:
+
+```bash
+sudo install -d -m 0700 /etc/cifs-utils/credentials
+sudo touch /etc/cifs-utils/credentials/taurus-camera-ca
+sudo chown root:root /etc/cifs-utils/credentials/taurus-camera-ca
+sudo chmod 0600 /etc/cifs-utils/credentials/taurus-camera-ca
+sudoedit /etc/cifs-utils/credentials/taurus-camera-ca
+```
+
+In the editor, enter these **two lines**, replacing the values with the actual Samba account and password configured on **taurus**. Keep the literal `username=` and `password=` keys, with no spaces around `=` and no surrounding quotes. Save and exit before continuing; do not leave the file empty.
 
 ```ini
 username=BACKUP_ACCOUNT
 password=THE_PASSWORD_ENTERED_INTERACTIVELY
 ```
 
-Add `domain=...` only if this Samba server requires it. Do not copy the old mount's credentials without confirming they belong to the new share account.
+Add `domain=...` only if this Samba server requires it. Do not copy the old mount's credentials without confirming they belong to the new share account. Do not use `install -m 0600 /dev/null` on this file: that erases saved credentials. Do not print or paste the password into commands or chat.
+
+Create the mount point if it does not already exist, obtain stephen's local numeric IDs, and open fstab:
 
 ```bash
-sudo install -d -m 0700 /etc/cifs-utils/credentials
-sudo install -m 0600 /dev/null /etc/cifs-utils/credentials/taurus-camera-ca
-sudoedit /etc/cifs-utils/credentials/taurus-camera-ca
-sudo chown root:root /etc/cifs-utils/credentials/taurus-camera-ca
-sudo chmod 0600 /etc/cifs-utils/credentials/taurus-camera-ca
-sudo install -d -m 0700 /mnt/taurus-camera-ca
+if [ ! -d /mnt/taurus-camera-ca ]; then
+    sudo install -d -m 0700 /mnt/taurus-camera-ca
+fi
+id -u stephen
+id -g stephen
+sudoedit /etc/fstab
 ```
 
-Add this **new** line to `/etc/fstab` using `sudoedit`. Replace `LOCAL_UID` and `LOCAL_GID` with the numeric output of `id -u stephen` and `id -g stephen` on the camera host.
+Add the following line, replacing `LOCAL_UID` and `LOCAL_GID` with those numeric IDs (both were `1000` on gmktec). If an entry for `/mnt/taurus-camera-ca` already exists, correct that entry instead of adding a duplicate.
 
 ```fstab
 //taurus.home.arpa/camera-ca-private /mnt/taurus-camera-ca cifs credentials=/etc/cifs-utils/credentials/taurus-camera-ca,vers=3.1.1,uid=LOCAL_UID,gid=LOCAL_GID,file_mode=0600,dir_mode=0700,nosuid,nodev,noexec,_netdev,noauto,x-systemd.automount 0 0
 ```
 
-Validate and activate only the new mount:
+Validate fstab and resolve any errors before continuing:
 
 ```bash
 sudo findmnt --verify --fstab
-sudo systemctl daemon-reload
-ls -ld /mnt/taurus-camera-ca
-findmnt /mnt/taurus-camera-ca -o TARGET,SOURCE,FSTYPE,OPTIONS
 ```
 
-The output may show both `autofs` and `cifs` for the same mount point. Require the `cifs` row to name `//taurus.home.arpa/camera-ca-private`, have no `ro` option, and show `file_mode=0600,dir_mode=0700`. Do not use `findmnt -T` alone to distinguish the underlying CIFS mount from the automount layer.
+Reload systemd, clear any failed mount attempt from a partial setup, and explicitly start the new automount. Access the directory contents to trigger the CIFS mount:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl reset-failed 'mnt-taurus\x2dcamera\x2dca.mount'
+sudo systemctl start 'mnt-taurus\x2dcamera\x2dca.automount'
+ls -la /mnt/taurus-camera-ca/
+findmnt -rn -t cifs -o TARGET,SOURCE,FSTYPE,OPTIONS
+```
+
+`daemon-reload` alone does not start the automount, and `ls -ld` does not reliably trigger it. The fstab entry also arranges automount activation on subsequent boots.
+
+Require a `cifs` row for `/mnt/taurus-camera-ca` naming `//taurus.home.arpa/camera-ca-private`, with `rw`, the intended numeric UID/GID, and `file_mode=0600,dir_mode=0700`. An `autofs` mount alone is not success. Do not use `findmnt -T` alone to distinguish the underlying CIFS mount from the automount layer.
+
+If mounting fails, inspect the current error before changing settings:
+
+```bash
+sudo journalctl -b -u 'mnt-taurus\x2dcamera\x2dca.mount' --no-pager -n 30
+```
+
+A `Password for root@...` prompt means the intended saved login is not being supplied. Check that the credentials file contains both correctly formatted, nonempty entries and that fstab references that file. If the intended login gets permission denied, verify the Samba credentials and share access on taurus.
+
+After correcting the cause, retry only this mount:
+
+```bash
+sudo systemctl reset-failed 'mnt-taurus\x2dcamera\x2dca.mount'
+sudo systemctl start 'mnt-taurus\x2dcamera\x2dca.mount'
+findmnt -rn -t cifs -o TARGET,SOURCE,FSTYPE,OPTIONS
+```
+
+Continue with section 3 to verify writing and server-side permissions.
 
 ## 3. Test with harmless files before moving any secrets
 
@@ -124,10 +174,6 @@ smbclient //taurus.home.arpa/camera-ca-private -U OTHER_ACCOUNT -c ls
 Require an access-denied result. Do not use the backup account for this negative test, and do not put either account's password on a command line. If no unrelated test account is available, record that the remote access test remains incomplete.
 
 Return to the camera-host shell and exit it so the trap deletes the probe. Confirm on both hosts that the probe is gone. Repeat the harmless-file test after a reboot to confirm that the mount and server permissions persist.
-
-## 4. Cut over the runbooks
-
-Only after all acceptance checks pass, use `/mnt/taurus-camera-ca` as `{{BACKUP_PATH}}` in `GPG_KEY.md` and `CREATE_CA_CERT.md`. Update any written configuration or runbook values that still point to `/mnt/taurus/Camera-System-Backup`. Copy the existing secret-key export to the new path without overwriting an existing file; verify byte identity and inspect its server-side mode and ACL again. Keep the old backup until the complete CA backup set and a recovery test have been verified at the new location. Removing the old share or its files is a separate decision.
 
 ## Stop conditions
 

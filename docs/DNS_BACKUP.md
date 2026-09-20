@@ -3,7 +3,7 @@
 This is the shared backup and restore procedure for the camera server's
 DNS-only dnsmasq service. DNS.md defines installation and when to take a
 checkpoint. Resolve `{{BACKUP_PATH}}` and site values from the installation
-inputs, not historical BACKUP.md entries.
+inputs.
 
 ## Layout and scope
 
@@ -87,7 +87,7 @@ Take a fresh checkpoint after initial verification and after later DNS
 record, upstream, binding, include, or service-override changes. Each capture
 uses this same history; do not create new `dns-*` procedure folders or separate
 `final-etc-dnsmasq*.tar` fragments. Record execution details in checkpoint
-metadata, not BACKUP.md.
+metadata.
 
 ## Restore a checkpoint
 

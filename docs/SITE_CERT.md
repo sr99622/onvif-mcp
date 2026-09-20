@@ -517,33 +517,6 @@ Then exercise `get_web_player_url` through the MCP endpoint (session handshake p
 https://{{SERVER_FQDN}}/webrtc/<SERIAL>/<PROFILE>/
 ```
 
-### Client distribution
-
-The root certificate (`/etc/nginx/tls/camera-system-root-ca.crt.pem` or the copy in
-`{{CA_ROOT_PATH}}/camera-system-ca/certs/`) is public and must be distributed to
-clients that will consume the HTTPS endpoints; the private key never leaves this
-host, and the vault passphrases stay GPG-encrypted in `~/.password-store`.
-
-## Stage-close backup
-
-After the HTTPS checks pass, create a complete nginx checkpoint using
-[NGINX_BACKUP.md](NGINX_BACKUP.md). Store it under
-`{{BACKUP_PATH}}/nginx/YYYYMMDDHHMMSSZ/` with `nginx.tar`, `metadata.txt`, and
-verified `SHA256SUMS`. Include the public TLS material; exclude the server
-private key. The post-issuance CA backup from §7 remains required for recovery.
-
-Keep non-nginx artifacts separately in
-`{{BACKUP_PATH}}/site-cert-{{DATETIME_STAMP}}`: `final-etc-onvif-mcp.tar`
-(registry provenance), `final-etc-systemd-system-onvif-mcp-http.service.tar`,
-post-change verification notes, and verified `SHA256SUMS`. Record the nginx
-checkpoint path in those notes. Do not put nginx archives or runbook copies
-in that folder. Regenerate camera-IP data during recovery as described in
-RESTORE.md.
-
-Later nginx changes create another complete checkpoint in the same history.
-Restore selects one completed nginx snapshot; it does not overlay later
-procedure folders.
-
 ## 12. Renewal procedure (use only at renewal time)
 
 After renewal and its endpoint checks pass, create a fresh nginx checkpoint

@@ -15,7 +15,7 @@ in the terminal; it must never be put in a command, file, or agent transcript.
 
 | Name | Meaning |
 |---|---|
-| `{{BACKUP_PATH}}` | Mounted SMB backup root (for this host, `/mnt/taurus/Camera-System-Backup`) |
+| `{{BACKUP_PATH}}` | Mounted SMB backup folder |
 
 The exported secret key is stored at
 `{{BACKUP_PATH}}/Camera-CA-Backups/ca-vault-gpg.key.gpg`. The `.gpg` extension is

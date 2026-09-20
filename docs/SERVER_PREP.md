@@ -247,7 +247,7 @@ Configuration of the system will require more turns than are configured by defau
 
 ```
 agent:
-  max_turns: 120
+  max_turns: 150
 ```
 
 Launch hermes and inspect the header. The first launch will show connecting to the MCP server, the second launch will stabilize the header. Look for the mcp servers section it should look something like:
