@@ -117,38 +117,7 @@ Be mindful of model context size when running the configurations shown below. As
 
     ---
 
-4. ### Install the Chrome Browser
-
-    #### Install Chrome browser
-
-    ```bash
-    wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-    sudo apt install ./google-chrome-stable_current_amd64.deb
-    ```
-
-    #### Install certificate
-
-    ```bash
-    curl -O http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt.pem
-    sudo mv camera-system-root-ca.crt.pem /usr/local/share/ca-certificates/
-    sudo update-ca-certificates
-    ```
-
-    #### Configure Chrome to accept certificate
-
-    ```
-    sudo apt install libnss3-tools
-    mkdir -p "$HOME/.pki/nssdb"
-    chmod 700 "$HOME/.pki/nssdb"
-    certutil -d "sql:$HOME/.pki/nssdb" -N
-    certutil -d "sql:$HOME/.pki/nssdb" -A -t "CP,CP," -n "Camera CA Certificate" -i /usr/local/share/ca-certificates/camera-system-root-ca.crt.pem
-    ```
-
-    Launch the Chrome Browser and navigate to the cameras page at https://{{SERVER_FQDN}}/cameras to verify the working installation.
-
-    ---
-
-5. ### Keycloak installation
+4. ### Keycloak installation
 
     The Keycloak server provides authentication services for the site. During installation a default user is created that can be used for testing the configuration. A fresh context may be needed at this point, if so, re-intialize the agent context in the prompt by having them review this document again. 
 
@@ -166,7 +135,7 @@ Be mindful of model context size when running the configurations shown below. As
     ```
     ---
 
-6. ### Layer authentication on the rest of the site endpoints
+5. ### Layer authentication on the rest of the site endpoints
 
     This step will require that the camera-new http MCP server is available to the agent. This can be accomplished using the /reload-mcp directive before starting the runbook.
 
@@ -185,7 +154,7 @@ Be mindful of model context size when running the configurations shown below. As
     ```
     ---
 
-7. ### Add user
+6. ### Add user
 
     **Required Values**
 
@@ -205,6 +174,22 @@ Be mindful of model context size when running the configurations shown below. As
     ADD_USER.md
     ```
     ---
+
+7. ### Add client IP address to allowed hosts
+
+    **Required Values**
+
+    | Name | Description |
+    |---|---|
+    | `{{CLIENT_SOURCE_IP}}` | IP Address to be allowed |
+    | `{{BACKUP_PATH}}` | Backup folder |
+
+
+    **Runbook**
+
+    ```
+    ADD_CLIENT_ON_SERVER.md
+    ```
 
 8. ### Firewall Protection
 
