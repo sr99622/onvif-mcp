@@ -258,72 +258,400 @@ own checks pass. Do not mutate a completed checkpoint to add links.
 
 ## Restore from checkpoint
 
-1. Select the lexicographically newest completed directory whose name matches
-   fourteen digits followed by `Z`. Ignore hidden staging directories. Verify
-   `SHA256SUMS` and require both archives and metadata. A missing file or failed
-   checksum stops recovery; selecting an older checkpoint is an explicit
-   recovery decision. Use both archives from the same directory.
+This procedure intentionally spells out the mechanics. Agents must not guess the
+checkpoint, mix archives from different timestamps, layer restored files over stale
+state, or start Keycloak before the selected PostgreSQL dump is restored. A restore is
+complete only after the database contents and applicable public endpoints are verified.
+Nginx recovery remains separate; use `NGINX_BACKUP.md` for nginx configuration and TLS
+material.
 
-2. Inspect the selected archives in a protected temporary directory. Reject
-   absolute paths, `..` traversal and symlinks that redirect extraction outside
-   the intended destination. Require configuration paths rooted at `keycloak/`
-   and exactly the dump named in metadata under `keycloak-postgres-backups/`.
-   Check the dump catalog without printing its contents. Select compatible
-   PostgreSQL and Keycloak image versions from metadata; recovery and software
-   upgrades are separate operations. Account for Compose mounts and other
-   external configuration dependencies before proceeding.
+### 1. Select and verify one completed checkpoint
 
-3. Prepare Docker/Compose, required service accounts, CA trust, and the
-   non-nginx host units referenced in metadata. Nginx configuration, public TLS
-   material, and nginx-specific unit overrides use NGINX_BACKUP.md. Recover or
-   reissue the server private key through SITE_CERT.md; it is not in these
-   archives. Check compatibility between the chosen nginx and Keycloak states.
+Select the lexicographically newest completed directory whose name matches fourteen
+digits followed by `Z`. Ignore hidden staging directories. Selecting an older
+checkpoint is an explicit recovery decision and must be recorded.
 
-4. On a replacement host, prepare a clean `/opt/keycloak/` destination. For
-   an explicitly authorized in-place restore, first preserve the existing
-   configuration and database and stop Keycloak and oauth2-proxy writers.
-   Extract `keycloak.tar` with `/opt` as the base, rather than layering it over
-   stale files. Verify root ownership, directory mode 0750, secrets mode 0600,
-   and Compose configuration mode 0640. Never print `.env` or password files.
+```bash
+set -euo pipefail
+BACKUP_PATH="{{BACKUP_PATH}}"
+parent="$BACKUP_PATH/keycloak"
+checkpoint_name="$(find "$parent" -maxdepth 1 -mindepth 1 -type d -printf '%f\n' |
+  grep -E '^[0-9]{14}Z$' | sort | tail -n 1)"
+test -n "$checkpoint_name"
+checkpoint="$parent/$checkpoint_name"
+export checkpoint
 
-5. Start only PostgreSQL from the recovered Compose configuration and wait
-   for health. Keep Keycloak and oauth2-proxy stopped. Confirm the exact
-   database/volume selected for recovery and require an empty destination
-   database owned by the configured database user. On a fresh host, PostgreSQL
-   initialization may already create that database. Stop on unexpected data;
-   do not ignore errors or blindly drop an existing database. Do not run
-   Keycloak first to initialize the schema.
+cd "$checkpoint"
+test -f keycloak.tar
+test -f keycloak-postgres.tar
+test -f metadata.txt
+test -f SHA256SUMS
+sha256sum -c SHA256SUMS
+```
 
-6. Extract the exact selected dump to protected temporary storage and restore
-   it using the compatible PostgreSQL container's `pg_restore` with
-   `--username=keycloak --dbname=keycloak --exit-on-error`. Read root-only files
-   through a root shell or `sudo cat`; an unprivileged shell redirect cannot
-   read them. Preserve pipeline failure status and stop on any restore error.
-   Verify expected realms, users, clients and policies without exposing
-   credentials. A successful catalog listing alone does not prove recovery.
-   Remove temporary dump copies after validation.
+Require all checksums to pass. A missing archive, missing metadata file, or failed
+checksum stops recovery. Use both archives from this same directory.
 
-7. Install the repository's `scripts/backup-keycloak-postgres` and recreate
-   its one-shot service using KEYCLOAK.md §14. No archived script is required.
-   Restore necessary non-nginx units from their recorded source; inspect
-   archive roots and exclude nginx-specific overrides from any legacy whole-
-   system unit archive. Reload systemd after installing units. The selected
-   nginx checkpoint owns its exact override set, including recorded absence.
+### 2. Inspect metadata and archive safety before extraction
 
-8. Start Keycloak and wait for internal readiness. Restore/start nginx through
-   NGINX_BACKUP.md. If oauth2-proxy is configured, start it once Keycloak
-   discovery through nginx's public `/auth/` origin works, then verify its
-   health. This ordering avoids waiting for oauth2-proxy before nginx can
-   expose the discovery endpoint it needs.
+Copy the selected checkpoint into protected temporary inspection storage. Do not print
+`.env`, `*.pass`, database contents, token caches, or expanded Compose configuration.
+Read metadata for compatible image versions and the exact dump basename.
 
-9. Verify the public issuer/discovery document, expected unauthenticated MCP
-   response, and the restored users/clients/policies. If browser authentication
-   is configured, run STREAM_AUTH.md's functional verification, checking login
-   and denied/unauthenticated access. Reauthenticate client applications as
-   needed; client token caches are not recovery inputs. Do not declare the
-   system ready until the applicable authentication and service checks pass.
-   
-10. Record actual recovery results outside the immutable checkpoint. Changes
-    made during recovery, including new registrations or certificates, require
-    fresh checkpoints after verification. Preserve the selected recovery point.
+```bash
+restore_work="$(mktemp -d /root/keycloak-restore-inspect.XXXXXX)"
+chmod 700 "$restore_work"
+cp "$checkpoint"/keycloak.tar \
+   "$checkpoint"/keycloak-postgres.tar \
+   "$checkpoint"/metadata.txt \
+   "$restore_work"/
+cd "$restore_work"
+sed -n '1,220p' metadata.txt
+```
+
+Extract the dump basename from metadata, then verify archive roots and path safety:
+
+```bash
+dump_name="$(sed -n 's/^New dump basename: //p' metadata.txt)"
+test -n "$dump_name"
+export dump_name restore_work
+
+python3 - <<'PY'
+import os, tarfile
+from pathlib import Path
+root = Path(os.environ['restore_work'])
+dump = os.environ['dump_name']
+expected_pg = f'keycloak-postgres-backups/{dump}'
+for archive in ['keycloak.tar', 'keycloak-postgres.tar']:
+    with tarfile.open(root / archive) as tf:
+        members = tf.getmembers()
+        for m in members:
+            p = Path(m.name)
+            if m.name.startswith('/') or '..' in p.parts:
+                raise SystemExit(f'{archive}: unsafe member path {m.name}')
+            if m.issym() or m.islnk():
+                raise SystemExit(f'{archive}: link member not allowed during restore inspection: {m.name} -> {m.linkname}')
+        names = [m.name for m in members]
+        if archive == 'keycloak.tar':
+            if not names or any(not (n == 'keycloak' or n.startswith('keycloak/')) for n in names):
+                raise SystemExit('keycloak.tar must contain only keycloak/ members')
+        else:
+            if names != [expected_pg]:
+                raise SystemExit(f'keycloak-postgres.tar must contain exactly {expected_pg!r}, got {names!r}')
+print('archive safety and root checks passed')
+PY
+```
+
+Check the database dump catalog without printing its contents. Prefer the recovered
+PostgreSQL container after Docker is prepared; if no compatible container is available
+yet, perform this check immediately after Step 5 starts PostgreSQL and before restore.
+
+### 3. Prepare host prerequisites and separate nginx recovery
+
+Prepare Docker/Compose, required service accounts, CA trust, and any non-nginx host
+units referenced in metadata. Do not recover nginx from this checkpoint. Nginx
+configuration, public TLS files, and nginx-specific unit overrides use
+`NGINX_BACKUP.md`. Recover or reissue the server private key through `SITE_CERT.md`; it
+is not in these archives.
+
+On Ubuntu, install Docker packages if absent and start Docker:
+
+```bash
+if ! command -v docker >/dev/null 2>&1; then
+  sudo apt update
+  sudo apt install -y docker.io docker-compose-v2
+fi
+sudo systemctl enable --now docker
+systemctl is-active docker
+sudo docker compose version
+```
+
+Confirm that the public CA file referenced by the recovered Compose file exists before
+starting oauth2-proxy later:
+
+```bash
+sudo test -s /etc/nginx/tls/camera-system-root-ca.crt.pem
+```
+
+### 4. Restore `/opt/keycloak` cleanly
+
+On a replacement host, `/opt/keycloak` should be absent. For an explicitly authorized
+in-place restore, preserve existing configuration and database state first, then stop
+Keycloak and oauth2-proxy writers. Do not layer restored files over stale files.
+
+```bash
+stamp="$(date -u +%Y%m%d%H%M%SZ)"
+if [ -e /opt/keycloak ]; then
+  sudo docker compose --project-directory /opt/keycloak down || true
+  sudo tar --acls --xattrs -cpf "/root/opt-keycloak-pre-restore-$stamp.tar" -C /opt keycloak
+  sudo rm -rf /opt/keycloak
+fi
+
+sudo tar --acls --xattrs --same-owner -xpf "$checkpoint/keycloak.tar" -C /opt
+```
+
+Verify ownership and modes without printing secrets:
+
+```bash
+sudo stat -c '%a %U:%G %n' /opt/keycloak /opt/keycloak/compose.yaml /opt/keycloak/.env
+sudo find /opt/keycloak -maxdepth 1 -type f -name '*.pass' -printf '%m %u:%g %s %p\n'
+sudo test "$(sudo stat -c '%a %U:%G' /opt/keycloak/.env)" = '600 root:root'
+sudo test "$(sudo stat -c '%a %U:%G' /opt/keycloak/compose.yaml)" = '640 root:root'
+sudo find /opt/keycloak -maxdepth 1 -type f -name '*.pass' -exec sh -c '
+  for f do [ "$(stat -c "%a %U:%G" "$f")" = "600 root:root" ] || exit 1; done
+' sh {} +
+sudo docker compose --project-directory /opt/keycloak config --quiet
+```
+
+Expected directory mode is `0750` root:root. If the archive restores `/opt/keycloak` as
+`0755`, correct it to `0750` before starting services and record the archive-quality
+issue.
+
+### 5. Start only PostgreSQL and require an empty destination database
+
+Start PostgreSQL alone. Keep Keycloak and oauth2-proxy stopped until after the dump is
+restored.
+
+```bash
+sudo docker compose --project-directory /opt/keycloak up -d postgres
+```
+
+Wait for PostgreSQL health:
+
+```bash
+for i in $(seq 1 60); do
+  status="$(sudo docker compose --project-directory /opt/keycloak ps --format json postgres |
+    python3 -c 'import json,sys; data=sys.stdin.read().strip(); print(json.loads(data).get("Health", "") if data else "")' 2>/dev/null || true)"
+  [ "$status" = "healthy" ] && break
+  sleep 2
+done
+sudo docker compose --project-directory /opt/keycloak ps
+```
+
+Confirm the destination database is empty enough for restore. Stop if existing
+application tables or realms are present; do not blindly drop data.
+
+```bash
+sudo docker compose --project-directory /opt/keycloak exec -T postgres \
+  psql --username=keycloak --dbname=keycloak --tuples-only --no-align \
+  --command="SELECT count(*) FROM information_schema.tables WHERE table_schema='public';"
+```
+
+A fresh PostgreSQL initialization may create the `keycloak` database but should not have
+Keycloak tables because Keycloak has not been started.
+
+### 6. Restore the selected PostgreSQL dump and validate contents
+
+Extract the exact selected dump to protected temporary storage, list its catalog, and
+restore with failure propagation. Read root-only files through `sudo` or a root shell;
+an unprivileged shell redirect cannot read them.
+
+```bash
+sudo install -d -m 700 /root/keycloak-restore-dump
+sudo tar -xf "$checkpoint/keycloak-postgres.tar" -C /root/keycloak-restore-dump
+pgdump="/root/keycloak-restore-dump/keycloak-postgres-backups/$dump_name"
+sudo test -s "$pgdump"
+sudo sh -c "docker compose --project-directory /opt/keycloak exec -T postgres \
+  pg_restore --list < '$pgdump' >/dev/null"
+sudo sh -c "docker compose --project-directory /opt/keycloak exec -T postgres \
+  pg_restore --username=keycloak --dbname=keycloak --exit-on-error < '$pgdump'"
+```
+
+Verify expected restored state without exposing credentials:
+
+```bash
+sudo docker compose --project-directory /opt/keycloak exec -T postgres \
+  psql --username=keycloak --dbname=keycloak --tuples-only --no-align \
+  --command="SELECT name FROM realm ORDER BY name;"
+
+sudo docker compose --project-directory /opt/keycloak exec -T postgres \
+  psql --username=keycloak --dbname=keycloak --tuples-only --no-align \
+  --command="SELECT realm_id, client_id FROM client WHERE client_id IN ('camera-web','mcp-client','account','security-admin-console') ORDER BY realm_id, client_id;"
+
+sudo rm -rf /root/keycloak-restore-dump
+```
+
+A successful `pg_restore --list` alone is not enough; require restored realms and expected
+clients or policies relevant to the selected checkpoint.
+
+### 7. Reinstall the backup script and one-shot service
+
+Install the repository's current script and recreate the one-shot service from
+`KEYCLOAK.md` §14. Do not recover the script from the backup archive.
+
+```bash
+sudo install -d -m 700 -o root -g root /var/backups/keycloak-postgres
+sudo install -o root -g root -m 750 \
+  "{{REPO_PATH}}/onvif-mcp/scripts/backup-keycloak-postgres" \
+  /usr/local/sbin/backup-keycloak-postgres
+sudo bash -n /usr/local/sbin/backup-keycloak-postgres
+
+sudo tee /etc/systemd/system/keycloak-postgres-backup.service >/dev/null <<'EOF'
+[Unit]
+Description=Back up the Keycloak PostgreSQL database
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+Nice=10
+IOSchedulingClass=idle
+ExecStart=/usr/local/sbin/backup-keycloak-postgres
+EOF
+sudo chmod 644 /etc/systemd/system/keycloak-postgres-backup.service
+sudo systemctl daemon-reload
+sudo systemd-analyze verify /etc/systemd/system/keycloak-postgres-backup.service
+```
+
+### 8. Start Keycloak, then oauth2-proxy only after public discovery works
+
+Start Keycloak and wait for internal readiness. Restore/start nginx through
+`NGINX_BACKUP.md` separately. If nginx is already restored and serving `/auth/`, verify
+public discovery before starting oauth2-proxy.
+
+```bash
+sudo docker compose --project-directory /opt/keycloak up -d keycloak
+for i in $(seq 1 90); do
+  code="$(curl -k -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/auth/realms/master/.well-known/openid-configuration || true)"
+  [ "$code" = "200" ] && break
+  sleep 2
+done
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/auth/realms/master/.well-known/openid-configuration
+```
+
+If nginx is recovered and TLS is working, verify discovery through the public origin:
+
+```bash
+sudo curl --resolve {{SERVER_FQDN}}:443:{{SERVER_IP}} \
+  --cacert /etc/nginx/tls/camera-system-root-ca.crt.pem \
+  -s -o /dev/null -w '%{http_code}\n' \
+  https://{{SERVER_FQDN}}/auth/realms/mcp/.well-known/openid-configuration
+```
+
+Only then start oauth2-proxy if it is present in Compose:
+
+```bash
+if sudo docker compose --project-directory /opt/keycloak config --services | grep -Fxq oauth2-proxy; then
+  sudo docker compose --project-directory /opt/keycloak up -d oauth2-proxy
+fi
+sudo docker compose --project-directory /opt/keycloak ps
+```
+
+### 9. Restore the MCP OAuth systemd drop-in when applicable
+
+Keycloak checkpoints do not include host systemd units. If the selected metadata says
+KEYCLOAK.md §11 was completed, or if the restored deployment is expected to protect
+`/mcp` with OAuth, recreate `/etc/systemd/system/onvif-mcp-http.service.d/oauth.conf`
+from KEYCLOAK.md §11 before verifying MCP authentication. Do not rely on the
+Keycloak database restore alone; without this host drop-in, the MCP HTTP service can
+run but accept unauthenticated requests.
+
+```bash
+sudo install -d -m 755 /etc/systemd/system/onvif-mcp-http.service.d
+sudo tee /etc/systemd/system/onvif-mcp-http.service.d/oauth.conf >/dev/null <<'EOF'
+[Service]
+Environment=MCP_OAUTH_ENABLED=true
+Environment=MCP_OAUTH_ISSUER=https://{{SERVER_FQDN}}/auth/realms/mcp
+Environment=MCP_RESOURCE_URL=https://{{SERVER_FQDN}}/mcp
+Environment=MCP_OAUTH_JWKS_URL=http://127.0.0.1:8080/auth/realms/mcp/protocol/openid-connect/certs
+EOF
+sudo chmod 644 /etc/systemd/system/onvif-mcp-http.service.d/oauth.conf
+sudo systemd-analyze verify onvif-mcp-http.service
+sudo systemctl daemon-reload
+sudo systemctl restart onvif-mcp-http.service
+systemctl is-active onvif-mcp-http.service
+```
+
+After restart, verify the active environment without printing unrelated service
+secrets:
+
+```bash
+systemctl show onvif-mcp-http.service -p Environment --no-pager |
+  tr ' ' '\n' |
+  grep -E '^(Environment=)?MCP_OAUTH_ENABLED=|^MCP_OAUTH_ISSUER=|^MCP_RESOURCE_URL=|^MCP_OAUTH_JWKS_URL='
+```
+
+If the deployment intentionally does not enable MCP OAuth, record that exception in the
+recovery note and skip this step deliberately.
+
+### 10. Verify restored authentication state
+
+Verify public issuer/discovery, expected unauthenticated MCP behavior, restored
+realms/users/clients/policies, Dynamic Client Registration, Hermes MCP OAuth,
+and browser stream/snapshot authentication. Do not print password files, `.env`,
+tokens, DCR registration access tokens, browser cookies, or database secrets.
+
+First verify restored database content directly:
+
+```bash
+sudo docker compose --project-directory /opt/keycloak exec -T postgres \
+  psql --username=keycloak --dbname=keycloak --tuples-only --no-align \
+  --command="SELECT realm_id, username, enabled FROM user_entity ORDER BY realm_id, username;"
+
+sudo docker compose --project-directory /opt/keycloak exec -T postgres \
+  psql --username=keycloak --dbname=keycloak --tuples-only --no-align \
+  --command="SELECT realm_id, client_id, enabled FROM client ORDER BY realm_id, client_id;"
+```
+
+Then run these functional checks before declaring recovery complete:
+
+1. Run `KEYCLOAK.md` §12, **Test DCR without exposing registration
+   credentials**.
+   - Expected: anonymous DCR for scope `mcp:tools` returns HTTP `201`.
+   - Print only safe fields: `client_id`, `scope`, `error`, and
+     `error_description`.
+   - Resolve the temporary client through the Admin API, require the name
+     `temporary-dcr-verification`, delete it, and verify it is gone.
+   - Remove the response artifact because it contains a registration access
+     token.
+
+2. Run `KEYCLOAK.md` §13, **Verify the Hermes login end-to-end**, for the
+   deployment's real MCP server entry (for example `camera-new`).
+   - Configure the entry with `auth: oauth`, the HTTPS `/mcp` URL, and an
+     explicit `ssl_verify` path to the private CA; never set `ssl_verify=false`.
+   - Prevent concurrent OAuth flows as described in §13.2.
+   - Complete the browser authorization headlessly with
+     `scripts/kc-headless-login-driver.py` or an equivalent no-secret driver.
+   - Require token files to exist with mode `0600`, then run
+     `hermes mcp test <name>` and require a successful OAuth connection and tool
+     discovery.
+   - Client token caches are not recovery inputs; reauthenticate clients after
+     restore rather than expecting token files from the checkpoint.
+
+3. If browser stream authentication is configured, run `STREAM_AUTH.md` §8,
+   **Verify unauthenticated behavior**.
+   - Require `/cameras/`, `/multiview/`, `/outputs/`, `/webrtc/`, `/snapshot/`,
+     and a known concrete `SNAPSHOT_PATH` to redirect to `/oauth2/start` with
+     the original path in `rd=`.
+   - Require the old HTTP snapshot entry point to redirect to the same HTTPS
+     snapshot path, and following that path without cookies must reach the login
+     redirect rather than serve a JPEG.
+   - Require unauthenticated MCP JSON-RPC to return `401` with protected-resource
+     metadata, while Keycloak discovery remains HTTP `200`.
+
+4. If browser stream authentication is configured, run `STREAM_AUTH.md` §9,
+   **Verify browser behavior**.
+   - Run `python3 scripts/stream_auth_step9_driver.py --origin
+     "https://{{SERVER_FQDN}}"` with deployment-specific overrides for any known
+     snapshot or WebRTC paths that differ from the defaults.
+   - Require `RESULT=PASS`: exact login landing on `/cameras/`, authenticated
+     `/oauth2/ping` returning `202 Authenticated`, same-session `/multiview/`,
+     WebRTC pass-through without a sign-in bounce, and both same-session and
+     fresh-session snapshots serving valid JPEGs with `Cache-Control: no-store`.
+   - Run the MCP regression checks from §9, including `hermes mcp test <name>`.
+
+Do not declare the system ready until every applicable authentication and service
+check above passes. If a check is intentionally not applicable, record why in the
+recovery note.
+
+### 11. Record recovery results and take fresh checkpoints after changes
+
+Record actual recovery results outside the immutable checkpoint. Preserve the selected
+checkpoint unchanged. Any changes made during recovery, including new registrations,
+certificates, nginx changes, or user changes, require fresh checkpoints after verification.
+A restored Keycloak state that depends on nginx/oauth2 configuration should be paired with
+a compatible nginx checkpoint from `NGINX_BACKUP.md`.
 

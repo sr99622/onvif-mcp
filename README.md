@@ -40,13 +40,22 @@ Be mindful of model context size when running the configurations shown below. As
 
     Follow the SERVER_PREP.md document in the docs folder after installing Ubuntu 26.04 on the host. The top section of the document installs several quality of life features that help manage the server, but are not strictly required for operation. The Essential Configurations section describes critical installations required for operation.
 
+    #### Mount an SMB share for backups
+
+    The server will need a backup location for critical data. An SMB share is a good place to do this. Assuming you have another Ubuntu machine set up on your local network, Hermes can do this for you using the instructions in the runbook SMB_SERVE.md. Other mounted storage locations work as well, but the procedures that follow will expect there to be a directory into which backup files can be written with proper file permissions.
+
+    Assuming you have chosen the SMB strategy and have a server set up, prompt the agent with the following, using your credentials for logging onto the SMB share.
+
+    ```
+    An SMB share is available on the local network for backup storage. Please follow the instructions in SMB_SERVE.md step 2. Add a separate client mount (camera host). You are the camera host, which is the client side on the SMB transaction. There may be an existing backup on the share already. Use the Required Values {{USERNAME}} <your username>, {{PASSWORD}} <your password>
+    ```
     ---
 
 2. ### HTTP Services
 
     This is a baseline configuration required before layering encryption and authentication on the server. All essential services are initially configured here without encryption. This could theoretically be considered a fully functional unsecured system. The Hermes agent is used to perform the configuration and can be prompted to follow this document and implement the steps as described in the runbook referenced below. Values required for implementation are listed in the table, edit this document with your own site values and Hermes can implement the configuration autonomously.
 
-    After following the instructions in SERVER_PREP.md, attach the cameras to the second ethernet adapter. Prompt the agent with the required values and the list of runbooks to make the build. The runbooks to implement the configuration are found in the `{{REPO_PATH}}/onvif-mcp/docs` directory. The runbooks are intended to be executed in the order listed.
+    After following the instructions in SERVER_PREP.md, attach the cameras to the second ethernet adapter. Prompt the agent with the required values and the list of runbooks to make the build. The value for `{{PRVT_CAMERA_NET_EN_NAME}}` can be found using the `nmcli dev show` command from a terminal. The runbooks to implement the configuration are found in the `{{REPO_PATH}}/onvif-mcp/docs` directory. The runbooks are intended to be executed in the order listed.
 
 
     **Required Values**

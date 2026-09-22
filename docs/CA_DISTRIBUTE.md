@@ -37,7 +37,7 @@ Authoritative CA workstation
 The copy under `/srv/camera-pki/public` is the deliberately managed client-distribution
 copy. The authoritative CA state remains at `{{CA_ROOT_PATH}}` and in its encrypted backups.
 
-## Values supplied by the Agent
+## Required Values
 
 | Symbol | Required value |
 |---|---|

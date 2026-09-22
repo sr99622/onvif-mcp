@@ -89,7 +89,7 @@ uses this same history; do not create new `dns-*` procedure folders or separate
 `final-etc-dnsmasq*.tar` fragments. Record execution details in checkpoint
 metadata.
 
-## Restore a checkpoint
+## Restore from checkpoint
 
 1. Select the lexicographically newest completed directory matching exactly
    fourteen digits followed by `Z`. Ignore hidden staging directories. Require

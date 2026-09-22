@@ -301,49 +301,258 @@ targets retain their own procedures.
 
 ## Restore from checkpoint
 
-1. Select the lexicographically newest completed directory matching exactly
-   fourteen digits followed by `Z`. Ignore hidden staging directories. Verify
-   both required files and `SHA256SUMS`; stop on failure. Choosing an older
-   recovery point is an explicit recovery decision, not an automatic fallback.
-   Restore one snapshot; do not merge nginx artifacts from procedure folders.
+This procedure intentionally spells out the mechanics. Agents must not merge nginx
+artifacts from procedure folders, restore over a stale `/etc/nginx` tree, or overwrite a
+newly reissued leaf certificate with an archived public certificate that no longer matches
+the live private key. A restore is complete only after nginx configuration, TLS,
+authentication routes, and public endpoints are verified.
 
-2. Inspect metadata and archive members in a protected temporary directory.
-   Install compatible nginx packages/modules and create the required service
-   user. Restore web content, CA distribution files, upstream services and any
-   external dependencies using the recorded sources. Check compatibility with
-   the chosen Keycloak checkpoint; newer independent histories need not describe
-   a mutually compatible application state.
+### 1. Select and verify one completed checkpoint
 
-3. Recover TLS credentials through SITE_CERT.md: reuse a surviving private key
-   only after verifying it matches the certificate, otherwise generate a new
-   key and reissue through the restored CA. Private keys are not in nginx.tar.
-   Keep recovered/reissued key and matching certificate files in protected
-   staging until after installing the archived configuration.
+Select the lexicographically newest completed directory matching exactly fourteen digits
+followed by `Z`. Ignore hidden staging directories. Choosing an older recovery point is an
+explicit recovery decision and must be recorded.
 
-4. During the authorized restore window, stop nginx and preserve the current
-   `/etc/nginx` tree and nginx-specific systemd overrides in a protected local
-   rollback location outside all include paths. Restore into a clean
-   `/etc/nginx` tree, not over an existing tree: extraction alone cannot remove
-   obsolete sites or package-created defaults. Restore the archived override
-   set exactly, including recorded absence, without changing unrelated units.
-   Handle inventoried external configuration files explicitly and preserve
-   rollback copies. Validate member paths and symlinks before extraction; never
-   let an archive symlink redirect extraction outside its intended destination.
-   
-5. Install the recovered/reissued TLS material at the configured paths, with
-   keys root-owned mode 0600. A newly issued certificate replaces the archived
-   public certificate; do not overwrite it with the old one afterward. Ensure
-   external include and module targets exist and the default site is disabled.
-   Verify the intended HTTPS listener is unpinned. Run `systemctl daemon-reload`
-   if units were restored, then require `nginx -t` success before starting nginx.
-   
-6. Start nginx. If oauth2-proxy requires Keycloak discovery through nginx,
-   make Keycloak ready first, start nginx to expose `/auth/`, then start
-   oauth2-proxy and wait for health. Only then verify the routes and access
-   controls recorded for this
-   checkpoint: HTTP redirects, `/ca/`, TLS hostname/chain, and, where deployed,
-   `/auth/`, `/oauth2/`, `/mcp`, camera pages and snapshots. Check both allowed
-   requests and expected authentication/denial behavior. If verification fails,
-   stop and diagnose or restore the preserved configuration and matching TLS
-   material; never repair by layering older stage archives over this snapshot.
+```bash
+set -euo pipefail
+BACKUP_PATH="{{BACKUP_PATH}}"
+parent="$BACKUP_PATH/nginx"
+checkpoint_name="$(find "$parent" -maxdepth 1 -mindepth 1 -type d -printf '%f\n' |
+  grep -E '^[0-9]{14}Z$' | sort | tail -n 1)"
+test -n "$checkpoint_name"
+checkpoint="$parent/$checkpoint_name"
+export checkpoint
+
+cd "$checkpoint"
+test -f nginx.tar
+test -f metadata.txt
+test -f SHA256SUMS
+sha256sum -c SHA256SUMS
+```
+
+Require all checksums to pass. A missing archive, missing metadata file, or failed
+checksum stops recovery.
+
+### 2. Inspect metadata and archive safety before extraction
+
+Copy the selected checkpoint into protected temporary inspection storage. Review metadata,
+then verify archive roots, symlinks, and private-key exclusion before touching `/etc/nginx`.
+
+```bash
+restore_work="$(mktemp -d /root/nginx-restore-inspect.XXXXXX)"
+chmod 700 "$restore_work"
+cp "$checkpoint"/nginx.tar "$checkpoint"/metadata.txt "$restore_work"/
+cd "$restore_work"
+sed -n '1,240p' metadata.txt
+sudo tar -tvf nginx.tar | sed -n '1,240p'
+```
+
+Run path and private-key scans:
+
+```bash
+export restore_work
+python3 - <<'PY'
+import os, tarfile
+from pathlib import Path
+root = Path(os.environ['restore_work'])
+with tarfile.open(root / 'nginx.tar') as tf:
+    names = []
+    for m in tf.getmembers():
+        names.append(m.name)
+        if m.name.startswith('/') or '..' in Path(m.name).parts:
+            raise SystemExit(f'unsafe member path: {m.name}')
+        if m.issym() or m.islnk():
+            link = Path(m.linkname)
+            if '..' in link.parts:
+                raise SystemExit(f'unsafe link target: {m.name} -> {m.linkname}')
+            if m.linkname.startswith('/') and not m.linkname.startswith('/etc/nginx/'):
+                raise SystemExit(f'absolute link target outside /etc/nginx: {m.name} -> {m.linkname}')
+        if m.isfile() and m.size < 2_000_000:
+            data = tf.extractfile(m).read()
+            if b'BEGIN PRIVATE KEY' in data or b'BEGIN RSA PRIVATE KEY' in data or b'BEGIN EC PRIVATE KEY' in data:
+                raise SystemExit(f'private-key material found in archive member {m.name}')
+    required = {
+        'etc/nginx/nginx.conf',
+        'etc/nginx/conf.d/gmktec.home.arpa.conf',
+        'etc/nginx/sites-available/camera',
+        'etc/nginx/sites-enabled/camera',
+    }
+    missing = sorted(required - set(names))
+    if missing:
+        raise SystemExit(f'missing required nginx members: {missing}')
+print('nginx archive safety checks passed')
+PY
+```
+
+### 3. Prepare host prerequisites and external dependencies
+
+Install compatible nginx packages/modules and create the service user named by the archived
+`nginx.conf`. Restore or verify external dependencies recorded in metadata before starting
+nginx:
+
+- application web roots such as `{{REPO_PATH}}/onvif-mcp/apps/cameras/` and
+  `{{REPO_PATH}}/onvif-mcp/apps/multiview/`;
+- `/etc/onvif-mcp/camera_registry.json` and `/etc/onvif-mcp/snapshot_routes.json` if
+  included;
+- `/srv/camera-pki/public/*` if `/ca/` distribution is included;
+- upstream services: MediaMTX, snapshot-proxy, MCP HTTP, Keycloak, and oauth2-proxy where
+  configured.
+
+```bash
+sudo apt update
+sudo apt install -y nginx
+# Replace webcam with the actual user from archived nginx.conf if different.
+sudo id webcam >/dev/null 2>&1 || sudo useradd --system --no-create-home --shell /usr/sbin/nologin webcam
+sudo usermod -aG {{SERVER_USER}} webcam
+```
+
+Do not restore nginx before recovering or reissuing the TLS private key/certificate pair
+through `SITE_CERT.md`. Private keys are not in `nginx.tar`.
+
+### 4. Preserve current nginx and stage live TLS material
+
+During the authorized restore window, stop nginx and preserve the current tree and
+nginx-specific systemd overrides outside all include paths. Also stage the current matching
+TLS material. If the current private key was reissued after the checkpoint, its matching
+leaf certificate must replace the archived public certificate after extraction.
+
+```bash
+stamp="$(date -u +%Y%m%d%H%M%SZ)"
+rollback="/root/nginx-pre-restore-$stamp"
+sudo install -d -m 700 "$rollback"
+sudo systemctl stop nginx.service || true
+sudo tar --acls --xattrs -cpf "$rollback/etc-nginx.tar" -C / etc/nginx
+if [ -e /etc/systemd/system/nginx.service ]; then
+  sudo tar --acls --xattrs -cpf "$rollback/nginx-service.tar" -C / etc/systemd/system/nginx.service
+fi
+if [ -e /etc/systemd/system/nginx.service.d ]; then
+  sudo tar --acls --xattrs -cpf "$rollback/nginx-service-d.tar" -C / etc/systemd/system/nginx.service.d
+fi
+sudo install -d -m 700 "$rollback/tls-live"
+sudo cp -a /etc/nginx/tls/{{SERVER_FQDN}}.key.pem "$rollback/tls-live/"
+sudo cp -a /etc/nginx/tls/{{SERVER_FQDN}}.crt.pem "$rollback/tls-live/"
+sudo cp -a /etc/nginx/tls/{{SERVER_FQDN}}.chain.pem "$rollback/tls-live/"
+sudo cp -a /etc/nginx/tls/camera-system-root-ca.crt.pem "$rollback/tls-live/"
+```
+
+Verify the staged key and certificate match before continuing:
+
+```bash
+sudo openssl pkey -in "$rollback/tls-live/{{SERVER_FQDN}}.key.pem" -pubout | openssl sha256
+sudo openssl x509 -in "$rollback/tls-live/{{SERVER_FQDN}}.crt.pem" -pubkey -noout | openssl sha256
+```
+
+The two hashes must match. Stop if they differ.
+
+### 5. Restore into a clean `/etc/nginx` tree
+
+Restore into a clean tree, not over an existing tree. Extraction alone cannot remove
+obsolete enabled sites, package defaults, or old rollback files.
+
+```bash
+sudo rm -rf /etc/nginx
+sudo install -d -m 755 -o root -g root /etc/nginx
+sudo tar --acls --xattrs --same-owner -xpf "$checkpoint/nginx.tar" -C /
+```
+
+Restore nginx-specific systemd override absence or presence exactly. If the archive does
+not contain `etc/systemd/system/nginx.service` or `etc/systemd/system/nginx.service.d/`,
+remove nginx-specific local overrides; do not touch unrelated units.
+
+```bash
+if ! sudo tar -tf "$checkpoint/nginx.tar" | grep -Fxq 'etc/systemd/system/nginx.service'; then
+  sudo rm -f /etc/systemd/system/nginx.service
+fi
+if ! sudo tar -tf "$checkpoint/nginx.tar" | grep -q '^etc/systemd/system/nginx.service.d/'; then
+  sudo rm -rf /etc/systemd/system/nginx.service.d
+fi
+sudo systemctl daemon-reload
+```
+
+### 6. Install the recovered/reissued TLS material and validate config
+
+Install the staged live TLS material after extraction so a newly reissued certificate is not
+overwritten by the archived public certificate. Keep the private key root-owned mode 0600;
+public TLS files should be mode 0644.
+
+```bash
+sudo install -d -o root -g root -m 700 /etc/nginx/tls
+sudo install -o root -g root -m 600 "$rollback/tls-live/{{SERVER_FQDN}}.key.pem" /etc/nginx/tls/{{SERVER_FQDN}}.key.pem
+sudo install -o root -g root -m 644 "$rollback/tls-live/{{SERVER_FQDN}}.crt.pem" /etc/nginx/tls/{{SERVER_FQDN}}.crt.pem
+sudo install -o root -g root -m 644 "$rollback/tls-live/camera-system-root-ca.crt.pem" /etc/nginx/tls/camera-system-root-ca.crt.pem
+sudo sh -c 'cat /etc/nginx/tls/{{SERVER_FQDN}}.crt.pem /etc/nginx/tls/camera-system-root-ca.crt.pem > /etc/nginx/tls/{{SERVER_FQDN}}.chain.pem'
+sudo chmod 644 /etc/nginx/tls/{{SERVER_FQDN}}.chain.pem
+```
+
+Validate the restored configuration before starting nginx:
+
+```bash
+sudo nginx -t
+sudo nginx -T | grep -c 'server_name {{SERVER_FQDN}}'
+sudo test ! -e /etc/nginx/sites-enabled/default
+sudo nginx -T 2>/dev/null | grep -F 'listen 443 ssl;'
+sudo nginx -T 2>/dev/null | grep -F '/auth/'
+sudo nginx -T 2>/dev/null | grep -F '/oauth2/'
+sudo nginx -T 2>/dev/null | grep -F '/ca/'
+```
+
+### 7. Start nginx, then oauth2-proxy when Keycloak discovery is public
+
+Start nginx first so Keycloak public discovery is available at `/auth/`. Then start
+oauth2-proxy, which depends on that public issuer URL.
+
+```bash
+sudo systemctl start nginx.service
+systemctl is-active nginx.service
+sudo ss -lntp 'sport = :443'
+
+sudo curl --resolve {{SERVER_FQDN}}:443:{{SERVER_IP}} \
+  --cacert /etc/nginx/tls/camera-system-root-ca.crt.pem \
+  -s -o /dev/null -w '%{http_code}\n' \
+  https://{{SERVER_FQDN}}/auth/realms/mcp/.well-known/openid-configuration
+
+if sudo docker compose --project-directory /opt/keycloak config --services | grep -Fxq oauth2-proxy; then
+  sudo docker compose --project-directory /opt/keycloak up -d oauth2-proxy
+fi
+sudo docker compose --project-directory /opt/keycloak ps
+```
+
+### 8. Final route and access-control verification
+
+Verify both allowed requests and expected authentication/denial behavior. Use the private CA
+explicitly; do not rely on ambient trust.
+
+```bash
+sudo curl --resolve {{SERVER_FQDN}}:443:{{SERVER_IP}} \
+  --cacert /etc/nginx/tls/camera-system-root-ca.crt.pem \
+  --head https://{{SERVER_FQDN}}/auth/realms/mcp/.well-known/openid-configuration
+
+curl -sI --resolve {{SERVER_FQDN}}:80:{{SERVER_IP}} \
+  http://{{SERVER_FQDN}}/cameras/ | sed -n '1,8p'
+
+curl -sI --resolve {{SERVER_FQDN}}:80:{{SERVER_IP}} \
+  http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt.pem | sed -n '1,8p'
+
+sudo curl --resolve {{SERVER_FQDN}}:443:{{SERVER_IP}} \
+  --cacert /etc/nginx/tls/camera-system-root-ca.crt.pem \
+  -s -o /dev/null -w '%{http_code}\n' https://{{SERVER_FQDN}}/cameras/
+
+sudo curl --resolve {{SERVER_FQDN}}:443:{{SERVER_IP}} \
+  --cacert /etc/nginx/tls/camera-system-root-ca.crt.pem \
+  -H 'Accept: text/event-stream, application/json' \
+  -s -o /dev/null -w '%{http_code}\n' https://{{SERVER_FQDN}}/mcp
+```
+
+Expected examples for an auth-enabled checkpoint:
+
+- `/auth/realms/mcp/.well-known/openid-configuration` returns `200`;
+- `/ca/camera-system-root-ca.crt.pem` over HTTP returns `200` from an allowed LAN address;
+- non-CA HTTP requests return `301` to HTTPS;
+- protected web routes such as `/cameras/`, `/snapshot/`, and `/webrtc/` return an OAuth
+  redirect (`302`) or auth denial when unauthenticated;
+- `/mcp` returns the MCP server's expected unauthenticated protocol response for the
+  supplied headers.
+
+If verification fails, stop and diagnose or restore the preserved rollback tree and
+matching TLS material. Never repair by layering older stage archives over this snapshot.
 

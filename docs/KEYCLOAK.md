@@ -957,10 +957,10 @@ fully prompt-driven (TTY-bound). Write the entry directly into
 would save:
 
 ```yaml
-  <name>:
+  camera-new:
     url: https://{{SERVER_FQDN}}/mcp
     auth: oauth
-    ssl_verify: /etc/ssl/certs/<ca-name>.pem
+    ssl_verify: /etc/ssl/certs/camera-system-root-ca.pem
     connect_timeout: 600
     enabled: false
 ```
@@ -987,16 +987,16 @@ Mitigations (any one suffices; this deployment uses the first two):
 
 - set `mcp.auto_reload_on_config_change: false` under `mcp:` in config.yaml,
   and keep the entry `enabled: false` until its token files exist;
-- run the login under an isolated home: `HERMES_HOME=<dir> hermes mcp login <name>`
+- run the login under an isolated home: `HERMES_HOME=<dir> hermes mcp login camera-new`
   (copy the `mcp_servers:` block into `<dir>/config.yaml`), then copy
-  `<dir>/mcp-tokens/<name>.{json,client.json,meta.json}` back to
+  `<dir>/mcp-tokens/camera-new.{json,client.json,meta.json}` back to
   `~/.hermes/mcp-tokens/`;
 - or guarantee no concurrent session has the server loaded at all.
 
 ### 13.3 Complete the browser step headlessly
 
 The browser step can be completed headlessly against the live login.
-`hermes mcp login <name>` force-marks itself interactive, so its loopback
+`hermes mcp login camera-new` force-marks itself interactive, so its loopback
 callback listener binds on port 27890 even without a TTY — *provided* no
 display variables are set (`env -u DISPLAY -u WAYLAND_DISPLAY ...`), which is
 also what prevents Hermes from auto-opening a competing browser tab. Then drive
@@ -1008,7 +1008,7 @@ never prints credentials or token values):
 ```bash
 # terminal A (isolated home, no display vars; a single flow is expected):
 cd <dir> && env -u DISPLAY -u WAYLAND_DISPLAY HERMES_HOME=<dir> \
-  hermes mcp login <name>
+  hermes mcp login camera-new
 
 # terminal B: read the printed auth URL, confirm exactly ONE flow and that a
 # listener owns 127.0.0.1:27890 (ss -ltnp | grep 27890), then:
@@ -1026,14 +1026,14 @@ then in terminal A `✓ Authenticated — N tool(s) available`.
 
 The ambiguous part of this runbook, verified point by point:
 
-- token files exist at `~/.hermes/mcp-tokens/<name>.{json,client.json,meta.json}`,
+- token files exist at `~/.hermes/mcp-tokens/camera-new.{json,client.json,meta.json}`,
   all mode `-rw-------`; **never display their contents**;
-- `hermes mcp test <name>` reconnects using saved state and lists the expected
+- `hermes mcp test camera-new` reconnects using saved state and lists the expected
   tools;
 - enable the entry (`enabled: true`) only after the test passes;
 - each login attempt registers a fresh public DCR client ("Hermes Agent");
   failed attempts orphan them. Periodically list clients in the realm by name,
-  match against the active `client_id` stored in `<name>.client.json`, and
+  match against the active `client_id` stored in `camera-new.client.json`, and
   delete only confirmed-orphan internal IDs (kcadm consumes stdin on exec —
   redirect `</dev/null` for batch deletes);
 - take another manual backup after the real client registration exists so it

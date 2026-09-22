@@ -18,7 +18,7 @@ Wired clients
     `-- other queries -> {{UPSTREAM_DNS}}
 ```
 
-## Value supplied by the Agent
+## Required Values
 
 | Symbol | Description | Example Value |
 |---|---|---|

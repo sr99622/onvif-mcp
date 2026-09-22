@@ -401,6 +401,19 @@ sha256sum \
 Create an authenticated, passphrase-encrypted archive of the full CA state. The passphrase
 is fed from the vault.
 
+Before archiving, re-enforce and verify the CA directory permissions. The archive preserves
+filesystem modes exactly, so a drifted directory mode would otherwise be restored onto a
+new machine:
+
+```bash
+find "{{CA_ROOT_PATH}}/camera-system-ca" -type d -exec chmod 700 {} +
+find "{{CA_ROOT_PATH}}/camera-system-ca" -type d -exec stat -c '%a %n' {} \; |
+  awk '$1 != "700" { bad=1; print } END { exit bad }'
+```
+
+The `awk` command must produce no output and exit successfully. Stop and fix the source
+tree if any CA directory is not mode `700`; do not archive non-compliant permissions.
+
 **age reads its passphrase from `/dev/tty`** — a file redirect (`age -p < file`) fails with
 "/dev/tty not available". Use the stdin-fed `script` PTY pattern, with both prompt lines
 ("Enter passphrase" + "Confirm passphrase") supplied from outside:
