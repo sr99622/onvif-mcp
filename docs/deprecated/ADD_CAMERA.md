@@ -19,7 +19,7 @@ The checked-in `apps/outputs/camera_registry.json` is a template only, and
 1. Camera must be connected to one of the server's network interfaces.
 2. Camera credentials are known (RTSP username and password, used for MediaMTX source URL construction).
 
-## Values supplied by Agent
+## Required Values
 
 | Value           | Description                                 |
 |-----------------|-----------------------------------------------|

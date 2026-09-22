@@ -7,10 +7,10 @@ This document describes the MediaMTX RTSP-to-WebRTC/HLS streaming server. The se
 | Value | Description |
 |---|---|
 | `{{SERVER_FQDN}}` | Server Fully Qualified Domain Name |
-| `{{USERNAME}}` | Camera Username |
-| `{{PASSWORD}}` | Camera Password |
+| `{{USERNAME}}` | Camera Username, normally `admin` |
+| `pass camera` | Camera password, stored in `~/.password-store/camera.gpg` |
 
-These values are required for operation. Stop and prompt the user if any of them are not provided.
+These values are required for operation. Do not ask the user to paste the camera password into the runbook or shell history. Read it from `pass camera`. If GPG prompts for the passphrase, complete that terminal prompt once; the local `gpg-agent` normally caches the unlocked key for a short period, allowing subsequent `pass camera` calls in the same build/restore session to run without prompting.
 
 ## Deployment Details
 
@@ -53,7 +53,7 @@ UDP 8189 carries encrypted WebRTC media, not the original unencrypted RTSP feed.
 
 ## Camera Streams
 
-Each camera exposes two or more named paths in the YAML config. The streams are declared in the `paths:` section of the `mediamtx.yml`. The camera stream path consists of a name and a `source:` field. The name is a combination of the camera serial number and profile token delimited by a slash character. The source is the camera RTSP endpoint, known as the stream_uri, modified to include the username and password credentials for authorization. Agents can collect the necessary camera data from the stdio camera MCP server tool `get_cameras`, which returns camera data including profiles that will each have a web_player_url. The main stream is considered to be the first profile, and substream(s) follow in order.
+Each camera exposes two or more named paths in the YAML config. The streams are declared in the `paths:` section of the `mediamtx.yml`. The camera stream path consists of a name and a `source:` field. The name is a combination of the camera serial number and profile token delimited by a slash character. The source is the camera RTSP endpoint, known as the stream_uri, modified to include the username and password credentials for authorization. The camera password must be read from the local password store with `pass camera` when generating the config; do not hard-code it in this document, scripts committed to source control, or shell history. Agents can collect the necessary camera data from the stdio camera MCP server tool `get_cameras`, which returns camera data including profiles that will each have a web_player_url. The main stream is considered to be the first profile, and substream(s) follow in order.
 
 ### Example Camera Stream Path Construction
 
@@ -61,7 +61,7 @@ The camera path is constructed using the formula shown below. Values inside the 
 
 ```py
   {serial_number}/{profile.token}
-    source: {stream_uri[:7]}{{USERNAME}}:{{PASSWORD}}@{stream_uri[7:]}
+    source: {stream_uri[:7]}{{USERNAME}}:{url_encoded_camera_password_from_pass}@{stream_uri[7:]}
 ```
 
 Using concrete example values
@@ -70,13 +70,15 @@ Using concrete example values
 * Profile Token: Profile_1
 * Stream URI: rtsp://10.1.1.70:554/Streaming/Channels/101?transportmode=unicast&profile=Profile_1
 * Username: admin
-* Password: admin123
+* Password: read from `pass camera`
 
 ```yaml
 paths:
   DS-2CD2142022579764/Profile_1:
-    source: rtsp://admin:admin123@10.1.1.70:554/Streaming/Channels/101?transportmode=unicast&profile=Profile_1
+    source: rtsp://admin:<URL-encoded value returned by pass camera>@10.1.1.70:554/Streaming/Channels/101?transportmode=unicast&profile=Profile_1
 ```
+
+When writing the real `/etc/mediamtx/mediamtx.yml`, read the first line returned by `pass camera`, URL-encode it, then replace `<URL-encoded value returned by pass camera>` with that encoded value. Characters such as `@`, `:`, `/`, `?`, `#`, `%`, and spaces have special meaning inside URLs. Do not leave `$CAMERA_PASSWORD` or another shell variable reference inside the YAML; MediaMTX does not expand shell variables in `source:` URLs.
 
 ### Stream Coverage Requirement
 
@@ -124,7 +126,27 @@ sudo mkdir -p /etc/mediamtx /var/log/mediamtx
 
 ## 3. Create MediaMTX Configuration File (`/etc/mediamtx/mediamtx.yml`)
 
-* Camera credentials are embedded in RTSP URLs in the config file (`/etc/mediamtx/mediamtx.yml`). Keep this file protected (mode 640, owned by mediamtx:mediamtx).
+* Camera credentials are embedded in RTSP URLs in the generated config file (`/etc/mediamtx/mediamtx.yml`). Keep this file protected (mode 640 or stricter, owned by mediamtx:mediamtx).
+* The camera password source of truth is `pass camera`. Use the first line returned by `pass camera` when generating RTSP `source:` URLs.
+* URL-encode the password before embedding it in `rtsp://{{USERNAME}}:...@host/...`.
+* If `pass camera` prompts for a GPG passphrase, enter it interactively in the terminal. Once the GPG agent cache is primed, repeated reads during the same build usually do not prompt again.
+* Do not write the generated YAML through commands that expose the password in shell history. Prefer a script, editor, or here-document that reads the password from `pass camera` into a variable and writes the file with restrictive permissions.
+
+Password read pattern for build/restore scripts:
+
+```bash
+IFS= read -r CAMERA_PASSWORD < <(pass camera)
+test -n "$CAMERA_PASSWORD"
+CAMERA_PASSWORD_URLENCODED="$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$CAMERA_PASSWORD")"
+```
+
+After generating `/etc/mediamtx/mediamtx.yml`, enforce ownership and permissions:
+
+```bash
+sudo chown mediamtx:mediamtx /etc/mediamtx /etc/mediamtx/mediamtx.yml
+sudo chmod 750 /etc/mediamtx
+sudo chmod 640 /etc/mediamtx/mediamtx.yml
+```
 
 ```yaml
 logLevel: info
@@ -164,7 +186,7 @@ authInternalUsers:
 # Camera paths (pull from RTSP sources)
 paths:
   DS-2CD2142022579764/Profile_1:
-    source: rtsp://admin:admin123@10.1.1.70:554/Streaming/Channels/101?transportmode=unicast&profile=Profile_1
+    source: rtsp://admin:<URL-encoded value returned by pass camera>@10.1.1.70:554/Streaming/Channels/101?transportmode=unicast&profile=Profile_1
   # ... one additional path per profile: the main stream AND every substream, for every camera
 ```
 
@@ -299,7 +321,7 @@ Delete the path entry from the `paths:` section of `/etc/mediamtx/mediamtx.yml` 
 
 - MediaMTX listens on `127.0.0.1` for WebRTC TCP ports, but access flows through Nginx at `/webrtc/`.
 - Without authentication layers, anyone on the network who can reach port 8889 (or port 80 via nginx) gets a live stream.
-- All cameras use the same default credentials (`{{USERNAME}}` / `{{PASSWORD}}`).
+- All cameras use the same camera username and the password stored in `pass camera`.
 
 ## Known Issues
 

@@ -17,8 +17,8 @@ logging.basicConfig(
 )
 log = logging.getLogger("snapshot-proxy")
 
-CAMERA_USERNAME = os.environ.get("CAMERA_USERNAME", "admin")
-CAMERA_PASSWORD = os.environ.get("CAMERA_PASSWORD", "admin123")
+CAMERA_USERNAME = os.environ.get("CAMERA_USERNAME")
+CAMERA_PASSWORD = os.environ.get("CAMERA_PASSWORD")
 HOST = os.environ.get("SNAPSHOT_PROXY_HOST", "127.0.0.1")
 PORT = int(os.environ.get("SNAPSHOT_PROXY_PORT", "8891"))
 UPSTREAM_TIMEOUT_S = 20

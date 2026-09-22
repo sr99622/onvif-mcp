@@ -5,7 +5,7 @@ applications in `apps/` so they are served by nginx on this host
 and pull live streams from the MediaMTX server
 (see `docs/MEDIAMTX.md`).
 
-## Values provided by the Agent
+## Required Values
 
 | Value Name | Description|
 |------------|------------|

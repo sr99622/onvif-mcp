@@ -16,7 +16,7 @@ If the new account will be used from a machine that is not yet allowed by the
 anonymous DCR Trusted Hosts policy, run `ADD_CLIENT_ON_SERVER.md` first with
 that machine's observed source address, then continue here.
 
-## Values supplied by the Agent
+## Required Values
 
 | Name | Description |
 |------|-------------|

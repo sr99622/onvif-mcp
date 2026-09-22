@@ -13,7 +13,7 @@ This configuration creates an isolated IPv4 network on {{PRVT_CAMERA_NET_EN_NAME
 
 The server's other interface and its existing LAN/Internet configuration are not changed.
 
-## Value provided by Agent
+## Required Value
 | Value | Description |
 |---|---|
 | {{PRVT_CAMERA_NET_EN_NAME}} | Ethernet Adapter Interface name hosting the private camera subnet |

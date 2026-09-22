@@ -1,11 +1,12 @@
-# GPG Vault Key Creation and Backup Runbook
+# GPG Key and Password Store Creation/Backup Runbook
 
 ## Purpose
 
-Create the one GPG key that will protect the `pass` password store, then back up
-its secret key **before** starting `CREATE_CA_CERT.md`. This procedure covers
-GPG only. The CA private key, `pass` entries, and `age` archives are created by
-their own procedures.
+Create the one GPG key that will protect the `pass` password store, initialize
+that store, add the camera-system passwords that are known at build time, and
+back up both the GPG secret key and the password store **before** starting
+`CREATE_CA_CERT.md`. The CA private key and CA backup archives are still created
+by their own procedures.
 
 Run the commands below as the account that will own the password store, in a
 real terminal or an SSH session with a TTY. The user enters the GPG passphrase
@@ -19,14 +20,24 @@ a new machine.
 | Name | Meaning |
 |---|---|
 | `{{BACKUP_PATH}}` | Mounted SMB backup folder |
+| `{{DATE}}` | Current date or unique backup label for password-store backups |
+| `{{SMB_USERNAME}}` | Samba username for the private camera CA backup share |
 
 The exported secret key is stored at
 `{{BACKUP_PATH}}/Camera-CA-Backups/ca-vault-gpg.key.gpg`. The `.gpg` extension is
 the established backup filename; the file contents are ASCII armored OpenPGP.
 
-The backup path may not have been created yet. If the backup does not exist, 
-attempt to create it using `mkdir -p`. If you are unable to find or create the
-full backup path, stop and warn the user, do not continue with the runbook.
+The password-store backup is stored at
+`{{BACKUP_PATH}}/Camera-CA-Backups/password-store-backup-{{DATE}}.tar.gz`, where
+`{{DATE}}` is the current date plus a unique suffix when more than one password
+store backup is made on the same day. Never overwrite an older password-store
+backup; create a new dated copy after any password-store manipulation.
+
+The backup mount may not exist until the SMB client mount step is complete. Do not
+create backup files under an unmounted local directory by mistake; after step 7,
+`{{BACKUP_PATH}}` should resolve to `/mnt/taurus-camera-ca` and contain the mounted
+private Samba share. If you are unable to mount or create the full backup path,
+stop and warn the user; do not continue with the runbook.
 
 ## Key Generation
 
@@ -89,7 +100,7 @@ full backup path, stop and warn the user, do not continue with the runbook.
       Stop if the new key or its encryption subkey is missing. Do not create a second
       key just to retry the backup.
 
-3. ### Export and back up the secret key (USER-run)
+3. ### Export the secret key locally (USER-run)
 
       Replace `YOUR_FULL_FINGERPRINT` with the full fingerprint from step 2. The 
       fingerprint is the string under the sec line from `gpg --list-secret-keys --fingerprint`
@@ -106,26 +117,21 @@ full backup path, stop and warn the user, do not continue with the runbook.
 
       Then YOUR_FULL_FINGERPRINT is "AC3C 1053 FEFE 526E 26BD  3895 7247 25B2 87EE 7E5D".
 
-      Resolve`{{BACKUP_PATH}}` before running the commands; do not type the braces 
-      literally. Check that the backup share is mounted and the destination does not 
-      already exist. A failure must stop the sequence rather than leaving a false backup.
+      The SMB share cannot be mounted until the `smb` password is available in
+      step 6. Export the secret key to a protected local file now; copy it to SMB
+      after the client mount is configured in step 7. A failure must stop the
+      sequence rather than leaving a false backup.
 
       ```bash
       set -e
       umask 077
-      fpr=YOUR_FULL_FINGERPRINT
-      backup_dir="{{BACKUP_PATH}}/Camera-CA-Backups"
+      fpr="YOUR_FULL_FINGERPRINT"
       local_export="$HOME/ca-vault-gpg.key.gpg"
-      backup_export="$backup_dir/ca-vault-gpg.key.gpg"
 
       test ! -e "$local_export"
-      test ! -e "$backup_export"
-      mkdir -p "$backup_dir"
       gpg --armor --output "$local_export" --export-secret-keys "$fpr"
       test -s "$local_export"
       chmod 600 "$local_export"
-      install -m 600 "$local_export" "$backup_export"
-      cmp -s "$local_export" "$backup_export"
       ```
 
 
@@ -134,23 +140,234 @@ full backup path, stop and warn the user, do not continue with the runbook.
       paste, email, or commit it. Do not use `sudo` for GPG: that would select root's
       key store instead of the user's.
 
-4. ### Verify the backup before CA creation
+4. ### Verify the local export before password-store creation
 
-      The export and backup must be nonempty, byte-identical, and readable as a
-      secret-key export. These commands display metadata, not the private key bytes:
+      The export must be nonempty and readable as a secret-key export. These
+      commands display metadata, not the private key bytes:
 
       ```bash
-      ls -l "$local_export" "$backup_export"    # both mode 600
-      cmp -s "$local_export" "$backup_export"     # exit status 0
-      gpg --list-packets "$backup_export" | sed -n '/secret key packet/p;/secret sub key packet/p'
-      gpg --list-secret-keys "$fpr"                # primary key and encryption subkey
+      fpr="YOUR_FULL_FINGERPRINT"
+      local_export="$HOME/ca-vault-gpg.key.gpg"
+      ls -l "$local_export"                 # mode 600
+      gpg --list-packets "$local_export" | sed -n '/secret key packet/p;/secret sub key packet/p'
+      gpg --list-secret-keys "$fpr"         # primary key and encryption subkey
       ```
 
       The packet listing must show a secret primary key and a secret subkey. Keep the
       GPG passphrase independently memorable or recoverable: losing both the live
       key and this export, or forgetting its passphrase, prevents recovery of the
-      future `pass` store. Once verified, proceed to `CREATE_CA_CERT.md` to initialize
-      `pass` and create the CA.
+      future `pass` store. Once verified, initialize the password store, mount the
+      SMB share, and back up both the GPG export and password store before
+      proceeding to `CREATE_CA_CERT.md`.
+
+5. ### Initialize the password store (USER-run)
+
+      Install `pass` if it is missing, then initialize the store with the same full
+      fingerprint used for the GPG key backup. Bare `pass init` can select the wrong
+      key or fail on some systems, so use the explicit fingerprint.
+
+      ```bash
+      set -e
+      pass --version
+      fpr="YOUR_FULL_FINGERPRINT"
+      pass init "$fpr"
+      test "$(cat ~/.password-store/.gpg-id)" = "$fpr"
+      chmod 700 ~/.password-store
+      ```
+
+      If `pass` is not installed on Debian/Ubuntu:
+
+      ```bash
+      sudo apt install pass
+      ```
+
+6. ### Add camera and SMB passwords (USER-run)
+
+      Add the operational passwords that other build procedures consume. These are
+      entered interactively in the terminal so they do not appear in shell history,
+      an agent transcript, or a committed runbook.
+
+      ```bash
+      pass insert camera
+      pass insert smb
+      ```
+
+      `camera` is the shared camera password used in RTSP/ONVIF camera access.
+      `smb` is the SMB password used by the camera-system backup/share workflow.
+      Use the first line of each entry as the password. If the entry needs notes,
+      use `pass edit <entry>` after the password is stored, keeping the password on
+      line 1.
+
+      Verify only that the entries exist and decrypt; do not paste the password into
+      the agent chat or logs:
+
+      ```bash
+      pass show camera >/dev/null
+      pass show smb >/dev/null
+      find ~/.password-store -maxdepth 2 -type f -name '*.gpg' -print
+      ```
+
+7. ### Mount the private SMB backup share on the camera host (USER-run)
+
+      The `smb` password is needed before the password store itself can be backed
+      up to the SMB share. After step 6, configure the camera host's separate CIFS
+      mount for the private CA backup share. This is the client-mount portion of
+      `SMB_SERVE.md`; the Samba server-side share must already exist on taurus.
+
+      Required values for this step:
+
+      | Name | Description |
+      |---|---|
+      | `{{SMB_USERNAME}}` | Username as recognized on the SMB server |
+      | `pass show smb` | Password as recognized on the SMB server |
+
+      Run these commands on the **camera host**. Install the CIFS mount helper and
+      verify taurus resolves before continuing:
+
+      ```bash
+      sudo apt install cifs-utils
+      getent ahosts taurus.home.arpa
+      ```
+
+      Confirm `/mnt/taurus-camera-ca` and
+      `/etc/cifs-utils/credentials/taurus-camera-ca` are not already used for a
+      different purpose. For a partially completed setup, reuse and correct the
+      existing configuration instead of creating a duplicate.
+
+      Create the credentials file from the password store without putting the SMB
+      password in shell history, command arguments, chat, or logs:
+
+      ```bash
+      set -e
+      umask 077
+      tmp_creds="$(mktemp "$HOME/.smb-creds.XXXXXX")"
+      {
+        printf 'username=%s\n' '{{SMB_USERNAME}}'
+        printf 'password='
+        pass show smb | head -n 1
+      } > "$tmp_creds"
+      sudo install -d -m 0700 /etc/cifs-utils/credentials
+      sudo install -o root -g root -m 0600 "$tmp_creds" /etc/cifs-utils/credentials/taurus-camera-ca
+      shred -u "$tmp_creds"
+      sudo test -s /etc/cifs-utils/credentials/taurus-camera-ca
+      ```
+
+      Add `domain=...` to `/etc/cifs-utils/credentials/taurus-camera-ca` only if
+      this Samba server requires it. Do not copy the old mount's credentials
+      without confirming they belong to the new share account.
+
+      Create the mount point if needed, get the local numeric UID/GID for the user
+      who owns the build files, then edit `/etc/fstab`:
+
+      ```bash
+      if [ ! -d /mnt/taurus-camera-ca ]; then
+          sudo install -d -m 0700 /mnt/taurus-camera-ca
+      fi
+      id -u stephen
+      id -g stephen
+      sudoedit /etc/fstab
+      ```
+
+      Add this line, replacing `LOCAL_UID` and `LOCAL_GID` with those numeric IDs.
+      If an entry for `/mnt/taurus-camera-ca` already exists, correct that entry
+      instead of adding a duplicate:
+
+      ```fstab
+      //taurus.home.arpa/camera-ca-private /mnt/taurus-camera-ca cifs credentials=/etc/cifs-utils/credentials/taurus-camera-ca,vers=3.1.1,uid=LOCAL_UID,gid=LOCAL_GID,file_mode=0600,dir_mode=0700,nosuid,nodev,noexec,_netdev,noauto,x-systemd.automount 0 0
+      ```
+
+      Validate fstab and resolve any errors before continuing:
+
+      ```bash
+      sudo findmnt --verify --fstab
+      ```
+
+      Reload systemd, clear any failed mount attempt from a partial setup, start
+      the automount, and access the directory to trigger the CIFS mount:
+
+      ```bash
+      sudo systemctl daemon-reload
+      sudo systemctl reset-failed 'mnt-taurus\x2dcamera\x2dca.mount'
+      sudo systemctl start 'mnt-taurus\x2dcamera\x2dca.automount'
+      ls -la /mnt/taurus-camera-ca/
+      findmnt -rn -t cifs -o TARGET,SOURCE,FSTYPE,OPTIONS
+      ```
+
+      Require a `cifs` row for `/mnt/taurus-camera-ca` naming
+      `//taurus.home.arpa/camera-ca-private`, with `rw`, the intended numeric
+      UID/GID, and `file_mode=0600,dir_mode=0700`. An `autofs` mount alone is not
+      success.
+
+      If mounting fails, inspect the current error before changing settings:
+
+      ```bash
+      sudo journalctl -b -u 'mnt-taurus\x2dcamera\x2dca.mount' --no-pager -n 30
+      ```
+
+      A `Password for root@...` prompt means the saved login is not being supplied.
+      Check that the credentials file has correctly formatted nonempty `username=`
+      and `password=` lines and that fstab references that file. If the intended
+      login gets permission denied, verify the Samba credentials and share access
+      on taurus.
+
+      Create the backup directory on the mounted share before continuing:
+
+      ```bash
+      install -d -m 0700 /mnt/taurus-camera-ca/Camera-CA-Backups
+      stat -c '%a %U:%G %n' /mnt/taurus-camera-ca /mnt/taurus-camera-ca/Camera-CA-Backups
+      ```
+
+      For this runbook, set `{{BACKUP_PATH}}` to `/mnt/taurus-camera-ca`. Complete
+      the harmless-file and server-side permission checks in `SMB_SERVE.md` before
+      relying on this share for long-term backup storage.
+
+8. ### Back up the password store (USER-run)
+
+      First copy the local GPG secret-key export to the mounted SMB share and
+      verify the copy. This is the first point where the SMB mount is available,
+      because the SMB password was only added to `pass` in step 6.
+
+      ```bash
+      set -e
+      umask 077
+      backup_dir="{{BACKUP_PATH}}/Camera-CA-Backups"
+      local_export="$HOME/ca-vault-gpg.key.gpg"
+      backup_export="$backup_dir/ca-vault-gpg.key.gpg"
+
+      test -s "$local_export"
+      mkdir -p "$backup_dir"
+      test ! -e "$backup_export"
+      install -m 600 "$local_export" "$backup_export"
+      cmp -s "$local_export" "$backup_export"
+      gpg --list-packets "$backup_export" | sed -n '/secret key packet/p;/secret sub key packet/p'
+      ```
+
+      Back up the whole password store immediately after adding or changing any
+      password. This `pass` version stores per-entry `.gpg` files plus the hidden
+      `.gpg-id`; the backup must include the entire store, not just one entry.
+
+      Resolve `{{BACKUP_PATH}}` and `{{DATE}}` before running the commands; do not
+      type the braces literally.
+
+      ```bash
+      set -e
+      umask 077
+      backup_dir="{{BACKUP_PATH}}/Camera-CA-Backups"
+      backup_label="{{DATE}}-initial"
+      backup_file="$backup_dir/password-store-backup-$backup_label.tar.gz"
+      mkdir -p "$backup_dir"
+      test ! -e "$backup_file"
+      tar -C "$HOME" -czf "$backup_file" .password-store
+      test -s "$backup_file"
+      chmod 600 "$backup_file"
+      cat ~/.password-store/.gpg-id > "$backup_dir/pass-gpg-id.txt"
+      tar -tzf "$backup_file" | sed -n '1,20p'
+      ```
+
+      Any later `pass insert`, `pass edit`, `pass rm`, generated CA passphrase, SMB
+      password rotation, or camera password rotation must be followed by another
+      password-store backup with a new `{{DATE}}`/label. Do not continue a build or
+      restore after changing the store until the new backup exists.
 
 ## Recovery
 
@@ -165,5 +382,16 @@ gpg --list-secret-keys
 ```
 
 The export alone does not restore the password store. Restore its separate
-backup after importing the key, following `CREATE_CA_CERT.md`'s recovery
-procedure.
+backup after importing the key:
+
+```bash
+mkdir -p ~/.password-store
+tar -xzf password-store-backup-{{DATE}}.tar.gz -C "$HOME"
+pass show camera >/dev/null
+pass show smb >/dev/null
+```
+
+If the backup was created with an older procedure that archived only selected
+entries, inspect it first with `tar -tzf password-store-backup-{{DATE}}.tar.gz`
+and restore the listed paths into `~/.password-store` without overwriting newer
+entries unintentionally.

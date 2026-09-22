@@ -39,9 +39,14 @@ location, the proxy's route table keys, and that scheme must all agree.
 | `{{REPO_PATH}}`     | Parent directory containing the onvif-mcp repository (repo lives at `{{REPO_PATH}}/onvif-mcp`) |
 | `{{SERVER_USER}}`   | System user the proxy runs as (owner of `{{REPO_PATH}}`, so it can read the repo source and its venv) |
 | `{{USERNAME}}`      | Camera username                                |
-| `{{PASSWORD}}`      | Camera password                                |
+| `pass camera`       | Camera password from the local password store  |
 
-These values are required for operation. Stop and prompt the user if any of them are not provided.
+These values are required for operation. Do not hard-code the camera password in
+the systemd unit, shell history, this runbook, or agent chat. Read the first line
+from `pass camera` when generating the shared service environment file. If GPG
+prompts for the passphrase, enter it interactively in the terminal; after that,
+`gpg-agent` normally caches the key for subsequent reads during the same build
+session.
 
 ## 1. Confirm the Service Source Exists in the Repository
 
@@ -64,10 +69,11 @@ dependencies). Bind and credentials come from environment:
 | SNAPSHOT_PROXY_PORT | 8891       | Bind port                         |
 | SNAPSHOT_ROUTES_FILE | /etc/onvif-mcp/snapshot_routes.json | Generated site route table |
 | CAMERA_USERNAME   | {{USERNAME}} | Camera login                      |
-| CAMERA_PASSWORD   | {{PASSWORD}} | Camera login                      |
+| CAMERA_PASSWORD   | `pass camera` | Camera login                     |
 
-Do not edit credentials into the source file; the unit file passes them via
-`Environment=`.
+Do not edit credentials into the source file or the unit file. The service reads
+camera credentials from the protected shared environment file
+`/etc/onvif-mcp-http.env`.
 
 ## 2. Collect Each Camera's Real Snapshot URI
 
@@ -89,10 +95,17 @@ authentication and `curl --basic` does Basic authentication. If --digest is
 unsuccessful, wait a few seconds then try --basic. Do not repeatedly hit the
 camera with requests in succession, you might crash it:
 
+Read the password once from the password store before testing:
+
+  ```bash
+  IFS= read -r CAMERA_PASSWORD < <(pass camera)
+  test -n "$CAMERA_PASSWORD"
+  ```
+
 * Digest Version of the Command
 
   ```bash
-  curl -s --digest -u {{USERNAME}}:{{PASSWORD}} --max-time 20 \
+  curl -s --digest -u "{{USERNAME}}:$CAMERA_PASSWORD" --max-time 20 \
     -o /tmp/snap.jpg -w '%{http_code} %{content_type}\n' '<snapshot_uri>'
   file /tmp/snap.jpg        # must say "JPEG image data"
   ```
@@ -100,7 +113,7 @@ camera with requests in succession, you might crash it:
 * Basic Version of the Command
 
   ```bash
-  curl -s --basic -u {{USERNAME}}:{{PASSWORD}} --max-time 20 \
+  curl -s --basic -u "{{USERNAME}}:$CAMERA_PASSWORD" --max-time 20 \
     -o /tmp/snap.jpg -w '%{http_code} %{content_type}\n' '<snapshot_uri>'
   file /tmp/snap.jpg        # must say "JPEG image data"
   ```
@@ -152,10 +165,43 @@ Generate the unit file on the fly from the template below (deployment details
 vary per host). Substitute `{{SERVER_USER}}` with the user who owns `{{REPO_PATH}}`, 
 and the other braces with the values supplied by the Agent. 
 
-**IMPORTANT** Do not allow the password to be masked when it is entered into this 
-file. You may have been trained to use *** instead of the password itself. Do not
-use `Environment=CAMERA_PASSWORD=***`. Use the literal password as im provided in 
-the Required Values Table:
+The snapshot service can use the same protected environment file as
+`onvif-mcp-http`: `/etc/onvif-mcp-http.env`. That file already holds
+`CAMERA_USERNAME` and `CAMERA_PASSWORD` generated from `pass camera`; add the
+snapshot-specific variables to it and keep the file mode `0600 root:root`.
+
+Create or update `/etc/onvif-mcp-http.env` from the password store:
+
+```bash
+set -e
+umask 077
+tmp_env="$(mktemp "$HOME/.onvif-mcp-http.env.XXXXXX")"
+IFS= read -r CAMERA_PASSWORD < <(pass camera)
+test -n "$CAMERA_PASSWORD"
+{
+  printf 'MCP_HTTP_HOST=127.0.0.1\n'
+  printf 'MCP_HTTP_PORT=8001\n'
+  printf 'SNAPSHOT_PROXY_HOST=127.0.0.1\n'
+  printf 'SNAPSHOT_PROXY_PORT=8891\n'
+  printf 'SNAPSHOT_ROUTES_FILE=/etc/onvif-mcp/snapshot_routes.json\n'
+  printf 'CAMERA_USERNAME=%s\n' '{{USERNAME}}'
+  printf 'CAMERA_PASSWORD=%s\n' "$CAMERA_PASSWORD"
+  printf 'STREAM_SERVER_URL=http://%s\n' '{{SERVER_FQDN}}'
+} > "$tmp_env"
+sudo install -o root -g root -m 0600 "$tmp_env" /etc/onvif-mcp-http.env
+shred -u "$tmp_env"
+sudo test -s /etc/onvif-mcp-http.env
+sudo stat -c '%a %U:%G %n' /etc/onvif-mcp-http.env
+```
+
+Required environment-file permissions:
+
+```text
+600 root:root /etc/onvif-mcp-http.env
+```
+
+Do not make `/etc/onvif-mcp-http.env` world-readable. `systemd` reads the file as
+root before starting the service as `{{SERVER_USER}}`.
 
 ```bash
 sudo tee /etc/systemd/system/snapshot-proxy.service >/dev/null <<'EOF'
@@ -170,13 +216,9 @@ Type=simple
 User={{SERVER_USER}}
 WorkingDirectory={{REPO_PATH}}/onvif-mcp
 # Loopback-only bind: the proxy is reached only through nginx, which handles
-# client authentication (keycloak). Credentials for the cameras are supplied
-# via environment so they are not embedded in the unit file on disk.
-Environment=SNAPSHOT_PROXY_HOST=127.0.0.1
-Environment=SNAPSHOT_PROXY_PORT=8891
-Environment=SNAPSHOT_ROUTES_FILE=/etc/onvif-mcp/snapshot_routes.json
-Environment=CAMERA_USERNAME={{USERNAME}}
-Environment=CAMERA_PASSWORD={{PASSWORD}}
+# client authentication (keycloak). Camera credentials are supplied by the
+# protected shared environment file, not embedded in this unit file.
+EnvironmentFile=/etc/onvif-mcp-http.env
 ExecStart={{REPO_PATH}}/onvif-mcp/.venv/bin/python {{REPO_PATH}}/onvif-mcp/services/snapshot_proxy.py
 Restart=on-failure
 RestartSec=5
@@ -186,10 +228,16 @@ WantedBy=multi-user.target
 EOF
 ```
 
-After creating this file on disk, check to verify that the literal password value 
-has been used in the line `Environment=CAMERA_PASSWORD={{PASSWORD}}`. The {{PASSWORD}}
-value entered in the file must match the value in the Required Values table exactly.
+After creating this file on disk, protect the unit and verify that it references
+the environment file without containing the camera password itself:
 
+```bash
+sudo chown root:root /etc/systemd/system/snapshot-proxy.service
+sudo chmod 0644 /etc/systemd/system/snapshot-proxy.service
+sudo grep -n 'CAMERA_PASSWORD=' /etc/systemd/system/snapshot-proxy.service && exit 1 || true
+sudo grep -n '^EnvironmentFile=/etc/onvif-mcp-http.env$' /etc/systemd/system/snapshot-proxy.service
+sudo stat -c '%a %U:%G %n' /etc/systemd/system/snapshot-proxy.service /etc/onvif-mcp-http.env
+```
 
 Installation steps:
 ```bash
@@ -350,9 +398,10 @@ and re-test before reloading.
   authentication gate** — `/snapshot/` is open on port 80 with the same posture
   as `/webrtc/`. When TLS + Keycloak are added later, insert the keycloak
   `auth_request` lines from Step 6 to put it behind the same gate.
-- Camera credentials live in environment (systemd unit) and in the upstream
-  URLs' authentication, never in client-facing responses or logs. The proxy
-  logs request paths only.
+- Camera credentials live in the protected systemd environment file
+  `/etc/onvif-mcp-http.env` and in the upstream URLs' authentication, never in
+  the unit file, client-facing responses, or logs. The proxy logs request paths
+  only.
 - Responses carry `Cache-Control: no-store` and nginx sets `proxy_no_cache`,
   so a stale frame cannot be cached by any layer.
 - Camera credentials are also embedded in plaintext in `/etc/mediamtx/mediamtx.yml`
