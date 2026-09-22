@@ -1,4 +1,4 @@
-Resto# Keycloak backup and restore
+# Keycloak backup and restore
 
 This is the shared procedure for Keycloak recovery points. KEYCLOAK.md,
 STREAM_AUTH.md, ADD_USER.md and ADD_CLIENT_ON_SERVER.md identify when to run
@@ -36,68 +36,225 @@ write these two archives into `keycloak-*`, `stream-auth-*`, `add-user-*`, or
 
 ## Create a checkpoint
 
-1. Verify that the intended backup share is mounted and writable. Create
-   `{{BACKUP_PATH}}/keycloak/` if needed. Prepare a uniquely named hidden
-   staging directory under that parent; never use a final timestamp directory
-   for an incomplete backup. Restrict access because both archives contain
-   secrets. Record the existing local dump filenames before starting.
+This procedure intentionally spells out the mechanics. Agents must not improvise
+folder names, reuse old dump files, or treat a successful local dump as a published
+off-host recovery point. A checkpoint is complete only after `SHA256SUMS` verifies
+inside the backup share and the hidden staging directory is renamed to its final
+timestamp.
 
-2. Invoke the installed one-shot service:
+### 1. Preflight and staging
 
-   ```bash
-   sudo systemctl start keycloak-postgres-backup.service
-   sudo systemctl show keycloak-postgres-backup.service -p Result -p ExecMainStatus
-   ```
+Confirm the Keycloak stack is stable before asking it for a dump:
 
-   Require success and exactly one new, nonempty dump under
-   `/var/backups/keycloak-postgres/`, mode 0600, root:root. Identify the new
-   file by comparison with the pre-run listing; do not silently use an older
-   dump when this invocation fails. No timer is required. The service only
-   creates the local dump; the remaining steps are mandatory.
+```bash
+sudo docker compose --project-directory /opt/keycloak ps
+systemctl is-active docker
+systemctl is-active keycloak-postgres-backup.service >/dev/null 2>&1 || true
+sudo stat -c '%A %U %G %n' /opt/keycloak /opt/keycloak/.env /opt/keycloak/compose.yaml
+sudo find /opt/keycloak -maxdepth 1 -type f -name '*.pass' -printf '%M %u %g %s %p\n'
+```
 
-3. Archive `/opt/keycloak/` as `keycloak.tar`, with archive paths rooted at
-   `keycloak/` (create with `-C /opt keycloak`). Include Compose configuration,
-   `.env`, and account `.pass` files; preserve ownership, modes, ACLs and
-   xattrs. Verify secret files are mode 0600 and Compose configuration mode
-   0640 before capture. Exclude token files; never copy tokens from client
-   caches. Do not print secret contents.
+Require:
 
-4. Archive **only the new dump** as `keycloak-postgres.tar`, with a single
-   file at `keycloak-postgres-backups/<dump-basename>.dump`. Preserve its
-   root ownership and 0600 mode. Use a protected temporary directory or an
-   explicit tar path transform to produce this archive root. Do not archive
-   the complete local dump history again. Each checkpoint is a full snapshot
-   and requires no earlier checkpoint to restore its database.
+- PostgreSQL is healthy and Keycloak is running, unless the triggering operation
+  explicitly stopped them for a maintenance window.
+- `/opt/keycloak/.env` and every `/opt/keycloak/*.pass` file are root:root mode
+  `0600`.
+- `/opt/keycloak/compose.yaml` is root:root mode `0640`.
+- The backup script and service were installed from KEYCLOAK.md §14.
 
-5. Write `metadata.txt` with the UTC capture time, triggering runbook or
-   maintenance operation, exact dump basename, Keycloak/PostgreSQL image
-   versions (including oauth2-proxy when present), and verification results. 
-   Record configuration changes and references to applicable nginx/systemd 
-   backups. Passwords, tokens, `.env` values, and database contents must not 
-   appear in metadata or logs.
+Create the hidden staging directory and export its path for the Python snippets:
 
-6. Verify both archived files can be listed and contain the required members.
-   Read the dump back from the staged archive into a protected temporary file
-   and require successful `pg_restore --list` with catalog output suppressed
-   (use the PostgreSQL container if necessary). Propagate failure and remove
-   temporary files. Do not treat a catalog check as a full restore test;
-   retain KEYCLOAK.md §15's isolated restore test requirement for initial
-   installation.
+```bash
+set -euo pipefail
+BACKUP_PATH="{{BACKUP_PATH}}"
+ts="$(date -u +%Y%m%d%H%M%SZ)"
+parent="$BACKUP_PATH/keycloak"
+final="$parent/$ts"
+staging="$parent/.$ts.staging.$$"
+export staging
 
-7. Generate `SHA256SUMS` covering `keycloak.tar`, `keycloak-postgres.tar`, and
-   `metadata.txt`, and run `sha256sum -c SHA256SUMS` against the files on the
-   share. Only after all checks pass, rename the staging directory to its
-   final UTC timestamp, within the same parent and without replacing an
-   existing destination. Failed staging directories are not recovery points.
-   Preserve completed checkpoints unchanged; local dump pruning must not
-   prune this off-host history.
+install -d -m 700 "$parent"
+test ! -e "$final"
+test ! -e "$staging"
+install -d -m 700 "$staging"
+```
 
-The archive pair recovers `/opt/keycloak/` configuration and database state.
-Host packages, external mounts, CA recovery, nginx, and other systemd units
-remain separate prerequisites recorded in metadata. For coordinated nginx
-and Keycloak changes, prepare both checkpoint paths before generating their
-metadata/checksums and record the compatible pair; publish only after each
-checkpoint's checks pass. Do not mutate a completed checkpoint to add links.
+Do not create `keycloak-*`, `stream-auth-*`, `add-user-*`, or
+`add-client-on-server-*` folders for these two archives. Those names are not the
+shared recovery history.
+
+### 2. Run the one-shot dump service and identify the new dump
+
+Record the dump directory contents before and after the service. This avoids the
+common mistake of silently archiving an older dump after a failed run.
+
+```bash
+sudo find /var/backups/keycloak-postgres -maxdepth 1 -type f -name 'keycloak-*.dump' \
+  -printf '%f\n' | sort > "$staging/dumps.before"
+
+sudo systemctl start keycloak-postgres-backup.service
+sudo systemctl show keycloak-postgres-backup.service -p Result -p ExecMainStatus | tee "$staging/service-result.txt"
+
+grep -Fx 'Result=success' "$staging/service-result.txt"
+grep -Fx 'ExecMainStatus=0' "$staging/service-result.txt"
+
+sudo find /var/backups/keycloak-postgres -maxdepth 1 -type f -name 'keycloak-*.dump' \
+  -printf '%f\n' | sort > "$staging/dumps.after"
+comm -13 "$staging/dumps.before" "$staging/dumps.after" > "$staging/new-dump-name"
+test "$(wc -l < "$staging/new-dump-name")" -eq 1
+
+dump_name="$(cat "$staging/new-dump-name")"
+dump_path="/var/backups/keycloak-postgres/$dump_name"
+sudo stat -c '%A %U %G %s %n' "$dump_path" | tee "$staging/new-dump-stat.txt"
+sudo test -s "$dump_path"
+sudo test "$(sudo stat -c '%a %U %G' "$dump_path")" = '600 root root'
+```
+
+If any command fails, stop and leave or remove the hidden staging directory. Do
+not continue with an older dump.
+
+### 3. Archive `/opt/keycloak` as `keycloak.tar`
+
+The archive root must be `keycloak/`, not `/opt/keycloak/` and not absolute
+paths. This archive intentionally contains recovery secrets (`.env` and `*.pass`),
+so do not print file contents.
+
+```bash
+sudo tar \
+  --owner=0 --group=0 --preserve-permissions --acls --xattrs \
+  -cf "$staging/keycloak.tar" \
+  -C /opt keycloak
+```
+
+Verify the member root and reject token/cache artifacts:
+
+```bash
+sudo tar -tf "$staging/keycloak.tar" | tee "$staging/keycloak.members"
+if grep -Ev '^(keycloak/?|keycloak/)' "$staging/keycloak.members"; then
+  echo 'ERROR: keycloak.tar contains a member outside keycloak/' >&2
+  exit 1
+fi
+if grep -Ei '(mcp-tokens|kcadm\.config|\.kctok|\.kctmp|refresh_token|access_token|client-token|token-cache)' "$staging/keycloak.members"; then
+  echo 'ERROR: token/cache artifact included in keycloak.tar' >&2
+  exit 1
+fi
+```
+
+Expected secret/config files are allowed and required for recovery:
+
+- `keycloak/.env` mode `0600`;
+- `keycloak/admin.pass` and user `*.pass` files mode `0600`;
+- `keycloak/compose.yaml` mode `0640`.
+
+### 4. Archive only the new PostgreSQL dump
+
+Do not archive `/var/backups/keycloak-postgres/` as a directory. It contains local
+history, not just this recovery point. Stage only the new dump under the required
+archive root:
+
+```bash
+dump_name="$(cat "$staging/new-dump-name")"
+install -d -m 700 "$staging/dumpstage/keycloak-postgres-backups"
+sudo install -o root -g root -m 600 \
+  "/var/backups/keycloak-postgres/$dump_name" \
+  "$staging/dumpstage/keycloak-postgres-backups/$dump_name"
+
+sudo tar \
+  --owner=0 --group=0 --preserve-permissions --acls --xattrs \
+  -cf "$staging/keycloak-postgres.tar" \
+  -C "$staging/dumpstage" "keycloak-postgres-backups/$dump_name"
+```
+
+Verify it has exactly one member and that the mode is preserved:
+
+```bash
+sudo tar -tf "$staging/keycloak-postgres.tar" | tee "$staging/postgres.members"
+test "$(wc -l < "$staging/postgres.members")" -eq 1
+grep -Fx "keycloak-postgres-backups/$dump_name" "$staging/postgres.members"
+sudo tar -tvf "$staging/keycloak-postgres.tar" | tee "$staging/postgres.member-stat"
+grep -E '^-rw------- .* keycloak-postgres-backups/' "$staging/postgres.member-stat"
+```
+
+### 5. Read back and validate the staged dump archive
+
+List both tar files and reject unsafe paths:
+
+```bash
+python3 - <<'PY'
+import os, tarfile
+from pathlib import Path
+staging = Path(os.environ['staging'])
+for name in ['keycloak.tar', 'keycloak-postgres.tar']:
+    with tarfile.open(staging / name) as tf:
+        for m in tf.getmembers():
+            if m.name.startswith('/') or '..' in Path(m.name).parts:
+                raise SystemExit(f'{name}: unsafe member path {m.name}')
+print('archive path safety checks passed')
+PY
+```
+
+Extract the staged database dump to protected temporary storage and run
+`pg_restore --list` with catalog output suppressed. Prefer the running PostgreSQL
+container so the check uses the deployment's compatible tool version:
+
+```bash
+sudo install -d -m 700 "$staging/pgcheck"
+sudo tar -xf "$staging/keycloak-postgres.tar" -C "$staging/pgcheck"
+pgcheck_dump="$staging/pgcheck/keycloak-postgres-backups/$dump_name"
+
+sudo sh -c "docker compose --project-directory /opt/keycloak exec -i postgres \
+  pg_restore --list < '$pgcheck_dump' >/dev/null"
+```
+
+This proves the dump catalog is readable. It is not a full restore test. Initial
+installation still requires KEYCLOAK.md §15's isolated restore test.
+
+### 6. Write metadata before checksums
+
+Create `$staging/metadata.txt` after the archive checks and before `SHA256SUMS`.
+It must contain actual values from this run:
+
+- capture UTC and triggering runbook/operation;
+- exact new dump basename;
+- `keycloak-postgres-backup.service` result lines;
+- Keycloak, PostgreSQL, and oauth2-proxy image versions (`docker compose images` is
+  sufficient; do not print expanded Compose config because it resolves secrets);
+- configuration changes captured by this checkpoint, described without secret values;
+- compatible nginx checkpoint path when this Keycloak state depends on nginx/oauth2;
+- host-unit checkpoint reference when applicable;
+- verification results: exactly one new dump, archive member checks, `pg_restore --list`,
+  checksum.
+
+Do not include passwords, `.env` values, OAuth codes, browser cookies, JWTs,
+refresh tokens, DCR registration access tokens, or database contents. It is fine
+to state that `.env` and `*.pass` files are intentionally archived inside
+`keycloak.tar` for recovery.
+
+### 7. Checksum and publish atomically
+
+Remove temporary extraction directories from staging before checksumming:
+
+```bash
+sudo rm -rf "$staging/dumpstage" "$staging/pgcheck"
+cd "$staging"
+sha256sum keycloak.tar keycloak-postgres.tar metadata.txt > SHA256SUMS
+sha256sum -c SHA256SUMS
+cd "$parent"
+mv "$staging" "$final"
+printf 'published keycloak checkpoint: %s\n' "$final"
+```
+
+After publication, completed timestamp directories are immutable. If the wrong
+dump, bad metadata, or an extra file was included, create a newer checkpoint;
+do not edit the completed one in place.
+
+The archive pair recovers `/opt/keycloak/` configuration and database state. Host
+packages, external mounts, CA recovery, nginx, and other systemd units remain
+separate prerequisites recorded in metadata. For coordinated nginx and Keycloak
+changes, prepare both checkpoint paths before checksumming and publication, record
+the compatible pair in both metadata files, and publish only after each checkpoint's
+own checks pass. Do not mutate a completed checkpoint to add links.
 
 ## Restore from checkpoint
 

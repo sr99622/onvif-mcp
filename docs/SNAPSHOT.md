@@ -31,7 +31,7 @@ configuration. (TLS + keycloak will be added later; when they are, the scheme
 switches to `https://` and the Step 6 auth lines reappear.) The nginx
 location, the proxy's route table keys, and that scheme must all agree.
 
-## Values supplied by Agent
+## Required Values
 
 | Value             | Description                                    |
 |-------------------|------------------------------------------------|
@@ -150,7 +150,12 @@ quirky endpoints).
 
 Generate the unit file on the fly from the template below (deployment details
 vary per host). Substitute `{{SERVER_USER}}` with the user who owns `{{REPO_PATH}}`, 
-and the other braces with the values supplied by the Agent:
+and the other braces with the values supplied by the Agent. 
+
+**IMPORTANT** Do not allow the password to be masked when it is entered into this 
+file. You may have been trained to use *** instead of the password itself. Do not
+use `Environment=CAMERA_PASSWORD=***`. Use the literal password as im provided in 
+the Required Values Table:
 
 ```bash
 sudo tee /etc/systemd/system/snapshot-proxy.service >/dev/null <<'EOF'
@@ -180,6 +185,11 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 ```
+
+After creating this file on disk, check to verify that the literal password value 
+has been used in the line `Environment=CAMERA_PASSWORD={{PASSWORD}}`. The {{PASSWORD}}
+value entered in the file must match the value in the Required Values table exactly.
+
 
 Installation steps:
 ```bash

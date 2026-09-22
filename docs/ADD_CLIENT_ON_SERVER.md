@@ -12,7 +12,7 @@ server and Keycloak, and where Keycloak runs locally (native install or
 compose project). All calls are made from the server host against the
 loopback Keycloak listener; nothing here touches the network-facing stack.
 
-## Value supplied by the Agent
+## Required Values
 
 | Symbol | Description |
 |--------|-------------|

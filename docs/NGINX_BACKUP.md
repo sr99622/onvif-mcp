@@ -51,44 +51,253 @@ contain authentication data.
 
 ## Create a checkpoint
 
-1. Complete the originating runbook's configuration and endpoint checks.
-   Require `sudo nginx -t` success. Verify the default site is disabled and,
-   for HTTPS stages, the intended unpinned HTTPS listener is present. Inspect
-   active includes for accidental backup files or duplicate vhosts. Do not
-   publish an unverified or partially configured state as a completed checkpoint.
+This section is written for agents that are prone to over-including files. Follow
+it literally. A completed checkpoint is published only by an atomic rename from a
+hidden staging directory after all checks pass.
 
-2. Confirm the intended backup share is mounted and writable. Create a unique
-   hidden staging directory under `{{BACKUP_PATH}}/nginx/`, with restricted
-   access. Freeze nginx configuration changes during capture. Record the UTC
-   capture time, triggering runbook/maintenance operation, nginx package and
-   module versions, required service user, selected Keycloak checkpoint (if
-   used), external dependencies, public certificate identities, and exclusions
-   in `metadata.txt`. Do not record private keys, passwords, or token values.
+### 1. Preflight: prove the live state is checkpoint-worthy
 
-3. Create `nginx.tar` using the reviewed manifest, `-C /`, and tar's ownership,
-   permissions, ACL/xattr preservation options. Do not follow symlinks. Include
-   all current configuration, even directories untouched by this runbook.
-   Compare the archived members against the manifest and check symlink targets.
+Run these checks before creating any archive:
 
-4. Read back the archive from the share into a protected temporary inspection
-   directory. Verify archive paths are relative and contain no `..` traversal,
-   expected files and modes are present, all private-key exclusions hold, and
-   the archived configuration matches the captured source. Re-run `nginx -t`
-   while the source remains unchanged. Do not run an extracted nginx config
-   directly against the live host: absolute includes may test live files.
-   A readable archive and syntax check are not an isolated restore test.
+```bash
+sudo nginx -t
+sudo nginx -T >/tmp/nginx-effective.txt
+sudo ss -lntp 'sport = :443' || true
+sudo ls -la /etc/nginx/conf.d /etc/nginx/sites-enabled /etc/nginx/sites-available
+systemctl show nginx.service --property=FragmentPath --property=DropInPaths
+```
 
-5. Generate `SHA256SUMS` for `nginx.tar` and `metadata.txt`; verify it on the
-   share with `sha256sum -c SHA256SUMS`. Record validation results before
-   generating checksums. Rename the staging directory to its final timestamp
-   within the same parent only after success, without replacing any existing
-   destination. Failures remain unpublished. Remove protected temporary files.
+Require all of the following before continuing:
 
-Take a fresh checkpoint after each later nginx configuration or public
-certificate change, including certificate renewal. A pre-change rollback copy
-may be kept locally outside nginx include paths, but is not a completed
-post-change checkpoint. Do not create `final-etc-nginx-*.tar` artifacts in
-procedure-named folders. Other backup targets retain their own procedures.
+- `nginx -t` reports success.
+- HTTPS stages use `listen 443 ssl;` without pinning to `{{SERVER_IP}}:443`.
+- There is no enabled default site unless metadata explicitly explains why it is
+  active and required. In the verified deployment, `sites-enabled/default` must
+  be absent.
+- No rollback/backup file is loaded by nginx. Remember: nginx loads every
+  regular file under `conf.d/*.conf` and every enabled site target.
+- The live HTTPS vhost, the HTTP redirect/CA-distribution vhost, `/ca/`, `/auth/`,
+  `/oauth2/`, `/mcp`, application routes, WebRTC, and snapshot routes have all
+  passed the originating runbook's functional checks.
+
+If any check fails, stop. Do not publish a checkpoint of a known-bad state.
+
+### 2. Create a private staging directory
+
+Use the supplied backup path, not a path copied from an older checkpoint:
+
+```bash
+set -euo pipefail
+BACKUP_PATH="{{BACKUP_PATH}}"
+ts="$(date -u +%Y%m%d%H%M%SZ)"
+parent="$BACKUP_PATH/nginx"
+final="$parent/$ts"
+staging="$parent/.$ts.staging.$$"
+export staging
+
+install -d -m 700 "$parent"
+test ! -e "$final"
+test ! -e "$staging"
+install -d -m 700 "$staging"
+```
+
+All temporary manifest, extraction, and metadata files for this checkpoint must
+stay under `$staging` or a protected local scratch directory. Never stage files
+inside `/etc/nginx`, `conf.d`, or `sites-enabled`.
+
+### 3. Build the explicit manifest
+
+Do not archive `/etc/nginx` as a directory operand. A directory operand makes tar
+recurse and re-add files you meant to exclude. Instead, generate a reviewed list
+of root-relative file/symlink paths and feed that list to tar.
+
+The manifest must include:
+
+- current active nginx configuration files under `/etc/nginx`;
+- public TLS material: `.crt.pem`, `.chain.pem`, `.csr.pem`, CA certificates;
+- `sites-enabled` symlinks, preserved as symlinks;
+- nginx-specific systemd override files if they exist;
+- required external configuration inputs such as `/etc/onvif-mcp/camera_registry.json`,
+  `/etc/onvif-mcp/snapshot_routes.json`, and `/srv/camera-pki/public/*` when those
+  are referenced by nginx.
+
+The manifest must exclude:
+
+- every private key, including the active `ssl_certificate_key` target;
+- `/etc/nginx/backups/`;
+- `*.backup-*`, `*.pre-*` rollback copies unless they are active configuration
+  inputs, and `nginx.conf.backup-*`;
+- inactive `sites-available/default` and inactive enabled-site targets;
+- runbook copies, logs, extracted inspection directories, and temporary files.
+
+Recommended manifest-generation pattern:
+
+```bash
+sudo env staging="$staging" python3 - <<'PY'
+from pathlib import Path
+import os, re, sys
+out = Path(os.environ['staging']) / 'manifest.txt'
+items = []
+
+def add_file(path):
+    p = Path(path)
+    if p.exists() and (p.is_file() or p.is_symlink()):
+        items.append(str(p.relative_to('/')))
+
+def rejected(rel, p):
+    if rel.startswith('etc/nginx/backups/'):
+        return True
+    if re.search(r'(^|/)default$', rel):
+        return True
+    if re.search(r'\.backup-|backup-\d{4}-\d{2}-\d{2}|nginx\.conf\.backup-|\.pre-', rel):
+        return True
+    if re.search(r'(\.key(\.|$)|key\.pem$)', rel):
+        return True
+    try:
+        if p.is_file():
+            head = p.open('rb').read(4096)
+            if b'BEGIN PRIVATE KEY' in head or b'BEGIN RSA PRIVATE KEY' in head or b'BEGIN EC PRIVATE KEY' in head:
+                return True
+    except PermissionError:
+        raise SystemExit(f'cannot inspect candidate file: {p}')
+    return False
+
+for root in ['/etc/nginx', '/srv/camera-pki/public']:
+    r = Path(root)
+    if not r.exists():
+        continue
+    for p in sorted(r.rglob('*')):
+        if p.is_dir():
+            continue              # avoid tar recursion from directory operands
+        rel = str(p.relative_to('/'))
+        if not rejected(rel, p):
+            items.append(rel)
+
+for path in [
+    '/etc/onvif-mcp/camera_registry.json',
+    '/etc/onvif-mcp/snapshot_routes.json',
+    '/etc/systemd/system/nginx.service',
+]:
+    add_file(path)
+
+d = Path('/etc/systemd/system/nginx.service.d')
+if d.exists():
+    for p in sorted(d.rglob('*')):
+        if p.is_file() or p.is_symlink():
+            items.append(str(p.relative_to('/')))
+
+items = sorted(set(items))
+for rel in items:
+    if rel.startswith('/') or '..' in Path(rel).parts:
+        raise SystemExit(f'bad manifest path: {rel}')
+out.write_text('\n'.join(items) + '\n')
+os.chmod(out, 0o600)
+print(f'wrote {out} with {len(items)} members')
+PY
+```
+
+Review the manifest before archiving:
+
+```bash
+sudo sed -n '1,240p' "$staging/manifest.txt"
+if sudo grep -E '(\.key(\.|$)|key\.pem$|\.backup-|backup-[0-9]{4}-[0-9]{2}-[0-9]{2}|nginx\.conf\.backup-|/default$|/backups/)' "$staging/manifest.txt"; then
+  echo 'ERROR: forbidden member in manifest' >&2
+  exit 1
+fi
+```
+
+If the grep prints any line, fix the live/staging state and rebuild the manifest.
+Do not continue by deciding the line is harmless.
+
+### 4. Create and validate `nginx.tar`
+
+```bash
+sudo tar \
+  --owner=0 --group=0 --preserve-permissions --acls --xattrs \
+  -cf "$staging/nginx.tar" \
+  -C / --files-from "$staging/manifest.txt"
+
+sudo tar -tf "$staging/nginx.tar" | sort > "$staging/archive-members.txt"
+sort "$staging/manifest.txt" > "$staging/manifest.sorted"
+diff -u "$staging/manifest.sorted" "$staging/archive-members.txt"
+```
+
+The diff must be empty. A nonempty diff means tar included extra files or missed
+files; do not publish.
+
+Then run these archive checks:
+
+```bash
+sudo env staging="$staging" python3 - <<'PY'
+import os, tarfile
+from pathlib import Path
+staging = Path(os.environ['staging'])
+with tarfile.open(staging / 'nginx.tar') as tf:
+    for m in tf.getmembers():
+        if m.name.startswith('/') or '..' in Path(m.name).parts:
+            raise SystemExit(f'unsafe member path: {m.name}')
+        if m.isfile() and m.size < 2_000_000:
+            data = tf.extractfile(m).read()
+            if b'BEGIN PRIVATE KEY' in data or b'BEGIN RSA PRIVATE KEY' in data or b'BEGIN EC PRIVATE KEY' in data:
+                raise SystemExit(f'private-key material found in archive member {m.name}')
+print('nginx.tar path and private-key scan passed')
+PY
+```
+
+Record symlinks, especially `sites-enabled/*`, with:
+
+```bash
+sudo tar -tvf "$staging/nginx.tar" | grep '^l' || true
+```
+
+### 5. Write metadata before checksums
+
+Create `$staging/metadata.txt`. It must include actual facts from this capture,
+not generic statements:
+
+- capture UTC and triggering runbook/operation;
+- nginx package version and service user;
+- exact active HTTPS vhost file(s) and HTTP vhost file(s);
+- public certificate subject/issuer/fingerprint;
+- nginx-specific unit override presence or absence;
+- external dependencies not archived, including application web roots and loopback
+  upstream services;
+- compatible Keycloak checkpoint path if this nginx state depends on Keycloak or
+  oauth2-proxy;
+- explicit exclusions, especially private key path and backup/default files;
+- verification results: `nginx -t`, manifest diff, private-key scan, checksum.
+
+Example fields to collect:
+
+```bash
+nginx -v 2>&1
+sudo openssl x509 -in /etc/nginx/tls/{{SERVER_FQDN}}.crt.pem -noout -subject -issuer -fingerprint -sha256
+systemctl show nginx.service --property=FragmentPath --property=DropInPaths
+```
+
+Do not put private key bytes, `.env` values, passwords, cookies, bearer tokens, or
+client tokens in metadata.
+
+### 6. Checksum and publish atomically
+
+```bash
+cd "$staging"
+sha256sum nginx.tar metadata.txt > SHA256SUMS
+sha256sum -c SHA256SUMS
+cd "$parent"
+mv "$staging" "$final"
+printf 'published nginx checkpoint: %s\n' "$final"
+```
+
+After publication, completed timestamp directories are immutable. If metadata is
+wrong or the archive contains an excluded file, create a new checkpoint; do not edit
+the completed one in place.
+
+Take a fresh checkpoint after each later nginx configuration or public certificate
+change, including certificate renewal. A pre-change rollback copy may be kept locally
+outside nginx include paths, but it is not a completed post-change checkpoint. Do not
+create `final-etc-nginx-*.tar` artifacts in procedure-named folders. Other backup
+targets retain their own procedures.
 
 ## Restore from checkpoint
 

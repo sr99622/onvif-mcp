@@ -152,7 +152,7 @@ Be mindful of model context size when running the configurations shown below. As
 
     The Keycloak server provides authentication services for the site. During installation a default user is created that can be used for testing the configuration. A fresh context may be needed at this point, if so, re-intialize the agent context in the prompt by having them review this document again. 
 
-    **Required Value**
+    **Required Values**
 
     | Name | Description | Site Value |
     |------|-------------|------------|

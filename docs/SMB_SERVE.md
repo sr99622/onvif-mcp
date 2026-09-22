@@ -64,7 +64,7 @@ getent ahosts taurus.home.arpa
 
 Require the hostname lookup to return taurus's address before continuing. `cifs-utils` supplies the mount helper that handles the hostname and credentials file.
 
-Confirm `/mnt/taurus-camera-ca` and `/etc/cifs-utils/credentials/taurus-camera-ca` are not already used for another purpose. For a partially completed setup, reuse and correct its existing configuration. Leave `/mnt/taurus` untouched.
+Confirm `/mnt/taurus-camera-ca` and `/etc/cifs-utils/credentials/taurus-camera-ca` are not already used for another purpose. For a partially completed setup, reuse and correct its existing configuration.
 
 Create the credentials directory and file without erasing existing credentials, set restrictive permissions, and open the file:
 
