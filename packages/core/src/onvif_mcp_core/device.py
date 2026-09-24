@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 
 from libonvif.devices.camera import (
     get_camera_by_ip,
@@ -14,14 +13,17 @@ from libonvif.devices.camera import (
     set_system_date_and_time,
 )
 
+from .credentials import get_camera_credentials
+
 logger = logging.getLogger(__name__)
 
 
 def _query_camera(ip_address: str):
+    credentials = get_camera_credentials()
     return get_camera_by_ip(
         ip_address,
-        os.environ.get("CAMERA_USERNAME", ""),
-        os.environ.get("CAMERA_PASSWORD", ""),
+        credentials.username,
+        credentials.password,
     )
 
 

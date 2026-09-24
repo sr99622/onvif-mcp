@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from collections.abc import Callable
 from typing import Any
 
@@ -11,6 +10,8 @@ from libonvif.devices.camera import (
     get_camera_by_ip,
     set_audio_encoder_configuration,
 )
+
+from .credentials import get_camera_credentials
 
 logger = logging.getLogger(__name__)
 
@@ -24,10 +25,11 @@ async def _set_audio_encoder_value(
     apply_value: Callable[[Any, Any], None],
 ) -> str:
     try:
+        credentials = get_camera_credentials()
         camera = get_camera_by_ip(
             ip_address,
-            os.environ.get("CAMERA_USERNAME", ""),
-            os.environ.get("CAMERA_PASSWORD", ""),
+            credentials.username,
+            credentials.password,
         )
     except Exception as ex:
         logger.error("Failed to query camera at %s: %s", ip_address, ex)

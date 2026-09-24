@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 
 from libonvif.datastructures.capabilities import Capabilities, PTZCapabilities
 from libonvif.datastructures.ptz import PTZPreset, PresetTour, TourSpot
@@ -23,6 +22,8 @@ from libonvif.devices.camera import (
     set_preset,
 )
 
+from .credentials import get_camera_credentials
+
 logger = logging.getLogger(__name__)
 
 MISSING_PTZ_XADDR = (
@@ -34,18 +35,20 @@ MISSING_PTZ_XADDR = (
 def _command_camera(ptz_xaddr: str, time_offset: int) -> Camera:
     camera = Camera()
     camera.capabilities = Capabilities(ptz=PTZCapabilities(xaddr=ptz_xaddr))
-    camera.username = os.environ.get("CAMERA_USERNAME", "")
-    camera.password = os.environ.get("CAMERA_PASSWORD", "")
+    credentials = get_camera_credentials()
+    camera.username = credentials.username
+    camera.password = credentials.password
     camera.time_offset = time_offset
     camera.errors = None
     return camera
 
 
 def _query_camera(ip_address: str):
+    credentials = get_camera_credentials()
     return get_camera_by_ip(
         ip_address,
-        os.environ.get("CAMERA_USERNAME", ""),
-        os.environ.get("CAMERA_PASSWORD", ""),
+        credentials.username,
+        credentials.password,
     )
 
 

@@ -397,7 +397,7 @@ or distribution responsibility even if a small shared helper is later useful.
 
 ## Security and operational observations
 
-- Camera credentials come from `CAMERA_USERNAME` and `CAMERA_PASSWORD`.
+- Camera credentials are acquired through `onvif_mcp_core.credentials.get_camera_credentials()`, which reads `CAMERA_USERNAME` and `CAMERA_PASSWORD` on each call with empty-string defaults. Discovery callbacks retain their existing signature and copy the returned credentials onto camera objects. Camera JSON credential handling is unchanged.
 - Full camera serialization currently includes credential fields. Avoid
   logging, committing, or unnecessarily displaying complete `get_camera`
   payloads. Consider redaction as a separate security improvement.

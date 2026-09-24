@@ -53,6 +53,7 @@ from onvif_mcp_core.device import (
     sync_camera_time as sync_camera_time_core,
 )
 from onvif_mcp_core.camera_queries import get_adapters as get_adapters_query
+from onvif_mcp_core.credentials import get_camera_credentials
 from onvif_mcp_core.guidance import TOOL_GUIDANCE
 from onvif_mcp_core.streaming import get_web_player_url as get_web_player_url_core
 from onvif_mcp_core.tools import (
@@ -267,9 +268,10 @@ def _fetch_motion_snapshot(camera: Camera, filename: str, directory: Path = SNAP
     """
     snapshot_uri = camera.profiles[0].snapshot_uri
     try:
+        credentials = get_camera_credentials()
         response = requests.get(
             snapshot_uri,
-            auth=HTTPDigestAuth(os.environ.get("CAMERA_USERNAME", ""), os.environ.get("CAMERA_PASSWORD", "")),
+            auth=HTTPDigestAuth(credentials.username, credentials.password),
             timeout=10,
         )
         response.raise_for_status()
@@ -409,10 +411,11 @@ def _ensure_camera_subscription_entry(ip_address: str) -> dict:
         _event_server.start()
 
     if ip_address not in _camera_subscriptions:
+        credentials = get_camera_credentials()
         camera = get_camera_by_ip(
             ip_address,
-            os.environ.get("CAMERA_USERNAME", ""),
-            os.environ.get("CAMERA_PASSWORD", ""),
+            credentials.username,
+            credentials.password,
         )
         _camera_subscriptions[ip_address] = {
             "camera": camera,
@@ -773,27 +776,6 @@ async def reboot_camera(ip_address: str) -> str:
     return await reboot_camera_core(ip_address)
 
 @mcp.tool()
-async def check_camera_mcp_environment() -> str:
-    """
-    Collect information about the environment under which camera server is running
-    
-    Args:
-        None
-
-    Returns:
-        A delimited string containing environment variable settings
-
-    """
-
-    output = []
-    output.append(os.environ.get("CAMERA_USERNAME", "Empty $env:CAMERA_USERNAME"))
-    output.append(os.environ.get("CAMERA_PASSWORD", "Empty $env:CAMERA_PASSWORD"))
-    output.append(os.environ.get("STREAM_SERVER_URL", "Empty $env:STREAM_SERVER_URL"))
-    output.append(os.environ.get("PATH", "Empty $env:PATH"))
-
-    return "\n--\n".join(output)
-
-@mcp.tool()
 async def stream_camera(camera_device_information_serial_number: str, camera_media_profile_token: str) -> str:
     """
     Open a camera live stream in the user's default web browser.
@@ -845,7 +827,8 @@ async def get_snapshot_image_base64_encoded(url: str) -> str:
         raise ValueError(f"Refused to get snapshot from '{url}': must start with http:// or https://")
 
     try:
-        response = requests.get(url, auth=HTTPDigestAuth(os.environ.get("CAMERA_USERNAME", ""), os.environ.get("CAMERA_PASSWORD", "")), timeout=5)
+        credentials = get_camera_credentials()
+        response = requests.get(url, auth=HTTPDigestAuth(credentials.username, credentials.password), timeout=5)
         response.raise_for_status()
         return base64.b64encode(response.content).decode('utf-8')
     except Exception as e:
@@ -868,7 +851,8 @@ async def download_snapshot_to_file(url: str, file_path: str) -> str:
         return f"Refused to download '{url}': must start with http:// or https://"
 
     try:
-        response = requests.get(url, auth=HTTPDigestAuth(os.environ.get("CAMERA_USERNAME", ""), os.environ.get("CAMERA_PASSWORD", "")), timeout=5)
+        credentials = get_camera_credentials()
+        response = requests.get(url, auth=HTTPDigestAuth(credentials.username, credentials.password), timeout=5)
         response.raise_for_status()
         with open(file_path, 'wb') as f:
             f.write(response.content)
@@ -891,9 +875,8 @@ async def show_snapshot_in_browser(url: str) -> str:
     if not (url.startswith("http://") or url.startswith("https://")):
         return f"Refused to open '{url}': must start with http:// or https://"
 
-    camera_username = os.environ.get("CAMERA_USERNAME", "")
-    camera_password = os.environ.get("CAMERA_PASSWORD", "")
-    curl = f"{url[:7]}{camera_username}:{camera_password}@{url[7:]}"
+    credentials = get_camera_credentials()
+    curl = f"{url[:7]}{credentials.username}:{credentials.password}@{url[7:]}"
     opened = webbrowser.open(curl)
     if opened:
         return f"Opened {url} in default browser."

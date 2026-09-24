@@ -1,5 +1,6 @@
 """Shared functionality for the ONVIF MCP server transports."""
 
+from .credentials import CameraCredentials, get_camera_credentials
 from .audio import set_camera_audio_encoding, set_camera_audio_sample_rate
 from .camera_queries import get_adapters, get_camera, get_cameras
 from .device import change_camera_hostname, reboot_camera, sync_camera_time
@@ -20,6 +21,8 @@ from .video import (
 )
 
 __all__ = [
+    "CameraCredentials",
+    "get_camera_credentials",
     "get_camera",
     "get_cameras",
     "get_adapters",

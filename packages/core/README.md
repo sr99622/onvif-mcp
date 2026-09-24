@@ -107,10 +107,18 @@ implementations.
 
 ## Credentials and camera access
 
-Core operations use `libonvif` and read camera credentials from:
+Core operations use `libonvif` and obtain credentials through
+`onvif_mcp_core.credentials.get_camera_credentials()`. The accessor reads:
 
 - `CAMERA_USERNAME`
 - `CAMERA_PASSWORD`
+
+The accessor returns a `CameraCredentials` object with `username` and `password`
+attributes. It reads the environment on each call, uses an empty string for a
+missing variable, and preserves whitespace. Both MCP transports use this shared
+interface; discovery callbacks copy the values onto each camera object. Existing
+camera JSON credential handling is unchanged. No password-store or file provider
+is used.
 
 The functions return MCP-friendly status strings rather than raising routine
 camera communication or configuration errors to the transport. Functions that

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import sys
 from collections.abc import Mapping, Sequence
 from typing import Any
@@ -13,14 +12,16 @@ from libonvif.devices.camera import Camera, discover, get_camera_by_ip
 from libonvif.utils.adapters import find_adapters
 from libonvif.utils.serialization import to_dict
 
+from .credentials import get_camera_credentials
 from .streaming import build_web_player_url, build_web_snapshot_url
 
 logger = logging.getLogger(__name__)
 
 
 def _get_camera_credentials(camera: Camera) -> None:
-    camera.username = os.environ.get("CAMERA_USERNAME", "")
-    camera.password = os.environ.get("CAMERA_PASSWORD", "")
+    credentials = get_camera_credentials()
+    camera.username = credentials.username
+    camera.password = credentials.password
 
 
 def _on_error(xaddr: str, ex: Exception) -> None:
@@ -37,10 +38,11 @@ def _camera_filled(camera: Camera) -> None:
 
 async def get_camera(ip_address: str) -> str:
     """Get the full state of a camera at the specified IP address."""
+    credentials = get_camera_credentials()
     camera = get_camera_by_ip(
         ip_address,
-        os.environ.get("CAMERA_USERNAME", ""),
-        os.environ.get("CAMERA_PASSWORD", ""),
+        credentials.username,
+        credentials.password,
     )
     return camera.to_json()
 
