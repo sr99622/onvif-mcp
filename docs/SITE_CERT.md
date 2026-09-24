@@ -29,7 +29,7 @@ vault entry `camera-ca/age-archive-<DATE>` for the age archives).
 | `{{CA_ROOT_PATH}}` | Private CA root directory (e.g. `/home/stephen/Private-CA`) |
 | `{{BACKUP_PATH}}` | Mounted SMB share path (e.g. `/mnt/taurus`) |
 | `{{REPO_PATH}}` | Project repository location (the onvif-mcp repo lives at `{{REPO_PATH}}/onvif-mcp`) |
-| `{{DATE}}` | Current date for archive names (e.g. `2026-09-01`; never reuse a hardcoded value) |
+| `{{TIMESTAMP}}` | generated timestamp at capture time with `date -u +%Y%m%d%H%M%SZ` |
 
 Passphrases are **not** supplied as variables and never echoed. Both live in the
 local `pass` vault under the CA store's GPG key (see CREATE_CA_CERT.md §5).
@@ -204,33 +204,33 @@ correctly requires no new archive.)
 
 Issuance changes `index.txt` (plus `index.txt.old`) and advances `serial`
 (`serial.old`). Create a new archive immediately, named
-`camera-system-ca-after-<server>-cert-{{DATE}}.tar.gz.age` (replace `<server>`
+`camera-system-ca-after-<server>-cert-{{TIMESTAMP}}.tar.gz.age` (replace `<server>`
 with a short label for this server; a restore reissue should label it e.g.
 `<server>-cert-rebuild`), exactly as CREATE_CA_CERT.md §10–11
 prescribe:
 
 ```bash
 # encrypt (two prompts)
-bash -lc 'pass show camera-ca/age-archive-{{DATE}}; pass show camera-ca/age-archive-{{DATE}}' \
+bash -lc 'pass show camera-ca/age-archive-{{TIMESTAMP}}; pass show camera-ca/age-archive-{{TIMESTAMP}}' \
   | script -qec "stty -echo 2>/dev/null; set -o pipefail; \
       tar -C {{CA_ROOT_PATH}} -czf - camera-system-ca | \
-      age -p -o {{CA_ROOT_PATH}}/backups/camera-system-ca-after-<server>-cert-{{DATE}}.tar.gz.age" /dev/null
-chmod 600 "{{CA_ROOT_PATH}}/backups/camera-system-ca-after-<server>-cert-{{DATE}}.tar.gz.age"
+      age -p -o {{CA_ROOT_PATH}}/backups/camera-system-ca-after-<server>-cert-{{TIMESTAMP}}.tar.gz.age" /dev/null
+chmod 600 "{{CA_ROOT_PATH}}/backups/camera-system-ca-after-<server>-cert-{{TIMESTAMP}}.tar.gz.age"
 
 # verify decryption without extracting (one prompt), then wipe the decrypted copy
-bash -lc 'pass show camera-ca/age-archive-{{DATE}}' \
-  | script -qec "stty -echo 2>/dev/null; age -d {{CA_ROOT_PATH}}/backups/camera-system-ca-after-<server>-cert-{{DATE}}.tar.gz.age > /tmp/.ca-decrypted.tgz" /dev/null
+bash -lc 'pass show camera-ca/age-archive-{{TIMESTAMP}}' \
+  | script -qec "stty -echo 2>/dev/null; age -d {{CA_ROOT_PATH}}/backups/camera-system-ca-after-<server>-cert-{{TIMESTAMP}}.tar.gz.age > /tmp/.ca-decrypted.tgz" /dev/null
 tar -tzf /tmp/.ca-decrypted.tgz    # must list key, certs, issued/, csr/, index.txt(.old), serial(.old), newcerts/
 shred -u /tmp/.ca-decrypted.tgz
 
 # copy without overwriting; hashes must match exactly
 mkdir -p "{{BACKUP_PATH}}/Camera-CA-Backups"
 cp --update=none \
-  "{{CA_ROOT_PATH}}/backups/camera-system-ca-after-<server>-cert-{{DATE}}.tar.gz.age" \
+  "{{CA_ROOT_PATH}}/backups/camera-system-ca-after-<server>-cert-{{TIMESTAMP}}.tar.gz.age" \
   "{{BACKUP_PATH}}/Camera-CA-Backups/"
 sha256sum \
-  "{{CA_ROOT_PATH}}/backups/camera-system-ca-after-<server>-cert-{{DATE}}.tar.gz.age" \
-  "{{BACKUP_PATH}}/Camera-CA-Backups/camera-system-ca-after-<server>-cert-{{DATE}}.tar.gz.age"
+  "{{CA_ROOT_PATH}}/backups/camera-system-ca-after-<server>-cert-{{TIMESTAMP}}.tar.gz.age" \
+  "{{BACKUP_PATH}}/Camera-CA-Backups/camera-system-ca-after-<server>-cert-{{TIMESTAMP}}.tar.gz.age"
 ```
 
 The archive must contain the encrypted CA key, root cert, issued site

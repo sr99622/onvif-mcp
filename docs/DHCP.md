@@ -115,7 +115,8 @@ Use this configuration:
 {
   "Dhcp4": {
     "interfaces-config": {
-      "interfaces": [ "{{PRVT_CAMERA_NET_EN_NAME}}" ]
+      "interfaces": [ "enp171s0" ],
+      "dhcp-socket-type": "raw"
     },
 
     "lease-database": {
@@ -123,6 +124,9 @@ Use this configuration:
       "persist": true,
       "name": "/var/lib/kea/kea-leases4.csv"
     },
+
+    "match-client-id": false,
+    "decline-probation-period": 0,
 
     "valid-lifetime": 3600,
     "renew-timer": 900,
@@ -135,6 +139,17 @@ Use this configuration:
         "pools": [
           {
             "pool": "10.2.2.100 - 10.2.2.200"
+          }
+        ],
+        // Dahua style cameras reject DHCP replies if these options are missing
+        "option-data": [
+          {
+            "name": "routers",
+            "data": "10.2.2.1"
+          },
+          {
+            "name": "dhcp-server-identifier",
+            "data": "10.2.2.1"
           }
         ]
       }
@@ -155,11 +170,11 @@ Use this configuration:
 }
 ```
 
-The configuration intentionally contains no `routers` or `domain-name-servers` DHCP options. Clients therefore receive an address and subnet mask, but no gateway or DNS server.
-
 ## 4. Prevent Routing Between Interfaces
 
-Omitting a gateway from DHCP prevents normal client routing, but the server must also have IP forwarding disabled to enforce isolation:
+The configuration contains no `domain-name-servers` DHCP options. Many cameras have hard coded DNS entries anyway. Some cameras may not operate properly under DHCP if no gateway is specified. The server address is included under `routers` so that these cameras will accept the DHCP configuration.
+
+The server does not have forwarding capability, but the server must also have IP forwarding disabled to enforce isolation:
 
 ```bash
 sysctl net.ipv4.ip_forward

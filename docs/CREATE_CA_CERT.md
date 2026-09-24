@@ -24,11 +24,11 @@ store must already contain the `camera` and `smb` entries.
 |---|---|
 | `{{CA_ROOT_PATH}}` | Private CA root directory |
 | `{{BACKUP_PATH}}`     | Mounted SMB share path |
-| `{{DATE}}`         | Current date for archive names (e.g. `2026-09-01`; never reuse a hardcoded value) |
+| `{{TIMESTAMP}}` | generated timestamp at capture time with `date -u +%Y%m%d%H%M%SZ` |
 
 For password-store backups, append a unique suffix when more than one store
-backup is made on the same day, for example `{{DATE}}-initial`,
-`{{DATE}}-ca-passphrases`, or `{{DATE}}-pre-ca-archive`.
+backup is made on the same day, for example `{{TIMESTAMP}}-initial`,
+`{{TIMESTAMP}}-ca-passphrases`, or `{{TIMESTAMP}}-pre-ca-archive`.
 
 Passphrases are **not** supplied as variables and never echoed. Both live in the local
 `pass` vault under the store's GPG key:
@@ -263,7 +263,7 @@ Store them (masked), then wipe the temp files in the same command chain:
 
 ```bash
 pass insert -m camera-ca/root-key-passphrase < /tmp/.ca-root-key-pass
-pass insert -m camera-ca/age-archive-{{DATE}}    < /tmp/.ca-age-archive
+pass insert -m camera-ca/age-archive-{{TIMESTAMP}}    < /tmp/.ca-age-archive
 shred -u /tmp/.ca-root-key-pass /tmp/.ca-age-archive
 ls -la ~/.password-store/camera-ca/   # per-entry .gpg files, mode 600
 ```
@@ -274,7 +274,7 @@ contents:
 
 ```bash
 backup_dir="{{BACKUP_PATH}}/Camera-CA-Backups"
-backup_label="{{DATE}}-ca-passphrases"
+backup_label="{{TIMESTAMP}}-ca-passphrases"
 backup_file="$backup_dir/password-store-backup-$backup_label.tar.gz"
 mkdir -p "$backup_dir"
 test ! -e "$backup_file"
@@ -417,10 +417,9 @@ archive must be self-consistent.
 
 This `pass` version stores **per-entry `.gpg` files**, not a single `store.gpg`,
 so store backups must include the whole directory including the hidden `.gpg-id`.
-Use a new `{{DATE}}` or label if a backup with the same name already exists:
 
 ```bash
-backup_label="{{DATE}}-pre-ca-archive"
+backup_label="{{TIMESTAMP}}-pre-ca-archive"
 mkdir -p "{{BACKUP_PATH}}/Camera-CA-Backups"
 tar -C "$HOME" -czf \
   "{{CA_ROOT_PATH}}/backups/password-store-backup-$backup_label.tar.gz" .password-store
@@ -458,20 +457,20 @@ tree if any CA directory is not mode `700`; do not archive non-compliant permiss
 
 ```bash
 # encrypt (two prompts)
-bash -lc 'pass show camera-ca/age-archive-{{DATE}}; pass show camera-ca/age-archive-{{DATE}}' \
+bash -lc 'pass show camera-ca/age-archive-{{TIMESTAMP}}; pass show camera-ca/age-archive-{{TIMESTAMP}}' \
   | script -qec "stty -echo 2>/dev/null; set -o pipefail; \
       tar -C {{CA_ROOT_PATH}} -czf - camera-system-ca | \
-      age -p -o {{CA_ROOT_PATH}}/backups/camera-system-ca-initial-{{DATE}}.tar.gz.age" /dev/null
+      age -p -o {{CA_ROOT_PATH}}/backups/camera-system-ca-initial-{{TIMESTAMP}}.tar.gz.age" /dev/null
 
 # set mode 600
-chmod 600 "{{CA_ROOT_PATH}}/backups/camera-system-ca-initial-{{DATE}}.tar.gz.age"
+chmod 600 "{{CA_ROOT_PATH}}/backups/camera-system-ca-initial-{{TIMESTAMP}}.tar.gz.age"
 ```
 
 Verify decryption without extracting (one prompt):
 
 ```bash
-bash -lc 'pass show camera-ca/age-archive-{{DATE}}' \
-  | script -qec "stty -echo 2>/dev/null; age -d {{CA_ROOT_PATH}}/backups/camera-system-ca-initial-{{DATE}}.tar.gz.age > /tmp/.ca-decrypted.tgz" /dev/null
+bash -lc 'pass show camera-ca/age-archive-{{TIMESTAMP}}' \
+  | script -qec "stty -echo 2>/dev/null; age -d {{CA_ROOT_PATH}}/backups/camera-system-ca-initial-{{TIMESTAMP}}.tar.gz.age > /tmp/.ca-decrypted.tgz" /dev/null
 tar -tzf /tmp/.ca-decrypted.tgz    # must list key, cert, openssl.cnf, index.txt, serial, crlnumber
 shred -u /tmp/.ca-decrypted.tgz    # wipe the decrypted copy immediately
 ```
@@ -489,11 +488,11 @@ there):
 
 ```bash
 cp --update=none \
-  "{{CA_ROOT_PATH}}/backups/camera-system-ca-initial-{{DATE}}.tar.gz.age" \
+  "{{CA_ROOT_PATH}}/backups/camera-system-ca-initial-{{TIMESTAMP}}.tar.gz.age" \
   "{{BACKUP_PATH}}/Camera-CA-Backups/"
 sha256sum \
-  "{{CA_ROOT_PATH}}/backups/camera-system-ca-initial-{{DATE}}.tar.gz.age" \
-  "{{BACKUP_PATH}}/Camera-CA-Backups/camera-system-ca-initial-{{DATE}}.tar.gz.age"   # hashes must match exactly
+  "{{CA_ROOT_PATH}}/backups/camera-system-ca-initial-{{TIMESTAMP}}.tar.gz.age" \
+  "{{BACKUP_PATH}}/Camera-CA-Backups/camera-system-ca-initial-{{TIMESTAMP}}.tar.gz.age"   # hashes must match exactly
 ```
 
 ## 12. Confirm the GPG key backup
@@ -508,8 +507,8 @@ Final SMB contents after a full run:
 
 ```text
 {{BACKUP_PATH}}/Camera-CA-Backups/
-├── camera-system-ca-initial-{{DATE}}.tar.gz.age   # full CA state (age, passphrase)
-├── password-store-backup-{{DATE}}-*.tar.gz        # full ~/.password-store snapshots after each manipulation
+├── camera-system-ca-initial-{{TIMESTAMP}}.tar.gz.age   # full CA state (age, passphrase)
+├── password-store-backup-{{TIMESTAMP}}-*.tar.gz        # full ~/.password-store snapshots after each manipulation
 └── pass-gpg-id.txt                                # the store's .gpg-id value
 ```
 
@@ -538,7 +537,7 @@ In order:
 
    ```bash
    mkdir -p ~/.password-store
-   tar -xzf password-store-backup-{{DATE}}.tar.gz -C "$HOME"
+   tar -xzf password-store-backup-{{TIMESTAMP}}.tar.gz -C "$HOME"
    ```
 
 3. Ensure `pass` is installed and check a secret:
@@ -546,14 +545,14 @@ In order:
    ```bash
    pass show camera >/dev/null
    pass show smb >/dev/null
-   pass show camera-ca/age-archive-{{DATE}} | wc -c    # 29 bytes (28-char value + newline) -> readable
+   pass show camera-ca/age-archive-{{TIMESTAMP}} | wc -c    # 29 bytes (28-char value + newline) -> readable
    ```
 
 4. Decrypt and restore the CA state (§10 one-line PTY pattern):
 
    ```bash
-   bash -lc 'pass show camera-ca/age-archive-{{DATE}}' \
-     | script -qec "stty -echo 2>/dev/null; age -d camera-system-ca-initial-{{DATE}}.tar.gz.age > /tmp/.ca-decrypted.tgz" /dev/null
+   bash -lc 'pass show camera-ca/age-archive-{{TIMESTAMP}}' \
+     | script -qec "stty -echo 2>/dev/null; age -d camera-system-ca-initial-{{TIMESTAMP}}.tar.gz.age > /tmp/.ca-decrypted.tgz" /dev/null
    tar -xzf /tmp/.ca-decrypted.tgz -C "{{CA_ROOT_PATH}}"   # restores the camera-system-ca/ tree
    shred -u /tmp/.ca-decrypted.tgz
    ```

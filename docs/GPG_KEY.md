@@ -17,25 +17,24 @@ a new machine.
 
 ## Required Values
 
-| Name | Meaning |
+| Name | Description |
 |---|---|
-| `{{BACKUP_PATH}}` | Mounted SMB backup folder |
-| `{{DATE}}` | Current date or unique backup label for password-store backups |
+| `{{SMB_MOUNT}}` | Mounted SMB shared folder |
 | `{{SMB_USERNAME}}` | Samba username for the private camera CA backup share |
+| `{{TIMESTAMP}}` | generated timestamp at capture time with `date -u +%Y%m%d%H%M%SZ` |
 
 The exported secret key is stored at
-`{{BACKUP_PATH}}/Camera-CA-Backups/ca-vault-gpg.key.gpg`. The `.gpg` extension is
+`{{SMB_MOUNT}}/Camera-CA-Backups/ca-vault-gpg.key.gpg`. The `.gpg` extension is
 the established backup filename; the file contents are ASCII armored OpenPGP.
 
 The password-store backup is stored at
-`{{BACKUP_PATH}}/Camera-CA-Backups/password-store-backup-{{DATE}}.tar.gz`, where
-`{{DATE}}` is the current date plus a unique suffix when more than one password
-store backup is made on the same day. Never overwrite an older password-store
-backup; create a new dated copy after any password-store manipulation.
+`{{SMB_MOUNT}}/Camera-CA-Backups/password-store-backup-{{TIMESTAMP}}.tar.gz`, where
+`{{TIMESTAMP}}` is the current timestamp. Never overwrite an older password-store
+backup; create a new timestamped copy after any password-store manipulation.
 
 The backup mount may not exist until the SMB client mount step is complete. Do not
 create backup files under an unmounted local directory by mistake; after step 7,
-`{{BACKUP_PATH}}` should resolve to `/mnt/taurus-camera-ca` and contain the mounted
+`{{SMB_MOUNT}}` should resolve to `/mnt/taurus-camera-ca` and contain the mounted
 private Samba share. If you are unable to mount or create the full backup path,
 stop and warn the user; do not continue with the runbook.
 
@@ -221,8 +220,7 @@ stop and warn the user; do not continue with the runbook.
       | `{{SMB_USERNAME}}` | Username as recognized on the SMB server |
       | `pass show smb` | Password as recognized on the SMB server |
 
-      Run these commands on the **camera host**. Install the CIFS mount helper and
-      verify taurus resolves before continuing:
+      Install the CIFS mount helper and verify taurus resolves before continuing:
 
       ```bash
       sudo apt install cifs-utils
@@ -317,7 +315,7 @@ stop and warn the user; do not continue with the runbook.
       stat -c '%a %U:%G %n' /mnt/taurus-camera-ca /mnt/taurus-camera-ca/Camera-CA-Backups
       ```
 
-      For this runbook, set `{{BACKUP_PATH}}` to `/mnt/taurus-camera-ca`. Complete
+      For this runbook, set `{{SMB_MOUNT}}` to `/mnt/taurus-camera-ca`. Complete
       the harmless-file and server-side permission checks in `SMB_SERVE.md` before
       relying on this share for long-term backup storage.
 
@@ -330,7 +328,7 @@ stop and warn the user; do not continue with the runbook.
       ```bash
       set -e
       umask 077
-      backup_dir="{{BACKUP_PATH}}/Camera-CA-Backups"
+      backup_dir="{{SMB_MOUNT}}/Camera-CA-Backups"
       local_export="$HOME/ca-vault-gpg.key.gpg"
       backup_export="$backup_dir/ca-vault-gpg.key.gpg"
 
@@ -346,14 +344,14 @@ stop and warn the user; do not continue with the runbook.
       password. This `pass` version stores per-entry `.gpg` files plus the hidden
       `.gpg-id`; the backup must include the entire store, not just one entry.
 
-      Resolve `{{BACKUP_PATH}}` and `{{DATE}}` before running the commands; do not
+      Resolve `{{SMB_MOUNT}}` and `{{TIMESTAMP}}` before running the commands; do not
       type the braces literally.
 
       ```bash
       set -e
       umask 077
-      backup_dir="{{BACKUP_PATH}}/Camera-CA-Backups"
-      backup_label="{{DATE}}-initial"
+      backup_dir="{{SMB_MOUNT}}/Camera-CA-Backups"
+      backup_label="{{TIMESTAMP}}-initial"
       backup_file="$backup_dir/password-store-backup-$backup_label.tar.gz"
       mkdir -p "$backup_dir"
       test ! -e "$backup_file"
@@ -366,12 +364,12 @@ stop and warn the user; do not continue with the runbook.
 
       Any later `pass insert`, `pass edit`, `pass rm`, generated CA passphrase, SMB
       password rotation, or camera password rotation must be followed by another
-      password-store backup with a new `{{DATE}}`/label. Do not continue a build or
+      password-store backup with a new `{{TIMESTAMP}}`/label. Do not continue a build or
       restore after changing the store until the new backup exists.
 
 ## Recovery
 
-Copy `{{BACKUP_PATH}}/Camera-CA-Backups/ca-vault-gpg.key.gpg` unchanged to the new machine. 
+Copy `{{SMB_MOUNT}}/Camera-CA-Backups/ca-vault-gpg.key.gpg` unchanged to the new machine. 
 Configure terminal pinentry as in step 1, then import the key as the intended user in a real 
 terminal with `GPG_TTY` set as in step 2:
 
@@ -386,12 +384,12 @@ backup after importing the key:
 
 ```bash
 mkdir -p ~/.password-store
-tar -xzf password-store-backup-{{DATE}}.tar.gz -C "$HOME"
+tar -xzf password-store-backup-{{TIMESTAMP}}.tar.gz -C "$HOME"
 pass show camera >/dev/null
 pass show smb >/dev/null
 ```
 
 If the backup was created with an older procedure that archived only selected
-entries, inspect it first with `tar -tzf password-store-backup-{{DATE}}.tar.gz`
+entries, inspect it first with `tar -tzf password-store-backup-{{TIMESTAMP}}.tar.gz`
 and restore the listed paths into `~/.password-store` without overwriting newer
 entries unintentionally.

@@ -40,14 +40,25 @@ Be mindful of model context size when running the configurations shown below. As
 
     Follow the SERVER_PREP.md document in the docs folder after installing Ubuntu 26.04 on the host. The top section of the document installs several quality of life features that help manage the server, but are not strictly required for operation. The Essential Configurations section describes critical installations required for operation.
 
-    #### Mount an SMB share for backups
+    #### Set up password store and backup folder
+
+    The system will need several secret passwords for cameras, shared folders and server management. The `GPG_KEY.md` runbook contains instructions for setting up a GPG protected password store for these secrets.
 
     The server will need a backup location for critical data. An SMB share is a good place to do this. Assuming you have another Ubuntu machine set up on your local network, Hermes can do this for you using the instructions in the runbook SMB_SERVE.md. Other mounted storage locations work as well, but the procedures that follow will expect there to be a directory into which backup files can be written with proper file permissions.
 
-    Assuming you have chosen the SMB strategy and have a server set up, prompt the agent with the following, using your credentials for logging onto the SMB share.
+    Assuming you have chosen the SMB strategy and have a server set up, prompt the agent to create the gpg key, password store, smb mount and backup the keys.
+
+    **Required Values**
+
+    | Name | Description |
+    |---|---|
+    | `{{SMB_MOUNT}}` | Mounted SMB shared folder |
+    | `{{SMB_USERNAME}}` | Samba username for the private camera CA backup share |
+
+    **Runbook**
 
     ```
-    An SMB share is available on the local network for backup storage. Please follow the instructions in SMB_SERVE.md step 2. Add a separate client mount (camera host). You are the camera host, which is the client side on the SMB transaction. There may be an existing backup on the share already. Use the Required Values {{USERNAME}} <your username>, {{PASSWORD}} <your password>
+    GPG_KEY.md
     ```
     ---
 
@@ -65,7 +76,6 @@ Be mindful of model context size when running the configurations shown below. As
     | `{{PRVT_CAMERA_NET_EN_NAME}}` | Ethernet adapter hosting the private camera network | - |
     | `{{SERVER_FQDN}}` | Fully Qualified Domain Name of the server, e.g. camera.home.arpa | - |
     | `{{USERNAME}}` | Common username for cameras | - |
-    | `{{PASSWORD}}` | Common password for cameras | - |
     | `{{REPO_PATH}}` | Parent directory of this repository | - |
     | `{{SERVER_USER}}` | Account name on the server under which Hermes is run | - |
 
@@ -117,7 +127,6 @@ Be mindful of model context size when running the configurations shown below. As
     **Runbooks**
 
     ```
-    GPG_KEY.md
     CREATE_CA_CERT.md
     SITE_CERT.md
     CA_DISTRIBUTE.md
