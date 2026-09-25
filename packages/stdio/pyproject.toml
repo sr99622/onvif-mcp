@@ -1,6 +1,6 @@
 [project]
 name = "onvif-mcp-stdio"
-version = "0.1.8"
+version = "0.1.10"
 description = "MCP server for ONVIF camera using stdio transport"
 requires-python = ">=3.10"
 dependencies = [
@@ -10,16 +10,13 @@ dependencies = [
     "niquests==3.20.1",
 ]
 
+[project.scripts]
+onvif-mcp-stdio = "camera:main"
+
 [tool.uv.sources]
 onvif-mcp-core = { workspace = true }
 
-# TEMPORARY: pointing libonvif at the local source directory during active
-# development, since we are iterating on unpublished fixes (e.g. the
-# on_error callback bug) that are not yet released to PyPI. This bypasses
-# uv.lock's normal PyPI resolution entirely.
-#
-# TODO: once libonvif stabilizes and a fixed release is published to PyPI,
-# remove this [tool.uv.sources] override, re-pin "libonvif" to that exact
-# released version in [project].dependencies above, and run `uv lock` to
-# regenerate uv.lock against the published package.
-# libonvif = { path = "../libonvif/packages/libonvif", editable = true }
+[project.urls]  
+"Homepage" = "https://github.com/sr99622/onvif-mcp"
+"Bug Reports" = "https://github.com/sr99622/onvif-mcp/issues"
+

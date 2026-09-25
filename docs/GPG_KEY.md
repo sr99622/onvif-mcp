@@ -19,6 +19,7 @@ a new machine.
 
 | Name | Description |
 |---|---|
+| `{{SMB_SERVER_FQDN}}` | SMB server Fully Qualified Domain Name |
 | `{{SMB_MOUNT}}` | Mounted SMB shared folder |
 | `{{SMB_USERNAME}}` | Samba username for the private camera CA backup share |
 | `{{TIMESTAMP}}` | generated timestamp at capture time with `date -u +%Y%m%d%H%M%SZ` |
@@ -34,9 +35,9 @@ backup; create a new timestamped copy after any password-store manipulation.
 
 The backup mount may not exist until the SMB client mount step is complete. Do not
 create backup files under an unmounted local directory by mistake; after step 7,
-`{{SMB_MOUNT}}` should resolve to `/mnt/taurus-camera-ca` and contain the mounted
-private Samba share. If you are unable to mount or create the full backup path,
-stop and warn the user; do not continue with the runbook.
+`{{SMB_MOUNT}}` should resolve contain the mounted private Samba share. If you are 
+unable to mount or create the full backup path, stop and warn the user; do not 
+continue with the runbook.
 
 ## Key Generation
 
@@ -211,24 +212,25 @@ stop and warn the user; do not continue with the runbook.
       The `smb` password is needed before the password store itself can be backed
       up to the SMB share. After step 6, configure the camera host's separate CIFS
       mount for the private CA backup share. This is the client-mount portion of
-      `SMB_SERVE.md`; the Samba server-side share must already exist on taurus.
+      `SMB_SERVE.md`; the Samba server-side share must already exist on {{SMB_SERVER_FQDN}}.
 
       Required values for this step:
 
       | Name | Description |
       |---|---|
+      | `{{SMB_SERVER_FQDN}}` | SMB host Fully Qualified Domain Name |
       | `{{SMB_USERNAME}}` | Username as recognized on the SMB server |
       | `pass show smb` | Password as recognized on the SMB server |
 
-      Install the CIFS mount helper and verify taurus resolves before continuing:
+      Install the CIFS mount helper and verify {{SMB_SERVER_FQDN}} resolves before continuing:
 
       ```bash
       sudo apt install cifs-utils
-      getent ahosts taurus.home.arpa
+      getent ahosts {{SMB_SERVER_FQDN}}
       ```
 
-      Confirm `/mnt/taurus-camera-ca` and
-      `/etc/cifs-utils/credentials/taurus-camera-ca` are not already used for a
+      Confirm `{{SMB_MOUNT}}` and
+      `/etc/cifs-utils/credentials/camera-backup` are not already used for a
       different purpose. For a partially completed setup, reuse and correct the
       existing configuration instead of creating a duplicate.
 
@@ -245,12 +247,12 @@ stop and warn the user; do not continue with the runbook.
         pass show smb | head -n 1
       } > "$tmp_creds"
       sudo install -d -m 0700 /etc/cifs-utils/credentials
-      sudo install -o root -g root -m 0600 "$tmp_creds" /etc/cifs-utils/credentials/taurus-camera-ca
+      sudo install -o root -g root -m 0600 "$tmp_creds" /etc/cifs-utils/credentials/camera-backup
       shred -u "$tmp_creds"
-      sudo test -s /etc/cifs-utils/credentials/taurus-camera-ca
+      sudo test -s /etc/cifs-utils/credentials/camera-backup
       ```
 
-      Add `domain=...` to `/etc/cifs-utils/credentials/taurus-camera-ca` only if
+      Add `domain=...` to `/etc/cifs-utils/credentials/camera-backup` only if
       this Samba server requires it. Do not copy the old mount's credentials
       without confirming they belong to the new share account.
 
@@ -258,8 +260,8 @@ stop and warn the user; do not continue with the runbook.
       who owns the build files, then edit `/etc/fstab`:
 
       ```bash
-      if [ ! -d /mnt/taurus-camera-ca ]; then
-          sudo install -d -m 0700 /mnt/taurus-camera-ca
+      if [ ! -d {{SMB_MOUNT}} ]; then
+          sudo install -d -m 0700 {{SMB_MOUNT}}
       fi
       id -u stephen
       id -g stephen
@@ -267,11 +269,11 @@ stop and warn the user; do not continue with the runbook.
       ```
 
       Add this line, replacing `LOCAL_UID` and `LOCAL_GID` with those numeric IDs.
-      If an entry for `/mnt/taurus-camera-ca` already exists, correct that entry
+      If an entry for `{{SMB_MOUNT}}` already exists, correct that entry
       instead of adding a duplicate:
 
       ```fstab
-      //taurus.home.arpa/camera-ca-private /mnt/taurus-camera-ca cifs credentials=/etc/cifs-utils/credentials/taurus-camera-ca,vers=3.1.1,uid=LOCAL_UID,gid=LOCAL_GID,file_mode=0600,dir_mode=0700,nosuid,nodev,noexec,_netdev,noauto,x-systemd.automount 0 0
+      //{{SMB_SERVER_FQDN}}/camera-ca-private {{SMB_MOUNT}} cifs credentials=/etc/cifs-utils/credentials/camera-backup,vers=3.1.1,uid=LOCAL_UID,gid=LOCAL_GID,file_mode=0600,dir_mode=0700,nosuid,nodev,noexec,_netdev,noauto,x-systemd.automount 0 0
       ```
 
       Validate fstab and resolve any errors before continuing:
@@ -285,39 +287,35 @@ stop and warn the user; do not continue with the runbook.
 
       ```bash
       sudo systemctl daemon-reload
-      sudo systemctl reset-failed 'mnt-taurus\x2dcamera\x2dca.mount'
-      sudo systemctl start 'mnt-taurus\x2dcamera\x2dca.automount'
-      ls -la /mnt/taurus-camera-ca/
+      sudo systemctl reset-failed 'mnt-camera-backup\x2dcamera\x2dca.mount'
+      sudo systemctl start 'mnt-camera-backup\x2dcamera\x2dca.automount'
+      ls -la {{SMB_MOUNT}}/
       findmnt -rn -t cifs -o TARGET,SOURCE,FSTYPE,OPTIONS
       ```
 
-      Require a `cifs` row for `/mnt/taurus-camera-ca` naming
-      `//taurus.home.arpa/camera-ca-private`, with `rw`, the intended numeric
+      Require a `cifs` row for `{{SMB_MOUNT}}` naming
+      `//{{SMB_SERVER_FQDN}}/camera-ca-private`, with `rw`, the intended numeric
       UID/GID, and `file_mode=0600,dir_mode=0700`. An `autofs` mount alone is not
       success.
 
       If mounting fails, inspect the current error before changing settings:
 
       ```bash
-      sudo journalctl -b -u 'mnt-taurus\x2dcamera\x2dca.mount' --no-pager -n 30
+      sudo journalctl -b -u 'mnt-camera-backup\x2dcamera\x2dca.mount' --no-pager -n 30
       ```
 
       A `Password for root@...` prompt means the saved login is not being supplied.
       Check that the credentials file has correctly formatted nonempty `username=`
       and `password=` lines and that fstab references that file. If the intended
       login gets permission denied, verify the Samba credentials and share access
-      on taurus.
+      on {{SMB_SERVER_FQDN}}.
 
       Create the backup directory on the mounted share before continuing:
 
       ```bash
-      install -d -m 0700 /mnt/taurus-camera-ca/Camera-CA-Backups
-      stat -c '%a %U:%G %n' /mnt/taurus-camera-ca /mnt/taurus-camera-ca/Camera-CA-Backups
+      install -d -m 0700 {{SMB_MOUNT}}/Camera-CA-Backups
+      stat -c '%a %U:%G %n' {{SMB_MOUNT}} {{SMB_MOUNT}}/Camera-CA-Backups
       ```
-
-      For this runbook, set `{{SMB_MOUNT}}` to `/mnt/taurus-camera-ca`. Complete
-      the harmless-file and server-side permission checks in `SMB_SERVE.md` before
-      relying on this share for long-term backup storage.
 
 8. ### Back up the password store (USER-run)
 

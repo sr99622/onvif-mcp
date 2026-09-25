@@ -772,7 +772,7 @@ requires-dist = [
 
 [[package]]
 name = "onvif-mcp-stdio"
-version = "0.1.8"
+version = "0.1.9"
 source = { virtual = "packages/stdio" }
 dependencies = [
     { name = "libonvif" },

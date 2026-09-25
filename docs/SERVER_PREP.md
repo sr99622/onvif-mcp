@@ -232,15 +232,9 @@ mcp_servers:
   camera:
     command: uv
     args:
-    - --directory
-    - {{HOME}}/onvif-mcp/packages/stdio/src
     - run
-    - camera.py
+    - onvif-stdio
     enabled: true
-    env:
-      CAMERA_USERNAME: {{USERNAME}}
-      CAMERA_PASSWORD: {{PASSWORD}}
-      STREAM_SERVER_URL: {{SERVER_FQDN}}
 ```
 
 Configuration of the system will require more turns than are configured by default. Edit the `.hermes/config.yaml` file to adjust
