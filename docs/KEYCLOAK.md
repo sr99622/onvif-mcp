@@ -954,15 +954,16 @@ concurrent-flow behavior in 13.2 has been observed repeatedly on that version.
 `hermes mcp add` cannot be driven non-interactively: the URL+OAuth path is
 fully prompt-driven (TTY-bound). Write the entry directly into
 `~/.hermes/config.yaml` under `mcp_servers:` instead — the same shape the CLI
-would save:
+would save. There will be http version of this setting already existing in the
+configuration file, modify it:
 
 ```yaml
-  camera-new:
+  camera:
     url: https://{{SERVER_FQDN}}/mcp
     auth: oauth
     ssl_verify: /etc/ssl/certs/camera-system-root-ca.pem
     connect_timeout: 600
-    enabled: false
+    enabled: true
 ```
 
 `ssl_verify` is mandatory for the private CA — not optional. The MCP client

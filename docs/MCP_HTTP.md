@@ -15,7 +15,7 @@ the systemd unit, shell history, this runbook, or agent chat. Read the first lin
 from `pass camera` when generating the service environment file. If GPG prompts
 for the passphrase, enter it interactively in the terminal; after that,
 `gpg-agent` normally caches the key for subsequent reads during the same build
-session.
+session. Prompt the user with instructions to prime the cache if necessary.
 
 ## Overview
 
@@ -30,7 +30,7 @@ The `onvif-mcp-http` package provides an HTTP-based MCP (Model Context Protocol)
 
 ## 1. Nginx Proxy Configuration
 
-All of this lives in one server block alongside the MediaMTX proxy and Camera App, at `/etc/nginx/sites-available/camera` (already present from the MEDIAMTX.md and APPS.md installs — extend it; do not create a second vhost):
+All of this lives in one server block alongside the MediaMTX proxy and Camera App, at `/etc/nginx/sites-available/camera` (if already present from the MEDIAMTX.md and APPS.md installs — extend it; do not create a second vhost):
 
 ```nginx
 server {
@@ -77,7 +77,7 @@ server {
 
 The camera password is a runtime secret. Store it in a protected systemd
 environment file generated from `pass camera`; keep the unit file itself free of
-secrets.
+secrets. Prompt the user with instructions to prime the gpg cache if necessary.
 
 Create `/etc/onvif-mcp-http.env` from the password store:
 
@@ -224,6 +224,19 @@ curl -s \
   -H "mcp-session-id: $SESSION_ID" \
   -d '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"get_adapters","arguments":{}}}' \
   http://{{SERVER_FQDN}}/mcp
+```
+
+## 4. Add camera MCP server configuration to Hermes
+
+Edit the ~/.hermes/config.yaml to enable the camera MCP serever in hermes. 
+Prompt the user to re-start hermes to intialize the server.
+
+```yaml
+mcp_servers:
+  camera:
+    url: http://{{SERVER_FQDN}}/mcp
+    connect_timeout: 60
+    timeout: 180
 ```
 
 ## Architecture Diagram

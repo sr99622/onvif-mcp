@@ -7,7 +7,6 @@ This configuration creates an isolated IPv4 network on {{PRVT_CAMERA_NET_EN_NAME
 - Server address: `10.2.2.1/24`
 - DHCP pool: `10.2.2.100` through `10.2.2.200`
 - DHCP interface: {{PRVT_CAMERA_NET_EN_NAME}}
-- No default gateway supplied to clients
 - No DNS server supplied to clients
 - No routing between this subnet and the server's other network interface
 

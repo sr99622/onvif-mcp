@@ -46,7 +46,7 @@ the systemd unit, shell history, this runbook, or agent chat. Read the first lin
 from `pass camera` when generating the shared service environment file. If GPG
 prompts for the passphrase, enter it interactively in the terminal; after that,
 `gpg-agent` normally caches the key for subsequent reads during the same build
-session.
+session. Prompt the user with instructions to prime the cache if necessary.
 
 ## 1. Confirm the Service Source Exists in the Repository
 

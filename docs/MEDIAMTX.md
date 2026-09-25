@@ -10,7 +10,7 @@ This document describes the MediaMTX RTSP-to-WebRTC/HLS streaming server. The se
 | `{{USERNAME}}` | Camera Username, normally `admin` |
 | `pass camera` | Camera password, stored in `~/.password-store/camera.gpg` |
 
-These values are required for operation. Do not ask the user to paste the camera password into the runbook or shell history. Read it from `pass camera`. If GPG prompts for the passphrase, complete that terminal prompt once; the local `gpg-agent` normally caches the unlocked key for a short period, allowing subsequent `pass camera` calls in the same build/restore session to run without prompting.
+These values are required for operation. Do not ask the user to paste the camera password into the runbook or shell history. Read it from `pass camera`. If GPG prompts for the passphrase, complete that terminal prompt once; the local `gpg-agent` normally caches the unlocked key for a short period, allowing subsequent `pass camera` calls in the same build/restore session to run without prompting. Prompt the user with instructions to prime the cache if necessary.
 
 ## Deployment Details
 
@@ -237,7 +237,8 @@ sudo systemctl status mediamtx  # verify active (running)
 
 Without these, MediaMTX returns a redirect like `302 Location: /camera/path/`, which nginx then tries to serve as a static file (causing 405 errors or broken behavior).
 
-Full nginx config at `/etc/nginx/sites-available/camera`:
+All of this lives in one server block at `/etc/nginx/sites-available/camera` (if already present from the MCP_HTTP.md — extend it; do not create a second vhost):
+
 
 ```nginx
 server {
