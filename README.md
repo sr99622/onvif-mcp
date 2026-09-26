@@ -36,7 +36,7 @@ The server is built in stages as listed below. Server host preparation sets up t
 
  The Hermes agent is used to perform the configuration and can be prompted to follow this document and implement the steps as described in the runbooks referenced below. Values required for each step of the implementation are listed in the tables, Prompt Hermes with your own site specific variables and Hermes can implement the configuration autonomously.
 
-Be mindful of model context size when running the configurations shown below. Starting a fresh context after it reaches 50 percent is advised. Runbooks can be execute individually on systems with modest context abilities if necessary. The runbooks cane be found in the `{{REPO_PATH}}/onvif-mcp/docs` directory. The runbooks are intended to be executed in the order listed.
+Be mindful of model context size when running the configurations shown below. Starting a fresh context after it reaches 50 percent is advised. Runbooks can be executed individually on systems with modest context if necessary. The runbooks can be found in the `{{REPO_PATH}}/onvif-mcp/docs` directory. The runbooks are intended to be executed in the order listed.
 
 1. ### Server Preparation
 
@@ -82,7 +82,6 @@ Be mindful of model context size when running the configurations shown below. St
     | `{{REPO_PATH}}`   | Full Pathname of Repository Location |
     | `{{SERVER_USER}}` | System user the service runs as (project owner) |
 
-    
     **Runbooks**
 
     ```
@@ -212,7 +211,6 @@ Be mindful of model context size when running the configurations shown below. St
     |---|---|
     | `{{CLIENT_SOURCE_IP}}` | IP Address to be allowed |
     | `{{BACKUP_PATH}}` | Backup folder |
-
 
     **Runbook**
 
