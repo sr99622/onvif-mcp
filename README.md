@@ -34,13 +34,17 @@ Clients using only the camera apps do not require any additional configuration. 
 
 The server is built in stages as listed below. Server host preparation sets up the baseline operating system configuration, Plain HTTP sets up the services without encryption, HTTPS creates the certificate and maps the endpoints for protection, and Authentication implements the Keycloak server for login credential requirements. A firewall can be added at the conclusion of the configuration for additional protection.
 
-Be mindful of model context size when running the configurations shown below. As they are grouped, they will require around 90k token context window for each group of Runbooks. Starting a fresh context after each group is advised for models with standard context length. Runbooks can be execute individually on systems with modest context abilities.
+ The Hermes agent is used to perform the configuration and can be prompted to follow this document and implement the steps as described in the runbooks referenced below. Values required for each step of the implementation are listed in the tables, Prompt Hermes with your own site specific variables and Hermes can implement the configuration autonomously.
+
+Be mindful of model context size when running the configurations shown below. Starting a fresh context after it reaches 50 percent is advised. Runbooks can be execute individually on systems with modest context abilities if necessary. The runbooks cane be found in the `{{REPO_PATH}}/onvif-mcp/docs` directory. The runbooks are intended to be executed in the order listed.
 
 1. ### Server Preparation
 
-    Follow the SERVER_PREP.md document in the docs folder after installing Ubuntu 26.04 on the host. The top section of the document installs several quality of life features that help manage the server, but are not strictly required for operation. The Essential Configurations section describes critical installations required for operation.
+    Follow the SERVER_PREP.md document in the docs folder after installing Ubuntu 26.04 on the host. The top section of the document installs several quality of life features that help manage the server, but are not strictly required for operation. The Essential Configurations section describes critical installations required for operation. The document assumes knowledge of the vi/nvim application for editing.
 
-    #### Set up password store and backup folder
+    To use an SMB server for backups, follow the instructions in Step 1. of SMB_SERVE.md.
+
+2. ### Set up password store and backup folder
 
     The system will need several secret passwords for cameras, shared folders and server management. The `GPG_KEY.md` runbook contains instructions for setting up a GPG protected password store for these secrets.
 
@@ -62,52 +66,56 @@ Be mindful of model context size when running the configurations shown below. As
     ```
     ---
 
-2. ### HTTP Services
+3. ### Set up Private Camera Subnet
 
-    This is a baseline configuration required before layering encryption and authentication on the server. All essential services are initially configured here without encryption. This could theoretically be considered a fully functional unsecured system. The Hermes agent is used to perform the configuration and can be prompted to follow this document and implement the steps as described in the runbook referenced below. Values required for implementation are listed in the table, edit this document with your own site values and Hermes can implement the configuration autonomously.
+    Attach the cameras to the second ethernet adapter. The value for `{{PRVT_CAMERA_NET_EN_NAME}}` can be found using the `nmcli dev show` command from a terminal.     The DHCP server is set up first and should be given ample opportunity to assign addresses to cameras before querying the camera MCP server tool get_cameras to discover cameras on the network. A couple of minutes should be long enough.
 
-    After following the instructions in SERVER_PREP.md, attach the cameras to the second ethernet adapter. Prompt the agent with the required values and the list of runbooks to make the build. The value for `{{PRVT_CAMERA_NET_EN_NAME}}` can be found using the `nmcli dev show` command from a terminal. The runbooks to implement the configuration are found in the `{{REPO_PATH}}/onvif-mcp/docs` directory. The runbooks are intended to be executed in the order listed.
-
+    The NCP_HTTP.md runbook sets up the camera MCP server to communicate with the cameras, and is used by later steps to gather camera information for system configuration. 
 
     **Required Values**
 
-    | Name | Description | Site Value |
-    |------|-------------|------------|
-    | `{{PRVT_CAMERA_NET_EN_NAME}}` | Ethernet adapter hosting the private camera network | - |
-    | `{{SERVER_FQDN}}` | Fully Qualified Domain Name of the server, e.g. camera.home.arpa | - |
-    | `{{USERNAME}}` | Common username for cameras | - |
-    | `{{REPO_PATH}}` | Parent directory of this repository | - |
-    | `{{SERVER_USER}}` | Account name on the server under which Hermes is run | - |
+    | Name | Description |
+    |------|-------------|
+    | `{{PRVT_CAMERA_NET_EN_NAME}}` | Ethernet adapter hosting the private camera network |
+    | `{{SERVER_FQDN}}` | Fully Qualified Domain Name of the Server |
+    | `{{USERNAME}}`    | Camera Username |
+    | `{{REPO_PATH}}`   | Full Pathname of Repository Location |
+    | `{{SERVER_USER}}` | System user the service runs as (project owner) |
 
+    
     **Runbooks**
 
     ```
     DHCP.md
+    MCP_HTTP.md
+    ```
+    ---
+
+4. ### HTTP Services
+
+    This is a baseline configuration required before layering encryption and authentication on the server. All essential services are initially configured here without encryption. This could theoretically be considered a fully functional unsecured system.
+
+    **Required Values**
+
+    | Name | Description |
+    |------|-------------|
+    | `{{SERVER_FQDN}}` | Fully Qualified Domain Name of the server, e.g. camera.home.arpa |
+    | `{{USERNAME}}` | Common username for cameras |
+    | `{{REPO_PATH}}` | Parent directory of this repository |
+    | `{{SERVER_USER}}` | Account name on the server under which Hermes is run |
+
+    **Runbooks**
+
+    ```
     MEDIAMTX.md
     SNAPSHOT.md
     APPS.md
-    MCP_HTTP.md
     ```
-    
-    **Agent Instructions**
-
-    The runbooks are intended to be executed in order. 
-    
-    The DHCP server is set up first and should be given ample opportunity to assign addresses to cameras before querying the camera MCP server tool get_cameras to discover cameras on the network. A couple of minutes should be long enough. 
-    
-    Use the stdio camera MCP server tool `get_cameras` to get camera data. This server is already configured for your use. It returns all the data needed in a delimited json format. Do not attempt to develop methods to query the cameras directly using ONVIF or other methods. The camera MCP server is the most reliable method of finding the data.
-
-    There is another camera MCP server that is configured by the runbook MCP_HTTP.md. It is not intended to be used by you to gather camera data. That server is available for remote agents to access the camera system. You will be configuring and testing the HTTP MCP server, but you should use the stdio MCP server that you have already to query cameras for data.
-
-    The SNAPSHOT.md runbook builds a server that is used to get camera snapshots. This server will query the cameras directly as a proxy to get jpg snapshots. You should not try to emulate the snapshot server. You should follow the runbook directions for testing closely. This server is intended for use by remote agents, similar to HTTP MCP.
-
     ---
 
-3. ### HTTPS Encryption
+5. ### HTTPS Encryption
 
-    Included are runbooks for generating and distributing a Certificate Authority (CA) and site certificate locally. The endpoints are re-mapped to provide encryption for the suite of services. The instructions include a backup to an SMB shared drive, so there should be one available on the local network to hold the certificates in the case of server failure. The backup can be skipped if necessary, but that is obviously not recommended.
-
-    During execution of the `GPG_KEY.md` runbook, the user will be prompted for passwords twice. The use will open their own terminal for these actions. First a a prompt for the gpg key generation. A second prompt occurs during the backup and testing. During execution of CREATE_CA_CERT.md, the user may be prompted for a key to warm up the key cache.
+    Included are runbooks for generating and distributing a Certificate Authority (CA) and site certificate locally. The endpoints are re-mapped to provide encryption for the suite of services. The instructions include a backup to the SMB shared drive configured earlier.
 
     Following completion of this section, nginx will be serving the endpoints under SSL encryption and clients will need to authorize the keys from their certificate store. Instructions for client configuration are in the `CLIENT.md` runbook. The site certificate can be accessed through an unencrypted endpoint on the server.
 
@@ -132,10 +140,9 @@ Be mindful of model context size when running the configurations shown below. As
     CA_DISTRIBUTE.md
     DNS.md
     ```
-
     ---
 
-4. ### Keycloak installation
+6. ### Keycloak installation
 
     The Keycloak server provides authentication services for the site. During installation a default user is created that can be used for testing the configuration. A fresh context may be needed at this point, if so, re-intialize the agent context in the prompt by having them review this document again. 
 
@@ -153,7 +160,7 @@ Be mindful of model context size when running the configurations shown below. As
     ```
     ---
 
-5. ### Layer authentication on the rest of the site endpoints
+7. ### Layer authentication on the rest of the site endpoints
 
     This step will require that the camera-new http MCP server is available to the agent. This can be accomplished using the /reload-mcp directive before starting the runbook.
 
@@ -172,7 +179,9 @@ Be mindful of model context size when running the configurations shown below. As
     ```
     ---
 
-6. ### Add user
+8. ### Add user
+
+    This step adds a user to the system that is authorized to access the apps endpoints of the nginx server. If connection to the MCP server is required, the additional step `Add client IP address to allowed hosts` must be executed, as the authentication server requires client machines to registered by IP address before they are allowed access. 
 
     **Required Values**
 
@@ -193,7 +202,9 @@ Be mindful of model context size when running the configurations shown below. As
     ```
     ---
 
-7. ### Add client IP address to allowed hosts
+9. ### Add client IP address to allowed hosts
+
+    This step is needed for access to the camera MCP server.
 
     **Required Values**
 
@@ -210,7 +221,7 @@ Be mindful of model context size when running the configurations shown below. As
     ```
     ---
 
-8. ### Firewall Protection
+10. ### Firewall Protection
 
     The document FIREWALL.md shows how to configure a firewall for this system using the built in ufw utility in Ubuntu.
 
