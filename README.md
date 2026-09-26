@@ -120,16 +120,16 @@ Be mindful of model context size when running the configurations shown below. St
 
     **Required Values**
 
-    | Name | Description | Site Value |
-    |------|-------------|------------|
-    | `{{CA_ROOT_PATH}}` | Private CA root directory (e.g. $HOME/Private-CA) | - |
-    | `{{BACKUP_PATH}}` | SMB shared drive to be created on the local host (e.g. `/mnt/backup/Camera-System-Backup`) | - |
-    | `{{SERVER_FQDN}}` | Fully Qualified Domain Name of the server, e.g. camera.home.arpa | - |
-    | `{{SERVER_USER}}` | Account name on the server under which Hermes is run | - |
-    | `{{REPO_PATH}}` | Parent directory of this repository | - |
-    | `{{SERVER_IP}}` | IP address of the server e.g. 10.1.1.2 | - |
-    | `{{RVRS_SRV_IP}}` | Reverse IP address of the server e.g. 2.1.1.10 | - |
-    | `{{UPSTREAM_DNS}}` | Upstream DNS resolver | - |
+    | Name | Description |
+    |------|-------------|
+    | `{{CA_ROOT_PATH}}` | Private CA root directory (e.g. $HOME/Private-CA) |
+    | `{{BACKUP_PATH}}` | SMB shared drive to be created on the local host (e.g. `/mnt/backup/Camera-System-Backup`) |
+    | `{{SERVER_FQDN}}` | Fully Qualified Domain Name of the server, e.g. camera.home.arpa |
+    | `{{SERVER_USER}}` | Account name on the server under which Hermes is run |
+    | `{{REPO_PATH}}` | Parent directory of this repository |
+    | `{{SERVER_IP}}` | IP address of the server e.g. 10.1.1.2 |
+    | `{{RVRS_SRV_IP}}` | Reverse IP address of the server e.g. 2.1.1.10 |
+    | `{{UPSTREAM_DNS}}` | Upstream DNS resolver |
 
     **Runbooks**
 
@@ -147,10 +147,10 @@ Be mindful of model context size when running the configurations shown below. St
 
     **Required Values**
 
-    | Name | Description | Site Value |
-    |------|-------------|------------|
-    | `{{SERVER_FQDN}}` | Fully Qualified Domain Name of the server (e.g. camera.home.arpa) | - |
-    | `{{BACKUP_PATH}}` | Backup folder (e.g. /mnt/backup/Camera-System-Backup) | - |
+    | Name | Description |
+    |------|-------------|
+    | `{{SERVER_FQDN}}` | Fully Qualified Domain Name of the server (e.g. camera.home.arpa) |
+    | `{{BACKUP_PATH}}` | Backup folder (e.g. /mnt/backup/Camera-System-Backup) |
 
     **Runbook**
 
