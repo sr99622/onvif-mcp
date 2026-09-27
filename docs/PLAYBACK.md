@@ -7,7 +7,7 @@ This document gives agent instructions for displaying MediaMTX recordings from t
 The server exposes MediaMTX playback through Nginx at:
 
 ```text
-https://gmktec.home.arpa/playback/
+https://{{SERVER_FQDN}}/playback/
 ```
 
 Nginx strips the `/playback/` prefix and proxies to the loopback-only MediaMTX playback server:
@@ -25,8 +25,8 @@ Do not expose `127.0.0.1:9996` publicly. Public browser access must go through t
 Public authenticated endpoints:
 
 ```text
-https://gmktec.home.arpa/playback/list?path={url_encoded_media_path}[&start={url_encoded_rfc3339}][&end={url_encoded_rfc3339}]
-https://gmktec.home.arpa/playback/get?path={url_encoded_media_path}&start={url_encoded_rfc3339}&duration={seconds}[&format=fmp4|mp4]
+https://{{SERVER_FQDN}}/playback/list?path={url_encoded_media_path}[&start={url_encoded_rfc3339}][&end={url_encoded_rfc3339}]
+https://{{SERVER_FQDN}}/playback/get?path={url_encoded_media_path}&start={url_encoded_rfc3339}&duration={seconds}[&format=fmp4|mp4]
 ```
 
 Loopback-only upstream endpoints:
@@ -36,7 +36,7 @@ http://127.0.0.1:9996/list?path={url_encoded_media_path}[&start={url_encoded_rfc
 http://127.0.0.1:9996/get?path={url_encoded_media_path}&start={url_encoded_rfc3339}&duration={seconds}[&format=fmp4|mp4]
 ```
 
-Media paths are the MediaMTX path names, for example:
+Media paths are the MediaMTX path names which are dervied from the camera serial number and main stream profile token (camera.serial_number/camera.profiles[0]/token), for example:
 
 ```text
 4B0013BPAABE264/MediaProfile000
@@ -58,7 +58,7 @@ Use the Hermes browser controller (`browser_exec`) to drive Chrome. Do not use c
 1. Open the authenticated origin or a target playback URL in Chrome:
 
 ```python
-new_tab('https://gmktec.home.arpa/playback/list?path=4B0013BPAABE264%2FMediaProfile000')
+new_tab('https://{{SERVER_FQDN}}/playback/list?path=4B0013BPAABE264%2FMediaProfile000')
 wait_for_load()
 print(page_info())
 ```
@@ -70,7 +70,7 @@ print(page_info())
 ```python
 from urllib.parse import quote
 path = '4B0013BPAABE264/MediaProfile000'
-url = 'https://gmktec.home.arpa/playback/list?path=' + quote(path, safe='')
+url = 'https://{{SERVER_FQDN}}/playback/list?path=' + quote(path, safe='')
 new_tab(url)
 wait_for_load()
 print(js('(() => document.body.innerText)()'))
@@ -96,7 +96,7 @@ path = '4B0013BPAABE264/MediaProfile000'
 start = '2026-09-26T22:17:07.510524-04:00'
 duration = 120
 video_url = (
-    'https://gmktec.home.arpa/playback/get?path=' + quote(path, safe='') +
+    'https://{{SERVER_FQDN}}/playback/get?path=' + quote(path, safe='') +
     '&start=' + quote(start, safe='') +
     '&duration=' + str(duration) +
     '&format=mp4'
@@ -233,7 +233,7 @@ sudo systemctl reload nginx
 The public URL for the example clip is:
 
 ```text
-https://gmktec.home.arpa/playback-cache/amcrest_2026-09-27_0900_10min.mp4
+https://{{SERVER_FQDN}}/playback-cache/amcrest_2026-09-27_0900_10min.mp4
 ```
 
 This URL remains protected by oauth2-proxy, like `/playback/`, `/webrtc/`, and `/snapshot/`.
@@ -277,9 +277,9 @@ Do not store camera credentials or browser session cookies in cached files, file
 Expected unauthenticated public behavior:
 
 ```text
-https://gmktec.home.arpa/playback/      -> 302 /oauth2/start?rd=/playback/
-https://gmktec.home.arpa/playback/list  -> 302 /oauth2/start?rd=/playback/list...
-https://gmktec.home.arpa/playback/get   -> 302 /oauth2/start?rd=/playback/get...
+https://{{SERVER_FQDN}}/playback/      -> 302 /oauth2/start?rd=/playback/
+https://{{SERVER_FQDN}}/playback/list  -> 302 /oauth2/start?rd=/playback/list...
+https://{{SERVER_FQDN}}/playback/get   -> 302 /oauth2/start?rd=/playback/get...
 ```
 
 Expected listener state:
