@@ -4,13 +4,15 @@ This document describes how to configure clients to use the camera server. The t
 
 Hermes has a built in Chrome browser MCP controller that is used by the system and requires the installation of the Chrome browser if not installed. Windows default Edge browser is Chrome compatible and can be used instead, so Chrome installation is not required for Windows.
 
-## Operating System Specific Instructions
+## Operating System Specific Client Preparation Instructions
 * [Fedora](#fedora)
 * [Ubuntu](#ubuntu)
 * [CachyOS](#cachyos)
 * [MacOS](#mac-os)
 * [Windows](#windows)
 * [Android](#android)
+
+Once the client has been prepared with the rerequisite software, follow the instructions in the [Common Configuration Instructions](#common-configuration-instructions) to complete the configuration.
 
 ## Fedora
 
@@ -242,7 +244,9 @@ Hermes has a built in Chrome browser MCP controller that is used by the system a
 
 &nbsp;
 
-# DNS Configuration
+# Common Configuration Instructions
+
+## DNS
 
 HTTPS operation requires that the server host name matches the certificate. This implies that the client resolves the host name rather than post the IP address directly. There are two ways to do this, DNS or hosts file configuration. Resolution by DNS server is preferable as a single authoritative source of addresses. This configuration requires that the LAN DHCP server assign the DNS address to clients whose addresses are assigned by DHCP. This is a setting on your router and will be specific to that device. In the event that this is impractical, clients can edit a hosts file to resolve the name locally. Each operating system has its own location for the hosts file. Clients with fixed IP can have the DNS server set manually along with the IP address.
 
@@ -257,45 +261,11 @@ Hosts file location (elevated privileges required to edit)
 
 &nbsp;
 
-# Common Hermes Instructions
+## Hermes
 
-### Retrieve the password from the server if necessary
+### Sign on to the camera system
 
-You will need your password to access the site. If the password was system generated, it will be stored in a root protected file on the server. You can copy the password from the server into your local clipboard so you can paste the password into the dialog box when challenged. Use the instructions below for your operating system. You will need ssh access to the server to complete this step.
-
-If you already know your password, skip this section.
-
-* Linux
-
-  If you're running Linux with Wayland, which is likely on new systems, use:
-
-  ```bash
-  ssh user@server 'sudo cat /opt/keycloak/{{LOGIN_USERNAME}}.pass' | wl-copy
-  ```
-
-  The password is now in your local clipboard; just paste it into the browser with Ctrl+V. If you don't have wl-copy, note that all major package installers (pacman, apt, dnf) use the same wl-clipboard name:
-
-  ```bash
-  sudo pacman -S wl-clipboard
-  ```
-
-  For X11 instead:
-
-  ```bash
-  ssh user@server 'sudo cat /opt/keycloak/{{LOGIN_USERNAME}}.pass' | xclip -selection clipboard
-  ```
-
-* macOS
-
-  ```bash
-  ssh user@server 'sudo cat /opt/keycloak/{{LOGIN_USERNAME}}.pass' | pbcopy
-  ```
-
-* Windows PowerShell
-
-  ```bash
-  ssh user@server "sudo cat /opt/keycloak/{{LOGIN_USERNAME}}.pass" | Set-Clipboard
-  ```
+You will recieve an email from the keycloak admin inviting you to create a password for your account on the system. Follow the link in the email create a password. Make sure to keep it in a safe place.
 
 ### Open the camera app
 
@@ -305,9 +275,7 @@ Open the chrome browser and navigate to the cameras page on the server
 https://{{SERVER_FQDN}}/cameras
 ```
 
-A login dialog box will appear asking for your credentials. Enter your username and password. If you have used the instructions above to retrieve your password from the server, the password will be in the clipboard and you can paste it into the box using ctl+V or command+V on macOS.
-
-This will register and save the credentials in the browser, and you should be able to observe the camera streams.
+A login dialog box will appear asking for your credentials. Enter your username and password, and you should be able to observe the camera streams.
 
 ### Configure the MCP server in Hermes
 
@@ -325,7 +293,7 @@ mcp_servers:
 
 You will need to know the {{CA_CERT_PATH}} for your system. If you have installed it using the instructions above, the path can be found on Linux from the instructions for your distro. On MacOS or Windows, download the certificate and store it somewhere safe.
 
-### Get client IP address
+### Get client IP address for MCP access
 
 The server hosting the MCP will require that the client IP address be registered before allowing access. This implies that the client has a fixed IP address. Consult your operating system documentation for instruction on how to set a static IP.
 
@@ -401,4 +369,10 @@ You can show the live stream from a camera in the browser
 
 ```
 show the {{CAMERA}} main stream in the chrome browser
+```
+
+If the client is using MCP services, you can optimize performance with the following prompt, which should be applied after testing the client in situ.
+
+```
+When using camera MCP server tools, it is not necessary to verify that any of the commands have completed successfully beyond checking the return code from the tool call. The camera communications library is very reliable and will pretty much always work properly. If something has gone wrong, the user will ask explicitly for you to check. This may go against your training to always verify things, but it is important that we optimize the system to be as responsive as possible, and post tool call checking slows things down considerably. If the tool call returns a success message, assume that the call succeeded and do not re-query the cameras or take a snapshot without being explicitly asked by the user. One important exception here is the appearance of the 500 error message in the browser when viewing a camera stream. The tool call will return success, but the server may show 500 due to auth token timeout. You should check for the 500 message in the title of the browser when asked to view a camera stream, and if it appears, all you need to do is refresh the browser.
 ```

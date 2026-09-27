@@ -14,7 +14,7 @@ Clients can connect to the camera web apps without further configuration beyond 
 
 * AI Provider
 
-    A source of intelligence is required for the system. This configuration was developed and tested using Qwen3.8 27B model running on a NVIDIA 4500 with 32GB VRAM. This arrangement provides sufficient compute to efficiently build and run the system. A full build out will require about three hours for the agent to complete. Run time operation is sufficiently responsive that the system provides operational characteristics on par with legacy deterministic camera management systems. Lower powered compute arrangements can provide acceptable performance as well in accordance with their capability. Note that during build out, context on the order of 90k tokens is needed to avoid context compression events. Cloud based AI works as well, use a lower tier model to conserve token usage.
+    A source of intelligence is required for the system. This configuration was developed and tested using Qwen3.8 27B model running on a NVIDIA 4500 with 32GB VRAM. This arrangement provides sufficient compute to efficiently build and run the system. A full build out will require about three hours for the agent to complete. Run time operation is sufficiently responsive that the system provides operational characteristics on par with legacy deterministic camera management systems. Lower powered compute arrangements can provide acceptable performance as well in accordance with their capability. Cloud based AI works as well, use a lower tier model to conserve token usage.
 
 * Agent 
 
@@ -61,7 +61,6 @@ Be mindful of model context size when running the configurations shown below. St
 
     **Runbook**
 
-    
     [GPG_KEY.md](docs/GPG_KEY.md)
 
     ---
@@ -124,7 +123,7 @@ Be mindful of model context size when running the configurations shown below. St
     | Name | Description |
     |------|-------------|
     | `{{CA_ROOT_PATH}}` | Private CA root directory (e.g. $HOME/Private-CA) |
-    | `{{BACKUP_PATH}}` | SMB shared drive to be created on the local host (e.g. `/mnt/backup/Camera-System-Backup`) |
+    | `{{BACKUP_PATH}}` | SMB shared drive to be created on the local host (e.g. `/mnt/camera-backup`) |
     | `{{SERVER_FQDN}}` | Fully Qualified Domain Name of the server, e.g. camera.home.arpa |
     | `{{SERVER_USER}}` | Account name on the server under which Hermes is run |
     | `{{REPO_PATH}}` | Parent directory of this repository |
@@ -153,7 +152,7 @@ Be mindful of model context size when running the configurations shown below. St
     | Name | Description |
     |------|-------------|
     | `{{SERVER_FQDN}}` | Fully Qualified Domain Name of the server (e.g. camera.home.arpa) |
-    | `{{BACKUP_PATH}}` | Backup folder (e.g. /mnt/backup/Camera-System-Backup) |
+    | `{{BACKUP_PATH}}` | Backup folder (e.g. /mnt/camera-backup) |
 
     **Runbook**
 
@@ -171,7 +170,7 @@ Be mindful of model context size when running the configurations shown below. St
     |---|---|
     | `{{SERVER_FQDN}}` | Public DNS name shared by Nginx, Keycloak, and MCP |
     | `{{SERVER_IP}}` | Address on which Nginx accepts public HTTPS |
-    | `{{BACKUP_PATH}}` | Backup folder (e.g. /mnt/backup/Camera-System-Backup) | - |
+    | `{{BACKUP_PATH}}` | Backup folder (e.g. /mnt/camera-backup) | - |
 
     **Runbook**
 
@@ -193,7 +192,7 @@ Be mindful of model context size when running the configurations shown below. St
 
     | Name | Description |
     |---|---|
-    | `{{GMAIL_ADDRESS}}` | Dedicated Gmail sender address |
+    | `{{GMAIL_ADDRESS}}` | Dedicated Gmail address for keycloak admin |
     | `{{SERVER_FQDN}}` | Camera server hostname used by clients |
     | `{{BACKUP_PATH}}` | Existing backup folder |
 
@@ -205,7 +204,7 @@ Be mindful of model context size when running the configurations shown below. St
 
 9. ### Add user
 
-    This step adds a user to the system that is authorized to access the apps endpoints of the nginx server. If connection to the MCP server is required, the additional step `Add client IP address to allowed hosts` must be executed, as the authentication server requires client machines to be registered by IP address before they are allowed access. 
+    This step adds a user to the system that is authorized to access the apps endpoints of the nginx server. If connection to the MCP server is required, the additional step `Add client IP address to allowed hosts` must be executed, as the authentication server requires client machines to be registered by IP address before they are allowed access to MCP. 
 
     The runbook creates the user in the keycloak database and emails an invitation to this user. The recipient must create their own password. Complete the documented checks and backups, and report onboarding as pending until the recipient completes setup.
 
@@ -253,9 +252,4 @@ Be mindful of model context size when running the configurations shown below. St
 
 Clients are configured using the [CLIENT.md](docs/CLIENT.md) doc. Configurations have been mapped for major Linux distros, Windows and MacOS. Limited configuration for Android mobile devices gives access to the camera web apps.
 
-If the client is using MCP services, you can optimize performance with the following prompt, which should be applied after testing the client in situ.
-
-```
-When using camera MCP server tools, it is not necessary to verify that any of the commands have completed successfully beyond checking the return code from the tool call. The camera communications library is very reliable and will pretty much always work properly. If something has gone wrong, the user will ask explicitly for you to check. This may go against your training to always verify things, but it is important that we optimize the system to be as responsive as possible, and post tool call checking slows things down considerably. If the tool call returns a success message, assume that the call succeeded and do not re-query the cameras or take a snapshot without being explicitly asked by the user. One important exception here is the appearance of the 500 error message in the browser when viewing a camera stream. The tool call will return success, but the server may show 500 due to auth token timeout. You should check for the 500 message in the title of the browser when asked to view a camera stream, and if it appears, all you need to do is refresh the browser.
-```
 ---

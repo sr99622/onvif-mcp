@@ -4,9 +4,7 @@
 
 Create the one GPG key that will protect the `pass` password store, initialize
 that store, add the camera-system passwords that are known at build time, and
-back up both the GPG secret key and the password store **before** starting
-`CREATE_CA_CERT.md`. The CA private key and CA backup archives are still created
-by their own procedures.
+back up both the GPG secret key and the password store.
 
 Run the commands below as the account that will own the password store, in a
 real terminal or an SSH session with a TTY. The user enters the GPG passphrase
@@ -134,7 +132,6 @@ continue with the runbook.
       chmod 600 "$local_export"
       ```
 
-
       GPG may ask for the key's passphrase through `pinentry-curses`. The exported
       file is sensitive even though the key is passphrase protected. Do not print,
       paste, email, or commit it. Do not use `sudo` for GPG: that would select root's
@@ -157,8 +154,7 @@ continue with the runbook.
       GPG passphrase independently memorable or recoverable: losing both the live
       key and this export, or forgetting its passphrase, prevents recovery of the
       future `pass` store. Once verified, initialize the password store, mount the
-      SMB share, and back up both the GPG export and password store before
-      proceeding to `CREATE_CA_CERT.md`.
+      SMB share, and back up both the GPG export and password store.
 
 5. ### Initialize the password store (USER-run)
 

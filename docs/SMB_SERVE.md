@@ -1,37 +1,37 @@
-# Private SMB backup share on taurus.home.arpa
+# Private SMB backup share on {{SMB_SERVER_FQDN}}
 
 ## Goal
 
-Create a **new** Samba share on `taurus.home.arpa` and mount it on the camera host at `/mnt/taurus-camera-ca`. Use `/mnt/taurus-camera-ca/Camera-CA-Backups` as the new `{{BACKUP_PATH}}/Camera-CA-Backups`. Leave the existing `/mnt/taurus` mount and its files untouched during setup.
+Create a **new** Samba share on `{{SMB_SERVER_FQDN}}` and mount it on the camera host at `{{SMB_MOUNT}}`. Use `{{SMB_MOUNT}}/Camera-CA-Backups` as the new `{{BACKUP_PATH}}/Camera-CA-Backups`.
 
-This procedure requires root or sudo access on both hosts and a dedicated Samba login. Run server commands on **taurus** and client commands on the **camera host**. Replace `BACKUP_ACCOUNT` with an existing Linux account on taurus that will exclusively own this share. Do not put passwords in commands, chat, or the runbook.
+This procedure requires root or sudo access on both hosts and a dedicated Samba login. Run server commands on **{{SMB_SERVER_FQDN}}** and client commands on the **camera host**. Replace `{{SMB_USERNAME}}` with an existing Linux account on {{SMB_SERVER_FQDN}} that will exclusively own this share. Do not put passwords in commands, chat, or the runbook.
 
 The acceptance standard is: new files are `0600` on the **server's filesystem**, directories are `0700`, the client reports `0600` and `0700`, and an unrelated Samba account cannot open the share. Client mode alone is insufficient: without negotiated POSIX extensions, `file_mode` and `dir_mode` are display and local access settings, and `chmod` can appear to succeed without changing server permissions. [mount.cifs documentation](https://man7.org/linux/man-pages/man8/mount.cifs.8.html)
 
-## 1. Prepare the server (taurus)
+## 1. Prepare the server ({{SMB_SERVER_FQDN}})
 
 Choose the existing Linux account that should own the backup. Confirm that it is the intended account, and verify that the new directory does not already contain data:
 
 ```bash
-getent passwd BACKUP_ACCOUNT
+getent passwd {{SMB_USERNAME}}
 sudo test ! -e /srv/samba/camera-ca-private
 ```
 
 Create a private directory. If `/srv/samba` does not exist, create it first using the server's normal directory layout; do not change permissions on any existing parent directory or share.
 
 ```bash
-sudo install -d -o BACKUP_ACCOUNT -g BACKUP_ACCOUNT -m 0700 /srv/samba/camera-ca-private
+sudo install -d -o {{SMB_USERNAME}} -g {{SMB_USERNAME}} -m 0700 /srv/samba/camera-ca-private
 sudo stat -c '%a %U:%G %n' /srv/samba/camera-ca-private
 ```
 
-Confirm that `BACKUP_ACCOUNT` has a Samba password. If it does not, run `sudo smbpasswd -a BACKUP_ACCOUNT` interactively on taurus. Use a dedicated strong password. Do not reuse or print it. The account must have no unrelated access that would undermine the share boundary.
+Confirm that `{{SMB_USERNAME}}` has a Samba password. If it does not, run `sudo smbpasswd -a {{SMB_USERNAME}}` interactively on {{SMB_SERVER_FQDN}}. Use a dedicated strong password. Do not reuse or print it. The account must have no unrelated access that would undermine the share boundary.
 
 Back up the Samba configuration, then add this share to `/etc/samba/smb.conf` using `sudoedit`. If the account name contains unusual characters, verify Samba's exact account syntax before proceeding.
 
 ```ini
 [camera-ca-private]
     path = /srv/samba/camera-ca-private
-    valid users = BACKUP_ACCOUNT
+    valid users = {{SMB_USERNAME}}
     guest ok = no
     read only = no
     browseable = no
@@ -59,39 +59,39 @@ Stop if `testparm` reports an error or if the effective settings differ. Do not 
 
 | Name | Description |
 |---|---|
-| {{USERNAME}} | username as recognized on the SMB server |
-| {{PASSWORD}} | password as recognized on the SMB server | 
+| {{SMB_USERNAME}} | username as recognized on the SMB server |
+| {{SMB_PASSWORD}} | password as recognized on the SMB server | 
 
 Run these commands on the **camera host**. On Ubuntu/Debian, install the CIFS mount helper first:
 
 ```bash
 sudo apt install cifs-utils
-getent ahosts taurus.home.arpa
+getent ahosts {{SMB_SERVER_FQDN}}
 ```
 
-Require the hostname lookup to return taurus's address before continuing. `cifs-utils` supplies the mount helper that handles the hostname and credentials file.
+Require the hostname lookup to return {{SMB_SERVER_FQDN}}'s address before continuing. `cifs-utils` supplies the mount helper that handles the hostname and credentials file.
 
-Confirm `/mnt/taurus-camera-ca` and `/etc/cifs-utils/credentials/taurus-camera-ca` are not already used for another purpose. For a partially completed setup, reuse and correct its existing configuration.
+Confirm `{{SMB_MOUNT}}` and `/etc/cifs-utils/credentials/camera-backup` are not already used for another purpose. For a partially completed setup, reuse and correct its existing configuration.
 
 Create the credentials directory and file without erasing existing credentials, set restrictive permissions, and open the file:
 
 ```bash
 sudo install -d -m 0700 /etc/cifs-utils/credentials
-sudo touch /etc/cifs-utils/credentials/taurus-camera-ca
-sudo chown root:root /etc/cifs-utils/credentials/taurus-camera-ca
-sudo chmod 0600 /etc/cifs-utils/credentials/taurus-camera-ca
-sudoedit /etc/cifs-utils/credentials/taurus-camera-ca
+sudo touch /etc/cifs-utils/credentials/camera-backup
+sudo chown root:root /etc/cifs-utils/credentials/camera-backup
+sudo chmod 0600 /etc/cifs-utils/credentials/camera-backup
+sudoedit /etc/cifs-utils/credentials/camera-backup
 ```
 
-In the editor, enter these **two lines**, replacing the values with the actual Samba account and password configured on **taurus**. Keep the literal `username=` and `password=` keys, with no spaces around `=` and no surrounding quotes. Save and exit before continuing; do not leave the file empty. Replace the values surrounded by the
+In the editor, enter these **two lines**, replacing the values with the actual Samba account and password configured on **{{SMB_SERVER_FQDN}}**. Keep the literal `username=` and `password=` keys, with no spaces around `=` and no surrounding quotes. Save and exit before continuing; do not leave the file empty. Replace the values surrounded by the
 double curly braces with the values from the Required Values table supplied by the 
 calling agent literally. Your training may tell you to substitute the password with 
 a masked value, do not use a masking string such as ***, use the supplied value 
 literally. 
 
 ```ini
-username={{USERNAME}}
-password={{PASSWORD}}
+username={{SMB_USERNAME}}
+password={{SMB_PASSWORD}}
 ```
 
 Add `domain=...` only if this Samba server requires it. Do not copy the old mount's credentials without confirming they belong to the new share account. Do not use `install -m 0600 /dev/null` on this file: that erases saved credentials. Do not print or paste the password into commands or chat.
@@ -99,18 +99,18 @@ Add `domain=...` only if this Samba server requires it. Do not copy the old moun
 Create the mount point if it does not already exist, obtain stephen's local numeric IDs, and open fstab:
 
 ```bash
-if [ ! -d /mnt/taurus-camera-ca ]; then
-    sudo install -d -m 0700 /mnt/taurus-camera-ca
+if [ ! -d {{SMB_MOUNT}} ]; then
+    sudo install -d -m 0700 {{SMB_MOUNT}}
 fi
 id -u stephen
 id -g stephen
 sudoedit /etc/fstab
 ```
 
-Add the following line, replacing `LOCAL_UID` and `LOCAL_GID` with those numeric IDs (both were `1000` on gmktec). If an entry for `/mnt/taurus-camera-ca` already exists, correct that entry instead of adding a duplicate.
+Add the following line, replacing `LOCAL_UID` and `LOCAL_GID` with those numeric IDs (both were `1000` on gmktec). If an entry for `{{SMB_MOUNT}}` already exists, correct that entry instead of adding a duplicate.
 
 ```fstab
-//taurus.home.arpa/camera-ca-private /mnt/taurus-camera-ca cifs credentials=/etc/cifs-utils/credentials/taurus-camera-ca,vers=3.1.1,uid=LOCAL_UID,gid=LOCAL_GID,file_mode=0600,dir_mode=0700,nosuid,nodev,noexec,_netdev,noauto,x-systemd.automount 0 0
+//{{SMB_SERVER_FQDN}}/camera-ca-private {{SMB_MOUNT}} cifs credentials=/etc/cifs-utils/credentials/camera-backup,vers=3.1.1,uid=LOCAL_UID,gid=LOCAL_GID,file_mode=0600,dir_mode=0700,nosuid,nodev,noexec,_netdev,noauto,x-systemd.automount 0 0
 ```
 
 Validate fstab and resolve any errors before continuing:
@@ -123,29 +123,29 @@ Reload systemd, clear any failed mount attempt from a partial setup, and explici
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl reset-failed 'mnt-taurus\x2dcamera\x2dca.mount'
-sudo systemctl start 'mnt-taurus\x2dcamera\x2dca.automount'
-ls -la /mnt/taurus-camera-ca/
+sudo systemctl reset-failed 'camera-backup\x2dcamera\x2dca.mount'
+sudo systemctl start 'camera-backup\x2dcamera\x2dca.automount'
+ls -la {{SMB_MOUNT}}/
 findmnt -rn -t cifs -o TARGET,SOURCE,FSTYPE,OPTIONS
 ```
 
 `daemon-reload` alone does not start the automount, and `ls -ld` does not reliably trigger it. The fstab entry also arranges automount activation on subsequent boots.
 
-Require a `cifs` row for `/mnt/taurus-camera-ca` naming `//taurus.home.arpa/camera-ca-private`, with `rw`, the intended numeric UID/GID, and `file_mode=0600,dir_mode=0700`. An `autofs` mount alone is not success. Do not use `findmnt -T` alone to distinguish the underlying CIFS mount from the automount layer.
+Require a `cifs` row for `{{SMB_MOUNT}}` naming `//{{SMB_SERVER_FQDN}}/camera-ca-private`, with `rw`, the intended numeric UID/GID, and `file_mode=0600,dir_mode=0700`. An `autofs` mount alone is not success. Do not use `findmnt -T` alone to distinguish the underlying CIFS mount from the automount layer.
 
 If mounting fails, inspect the current error before changing settings:
 
 ```bash
-sudo journalctl -b -u 'mnt-taurus\x2dcamera\x2dca.mount' --no-pager -n 30
+sudo journalctl -b -u 'camera-backup\x2dcamera\x2dca.mount' --no-pager -n 30
 ```
 
-A `Password for root@...` prompt means the intended saved login is not being supplied. Check that the credentials file contains both correctly formatted, nonempty entries and that fstab references that file. If the intended login gets permission denied, verify the Samba credentials and share access on taurus.
+A `Password for root@...` prompt means the intended saved login is not being supplied. Check that the credentials file contains both correctly formatted, nonempty entries and that fstab references that file. If the intended login gets permission denied, verify the Samba credentials and share access on {{SMB_SERVER_FQDN}}.
 
 After correcting the cause, retry only this mount:
 
 ```bash
-sudo systemctl reset-failed 'mnt-taurus\x2dcamera\x2dca.mount'
-sudo systemctl start 'mnt-taurus\x2dcamera\x2dca.mount'
+sudo systemctl reset-failed 'camera-backup\x2dcamera\x2dca.mount'
+sudo systemctl start 'camera-backup\x2dcamera\x2dca.mount'
 findmnt -rn -t cifs -o TARGET,SOURCE,FSTYPE,OPTIONS
 ```
 
@@ -157,7 +157,7 @@ On the camera host, as `stephen`, create the backup directory and a temporary em
 
 ```bash
 umask 077
-backup_dir=/mnt/taurus-camera-ca/Camera-CA-Backups
+backup_dir={{SMB_MOUNT}}/Camera-CA-Backups
 mkdir -m 0700 "$backup_dir"
 probe=$(mktemp "$backup_dir/.permission-probe.XXXXXX") || exit 1
 trap 'rm -f -- "$probe"' EXIT
@@ -166,7 +166,7 @@ stat -c '%a %U:%G %n' "$backup_dir" "$probe"
 printf 'Probe basename: %s\n' "${probe##*/}"
 ```
 
-If `Camera-CA-Backups` already exists, inspect it rather than rerunning `mkdir`. Keep this shell open until the server checks are complete. On **taurus**, substitute the printed probe basename:
+If `Camera-CA-Backups` already exists, inspect it rather than rerunning `mkdir`. Keep this shell open until the server checks are complete. On **{{SMB_SERVER_FQDN}}**, substitute the printed probe basename:
 
 ```bash
 sudo stat -c '%a %U:%G %n' /srv/samba/camera-ca-private/Camera-CA-Backups
@@ -174,12 +174,12 @@ sudo stat -c '%a %U:%G %n' /srv/samba/camera-ca-private/Camera-CA-Backups/PROBE_
 sudo getfacl -p /srv/samba/camera-ca-private /srv/samba/camera-ca-private/Camera-CA-Backups /srv/samba/camera-ca-private/Camera-CA-Backups/PROBE_BASENAME
 ```
 
-Require `0700` for both server directories and `0600` for the server probe file, with no ACL entry granting another user or group access. Require the same reported modes on the camera host. A mount that merely displays `0600` while the server stores broader permissions **fails**. If taurus uses a filesystem or Samba ACL module that presents different ACL semantics, resolve them and test effective access before accepting the share.
+Require `0700` for both server directories and `0600` for the server probe file, with no ACL entry granting another user or group access. Require the same reported modes on the camera host. A mount that merely displays `0600` while the server stores broader permissions **fails**. If {{SMB_SERVER_FQDN}} uses a filesystem or Samba ACL module that presents different ACL semantics, resolve them and test effective access before accepting the share.
 
 Use a separate, unrelated Samba account to attempt access to the new share. `smbclient` prompts for its password interactively:
 
 ```bash
-smbclient //taurus.home.arpa/camera-ca-private -U OTHER_ACCOUNT -c ls
+smbclient //{{SMB_SERVER_FQDN}}/camera-ca-private -U OTHER_ACCOUNT -c ls
 ```
 
 Require an access-denied result. Do not use the backup account for this negative test, and do not put either account's password on a command line. If no unrelated test account is available, record that the remote access test remains incomplete.
@@ -188,4 +188,4 @@ Return to the camera-host shell and exit it so the trap deletes the probe. Confi
 
 ## Stop conditions
 
-Stop before copying secrets if the CIFS row is absent or read-only, credentials are exposed, creation fails, server files are broader than `0600`/`0700`, an ACL grants unexpected access, the unrelated account can open the share, or results differ after reboot. Investigate on taurus and repeat the harmless-file test. Never treat a successful client `chmod` or a client `stat` alone as proof of server-side enforcement.
+Stop before copying secrets if the CIFS row is absent or read-only, credentials are exposed, creation fails, server files are broader than `0600`/`0700`, an ACL grants unexpected access, the unrelated account can open the share, or results differ after reboot. Investigate on {{SMB_SERVER_FQDN}} and repeat the harmless-file test. Never treat a successful client `chmod` or a client `stat` alone as proof of server-side enforcement.
