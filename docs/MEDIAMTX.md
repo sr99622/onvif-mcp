@@ -29,6 +29,7 @@ These values are required for operation. Do not ask the user to paste the camera
 |----------|---------|--------|-----|
 | RTSP | 127.0.0.1:8554 (TCP only) | **Enabled** | Camera pulls (loopback only — not accessible from LAN) |
 | WebRTC | :8889 (TCP HTTP), :8189 (UDP ICE) | **Enabled** | Browser live streams |
+| Playback | 127.0.0.1:9996 (TCP HTTP) | **Enabled** | Recorded stream list/get API, proxied by nginx |
 | HLS | :8888 | Disabled | Low-latency HLS segments |
 | RTMP | :1935 | Disabled | RTMP ingest |
 | SRT | :8890 | Disabled | Secure Reliable Transport |
@@ -118,6 +119,61 @@ hour long (`recordSegmentDuration: 1h`) and MediaMTX deletes segments after thre
 (`recordDeleteAfter: 3d`). This is the only file-management policy in the baseline
 configuration; no disk quota or emergency cleanup is configured by this runbook.
 
+## Playback
+
+MediaMTX exposes recorded-stream playback through a loopback-only HTTP server:
+
+```yaml
+playback: true
+playbackAddress: 127.0.0.1:9996
+```
+
+Do not bind playback to a public interface. Public browser access is through the authenticated nginx `/playback/` route, which strips the prefix and proxies to `http://127.0.0.1:9996/`.
+
+Public authenticated endpoints:
+
+```text
+https://{{SERVER_FQDN}}/playback/list?path={url_encoded_media_path}[&start={url_encoded_rfc3339}][&end={url_encoded_rfc3339}]
+https://{{SERVER_FQDN}}/playback/get?path={url_encoded_media_path}&start={url_encoded_rfc3339}&duration={seconds}[&format=fmp4|mp4]
+```
+
+Loopback diagnostic endpoints:
+
+```text
+http://127.0.0.1:9996/list?path={url_encoded_media_path}[&start={url_encoded_rfc3339}][&end={url_encoded_rfc3339}]
+http://127.0.0.1:9996/get?path={url_encoded_media_path}&start={url_encoded_rfc3339}&duration={seconds}[&format=fmp4|mp4]
+```
+
+Example path encoding:
+
+```text
+AMC014641NE6L35AT8/MediaProfile000 -> AMC014641NE6L35AT8%2FMediaProfile000
+```
+
+MediaMTX `/playback/get` is timestamp-addressable: change the `start=` parameter to jump to another wall-clock time. The dynamic response is not a normal static MP4 file and may not support Chrome's native scrub bar because the response is chunked and does not provide byte-range seeking.
+
+For normal browser seek controls, create a static MP4 from a playback slice:
+
+```bash
+work="$HOME/.hermes/cache/scratch/amcrest_0900_remux"
+mkdir -p "$work"
+src="$work/amcrest_2026-09-27_0900_10min_source.mp4"
+out="$work/amcrest_2026-09-27_0900_10min_static.mp4"
+
+curl -L --fail --silent --show-error \
+  'http://127.0.0.1:9996/get?path=AMC014641NE6L35AT8%2FMediaProfile000&start=2026-09-27T09%3A00%3A00-04%3A00&duration=600&format=mp4' \
+  -o "$src"
+
+ffmpeg -y -hide_banner -loglevel error \
+  -i "$src" \
+  -map 0 \
+  -c copy \
+  -movflags +faststart \
+  "$out"
+```
+
+Serve remuxed files from `/srv/camera-playback-cache/` through an authenticated nginx `/playback-cache/` location. Static cached files are not managed by MediaMTX `recordDeleteAfter`; delete them manually or add separate cache retention.
+
 ## Authentication
 
 MediaMTX uses **internal database mode** with permissive access rules — no password is required for any user (`pass:` is empty). The config grants full permissions (publish, read, playback) to all cameras. Access control is managed by the nginx proxy front end.
@@ -190,6 +246,10 @@ rtspAddress: 127.0.0.1:8554
 webrtc: true
 webrtcAddress: 127.0.0.1:8889
 webrtcLocalUDPAddress: :8189
+
+# Playback server for recorded streams (loopback only, proxied/authenticated by nginx)
+playback: true
+playbackAddress: 127.0.0.1:9996
 
 # Disable unused protocols to reduce attack surface
 rtmp: false
@@ -305,6 +365,37 @@ server {
         # Long timeouts for WebRTC sessions
         proxy_read_timeout 86400s;
         proxy_send_timeout 86400s;
+    }
+
+    location = /playback {
+        return 301 /playback/;
+    }
+
+    location /playback/ {
+        auth_request /oauth2/auth;
+        error_page 401 = @oauth2_signin;
+        auth_request_set $auth_cookie $upstream_http_set_cookie;
+        add_header Set-Cookie $auth_cookie always;
+
+        proxy_pass http://127.0.0.1:9996/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+
+    location /playback-cache/ {
+        auth_request /oauth2/auth;
+        error_page 401 = @oauth2_signin;
+        auth_request_set $auth_cookie $upstream_http_set_cookie;
+        add_header Set-Cookie $auth_cookie always;
+
+        alias /srv/camera-playback-cache/;
+        add_header Accept-Ranges bytes always;
     }
 
     location = / {

@@ -1,9 +1,9 @@
-# Keycloak Authentication for Camera Apps, WebRTC Streams, and Snapshots
+# Keycloak Authentication for Camera Apps, WebRTC Streams, Recorded Playback, and Snapshots
 
 ## Purpose
 
-This runbook adds browser-session authorization to camera applications and
-WebRTC signaling and live JPEG snapshots while preserving the MCP server's
+This runbook adds browser-session authorization to camera applications,
+WebRTC signaling, recorded playback, static playback cache files, and live JPEG snapshots while preserving the MCP server's
 independent OAuth bearer-token flow.
 
 The implementation uses:
@@ -22,6 +22,8 @@ Protected browser routes:
 /multiview/
 /outputs/
 /webrtc/
+/playback/
+/playback-cache/
 /snapshot/
 ```
 
@@ -61,6 +63,7 @@ Replace every symbolic value with the target environment's actual value.
 | `{{OAUTH2_PROXY_PORT}}` | 4180 | Loopback oauth2-proxy port, normally |
 | `{{MCP_HTTP_PORT}}` | 8001 | Loopback MCP HTTP port, normally |
 | `{{MEDIAMTX_WEBRTC_PORT}}` | 8889 | Loopback MediaMTX signaling port, normally |
+| `{{MEDIAMTX_PLAYBACK_PORT}}` | 9996 | Loopback MediaMTX recorded-playback HTTP port |
 | `{{MEDIAMTX_ICE_PORT}}` | 8189 | MediaMTX UDP ICE/media port, normally |
 | `{{SNAPSHOT_PORT}}` | 8891 | Loopback snapshot proxy HTTP port |
 | `{{COMPOSE_DIR}}` | /opt/keycloak | Keycloak Compose project directory |
@@ -100,6 +103,12 @@ Nginx on {{SERVER_FQDN}}
   |
   |-- /webrtc/
   |       `-- auth_request /oauth2/auth, then MediaMTX signaling
+  |
+  |-- /playback/
+  |       `-- auth_request /oauth2/auth, then MediaMTX recorded-playback API
+  |
+  |-- /playback-cache/
+  |       `-- auth_request /oauth2/auth, then static remuxed MP4 cache
   |
   `-- /snapshot/
           `-- auth_request /oauth2/auth, then snapshot proxy 127.0.0.1:8891
@@ -178,7 +187,7 @@ sudo docker compose --project-directory "{{COMPOSE_DIR}}" ps
 sudo systemctl is-active nginx mediamtx onvif-mcp-http.service snapshot-proxy.service
 
 sudo ss -ltnp | grep -E \
-  ':({{OAUTH2_PROXY_PORT}}|{{MCP_HTTP_PORT}}|{{KEYCLOAK_PORT}}|{{MEDIAMTX_WEBRTC_PORT}}|{{SNAPSHOT_PORT}})\b' || true
+  ':({{OAUTH2_PROXY_PORT}}|{{MCP_HTTP_PORT}}|{{KEYCLOAK_PORT}}|{{MEDIAMTX_WEBRTC_PORT}}|{{MEDIAMTX_PLAYBACK_PORT}}|{{SNAPSHOT_PORT}})\b' || true
 
 sudo ss -lunp | grep ':{{MEDIAMTX_ICE_PORT}}\b' || true
 ```
@@ -190,6 +199,7 @@ Require:
 - Nginx, MediaMTX, MCP, and snapshot-proxy active
 - oauth2-proxy port free
 - MediaMTX WebRTC signaling bound to loopback
+- MediaMTX playback HTTP bound to loopback
 - MCP and Keycloak HTTP bound to loopback
 - Snapshot proxy HTTP bound only to `{{LOOPBACK_IP}}:{{SNAPSHOT_PORT}}`
 
@@ -215,7 +225,7 @@ is normally a single file, `/etc/nginx/conf.d/{{SERVER_FQDN}}.conf`, included vi
 `include /etc/nginx/conf.d/*.conf;`. Confirm its HTTPS server's `listen`
 directive and `server_name {{SERVER_FQDN}}` against the live file (`nginx -T`)
 rather than assuming either, and confirm it contains all target locations
-(static apps, `/webrtc/`, `/snapshot/`, `/auth/`, `= /mcp`,
+(static apps, `/webrtc/`, `/playback/`, `/playback-cache/`, `/snapshot/`, `/auth/`, `= /mcp`,
 `= /.well-known/oauth-protected-resource/mcp`). Inspect the port-80 server for
 the same name: if it has no unprotected snapshot location and redirects every
 path to `https://{{SERVER_FQDN}}$request_uri`, Phase 7's HTTP-to-HTTPS snapshot
@@ -262,7 +272,19 @@ below; a root-only check does not prove a real snapshot can be retrieved.
 Record current unauthenticated behavior:
 
 ```bash
-for path in /cameras/ /multiview/ /outputs/ /webrtc/ /snapshot/ "$SNAPSHOT_PATH"; do
+paths=(
+  /cameras/
+  /multiview/
+  /outputs/
+  /webrtc/
+  /playback/
+  '/playback/list?path=AMC014641NE6L35AT8%2FMediaProfile000'
+  '/playback/get?path=AMC014641NE6L35AT8%2FMediaProfile000&start=2026-09-27T09%3A00%3A00-04%3A00&duration=60&format=mp4'
+  /playback-cache/
+  /snapshot/
+  "$SNAPSHOT_PATH"
+)
+for path in "${paths[@]}"; do
   curl -sS -o /dev/null \
     -w "${path} HTTP %{http_code} redirect=%{redirect_url}\n" \
     "https://{{SERVER_FQDN}}${path}"
@@ -610,10 +632,10 @@ Validate before reload:
 sudo nginx -t
 ```
 
-## 7. Protect applications, WebRTC signaling, and snapshots
+## 7. Protect applications, WebRTC signaling, playback, and snapshots
 
 Add the following exactly once at the beginning of each `/cameras/`,
-`/multiview/`, `/outputs/`, `/webrtc/`, and `/snapshot/` location:
+`/multiview/`, `/outputs/`, `/webrtc/`, `/playback/`, `/playback-cache/`, and `/snapshot/` location:
 
 ```nginx
 auth_request /oauth2/auth;
@@ -623,7 +645,42 @@ add_header Set-Cookie $auth_cookie always;
 ```
 
 Preserve all existing static-file, MediaMTX, WebSocket, redirect, proxy-header,
-and timeout directives. Preserve the snapshot location's existing proxy
+and timeout directives. The `/playback/` location must proxy to `http://{{LOOPBACK_IP}}:{{MEDIAMTX_PLAYBACK_PORT}}/` with the `/playback/` prefix stripped, and the `/playback-cache/` location must serve `/srv/camera-playback-cache/` with byte-range support for remuxed static MP4 files:
+
+```nginx
+location = /playback {
+    return 301 /playback/;
+}
+
+location /playback/ {
+    auth_request /oauth2/auth;
+    error_page 401 = @oauth2_signin;
+    auth_request_set $auth_cookie $upstream_http_set_cookie;
+    add_header Set-Cookie $auth_cookie always;
+
+    proxy_pass http://{{LOOPBACK_IP}}:{{MEDIAMTX_PLAYBACK_PORT}}/;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
+    proxy_read_timeout 300s;
+    proxy_send_timeout 300s;
+}
+
+location /playback-cache/ {
+    auth_request /oauth2/auth;
+    error_page 401 = @oauth2_signin;
+    auth_request_set $auth_cookie $upstream_http_set_cookie;
+    add_header Set-Cookie $auth_cookie always;
+
+    alias /srv/camera-playback-cache/;
+    add_header Accept-Ranges bytes always;
+}
+```
+
+Preserve the snapshot location's existing proxy
 headers, 30-second read/send timeouts, and cache controls. Its upstream must
 retain the snapshot path, as in SNAPSHOT.md:
 
@@ -666,7 +723,19 @@ sudo systemctl is-active nginx
 ## 8. Verify unauthenticated behavior
 
 ```bash
-for path in /cameras/ /multiview/ /outputs/ /webrtc/ /snapshot/ "$SNAPSHOT_PATH"; do
+paths=(
+  /cameras/
+  /multiview/
+  /outputs/
+  /webrtc/
+  /playback/
+  '/playback/list?path=AMC014641NE6L35AT8%2FMediaProfile000'
+  '/playback/get?path=AMC014641NE6L35AT8%2FMediaProfile000&start=2026-09-27T09%3A00%3A00-04%3A00&duration=60&format=mp4'
+  /playback-cache/
+  /snapshot/
+  "$SNAPSHOT_PATH"
+)
+for path in "${paths[@]}"; do
   curl -sS -o /dev/null \
     -w "${path} HTTP %{http_code} redirect=%{redirect_url}\n" \
     "https://{{SERVER_FQDN}}${path}"
@@ -750,10 +819,18 @@ Assertions performed (all must pass):
 6. A known direct WebRTC stream URL under `/webrtc/.../` passes authentication
    without a sign-in bounce (any non-302-to-sign-in outcome, such as the 200
    signaling page, is the expected pass-through result).
-7. The known `https://{{SERVER_FQDN}}${SNAPSHOT_PATH}` in the same session
+7. A known `/playback/list?...` URL and `/playback/get?...` URL in the same
+   session pass authentication without a sign-in bounce. The list endpoint
+   returns JSON, and the get endpoint returns `Content-Type: video/mp4`.
+8. If a static remuxed file exists under `/srv/camera-playback-cache/`, a known
+   `/playback-cache/*.mp4` URL in the same session returns `video/mp4` and
+   supports byte ranges (`206` with `Content-Range`) when requested with a
+   `Range: bytes=0-1023` header. If no cached file exists, record this check as
+   not applicable rather than creating a permanent cache file during auth setup.
+9. The known `https://{{SERVER_FQDN}}${SNAPSHOT_PATH}` in the same session
    returns 200 with `Content-Type: image/jpeg`, a body starting with the JPEG
    magic bytes (`FF D8 FF`), and `Cache-Control: no-store`; no second login.
-8. In a **fresh** unauthenticated session, the direct snapshot URL redirects
+10. In a **fresh** unauthenticated session, the direct snapshot URL redirects
    to `/oauth2/start?rd=<snapshot path>`; completing login in that session
    returns to the requested snapshot itself (not the site root) and serves a
    valid JPEG with `no-store`. A redirect to an HTML login page or merely a
@@ -906,7 +983,7 @@ been created. Resume with one command per step until context is stable.
 - Use exact redirect URIs and web origins; do not use broad wildcards.
 - Do not bypass the private CA.
 - Browser cookies and Hermes MCP tokens are independent credentials.
-- All authenticated browser users currently receive access to all five route
+- All authenticated browser users currently receive access to all protected route
   families. Add Keycloak roles/groups and corresponding authorization policy
   if per-user or per-route access is required.
 - Keep the snapshot proxy bound to loopback; public snapshot access goes
@@ -922,10 +999,12 @@ been created. Resume with one command per step until context is stable.
 - oauth2-proxy is bound only to loopback and returns ping `200`.
 - Direct unauthenticated auth check returns `401`.
 - Nginx oauth2 support routes are active.
-- All five browser route families redirect unauthenticated users to login.
+- All protected browser route families redirect unauthenticated users to login.
 - Keycloak login returns users to the requested route.
 - Static apps load after authentication.
 - Direct WebRTC playback works after authentication.
+- MediaMTX recorded playback list/get routes work after authentication.
+- Static remuxed playback cache files, when present, remain authenticated and support byte ranges.
 - Snapshot proxy is active and bound only to loopback.
 - Known direct snapshot URL redirects to login without a browser session.
 - Authenticated snapshots return valid JPEGs with `Cache-Control: no-store`.
