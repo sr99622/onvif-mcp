@@ -19,6 +19,7 @@ These values are required for operation. Do not ask the user to paste the camera
 | Server URL | `http://{{SERVER_FQDN}}/webrtc/` |
 | Binary | `/usr/local/bin/mediamtx` |
 | Config | `/etc/mediamtx/mediamtx.yml` |
+| Recordings | `/var/lib/mediamtx/recordings` |
 | Service | `sudo systemctl status mediamtx` (system service, multi-user.target) |
 | User | `mediamtx:mediamtx` (dedicated system user) |
 
@@ -91,6 +92,32 @@ the config short: consumers of this server depend on low-bandwidth substreams fo
 and multi-camera views. After writing the config, verify the path count matches the total
 number of profiles reported across all cameras before starting the service.
 
+## Recording
+
+MediaMTX records only paths that have `record: true`. This deployment keeps recording
+disabled in `pathDefaults` and adds `record: true` only to the first/main profile for each
+camera. Substreams remain available for live thumbnails and multi-camera views but are not
+recorded.
+
+Recordings are written under `/var/lib/mediamtx/recordings`. The configured `recordPath`
+uses `%path`, so each recorded camera/profile gets its own directory tree:
+
+```text
+/var/lib/mediamtx/recordings/{serial_number}/{profile_token}/YYYY-MM-DD_HH-MM-SS-microseconds.mp4
+```
+
+Example:
+
+```text
+/var/lib/mediamtx/recordings/DS-2CD2142022579764/Profile_1/2026-09-26_22-17-07-693849.mp4
+```
+
+The recording format is fMP4 (`recordFormat: fmp4`). MediaMTX appends the file extension
+automatically; with fMP4 recordings, files are written as `.mp4` segments. Segments are one
+hour long (`recordSegmentDuration: 1h`) and MediaMTX deletes segments after three days
+(`recordDeleteAfter: 3d`). This is the only file-management policy in the baseline
+configuration; no disk quota or emergency cleanup is configured by this runbook.
+
 ## Authentication
 
 MediaMTX uses **internal database mode** with permissive access rules — no password is required for any user (`pass:` is empty). The config grants full permissions (publish, read, playback) to all cameras. Access control is managed by the nginx proxy front end.
@@ -121,7 +148,9 @@ sudo cp mediamtx /usr/local/bin/mediamtx && sudo chmod 755 /usr/local/bin/mediam
 ```bash
 sudo groupadd --system mediamtx
 sudo useradd --system --no-create-home --shell /usr/sbin/nologin -g mediamtx mediamtx
-sudo mkdir -p /etc/mediamtx /var/log/mediamtx
+sudo mkdir -p /etc/mediamtx /var/log/mediamtx /var/lib/mediamtx/recordings
+sudo chown -R mediamtx:mediamtx /etc/mediamtx /var/log/mediamtx /var/lib/mediamtx
+sudo chmod 750 /etc/mediamtx /var/lib/mediamtx /var/lib/mediamtx/recordings
 ```
 
 ## 3. Create MediaMTX Configuration File (`/etc/mediamtx/mediamtx.yml`)
@@ -183,11 +212,26 @@ authInternalUsers:
       - action: playback
         path: ""
 
+# Recording defaults. Recording is disabled by default and enabled only
+# on the main stream path for each camera.
+pathDefaults:
+  record: false
+  recordPath: /var/lib/mediamtx/recordings/%path/%Y-%m-%d_%H-%M-%S-%f
+  recordFormat: fmp4
+  recordPartDuration: 1s
+  recordMaxPartSize: 50M
+  recordSegmentDuration: 1h
+  recordDeleteAfter: 3d
+
 # Camera paths (pull from RTSP sources)
 paths:
   DS-2CD2142022579764/Profile_1:
     source: rtsp://admin:<URL-encoded value returned by pass camera>@10.1.1.70:554/Streaming/Channels/101?transportmode=unicast&profile=Profile_1
-  # ... one additional path per profile: the main stream AND every substream, for every camera
+    record: true
+  DS-2CD2142022579764/Profile_2:
+    source: rtsp://admin:<URL-encoded value returned by pass camera>@10.1.1.70:554/Streaming/Channels/102?transportmode=unicast&profile=Profile_2
+  # ... one additional path per profile: the main stream AND every substream, for every camera.
+  # Add record: true only to the first/main profile for each camera.
 ```
 
 ## 4. Systemd Service Setup

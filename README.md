@@ -4,7 +4,7 @@ This project builds a secure IP camera network with enterprise grade OAuth authe
 
 The system employs a Hermes Agent with elevated privileges to build and manage the system. The configurations described here have been tested using a locally hosted instance of Qwen3.8 27B inference model as the source of intelligence. If inference is locally hosted, the system is fully autonomous and does not require any external internet connection to function once it has been set up.
 
-Clients can connect to the camera web apps without further configuration beyond entering authorization credentials. Hermes can be configured on the client side to give the agent full control over camera operation including PTZ functions with additional security safeguards.
+Clients can connect to the camera web apps without further configuration beyond importing the CA certificate and entering authorization credentials. Hermes can be configured on the client side to give the agent full control over camera operation including PTZ functions with additional security safeguards.
 
 ## System Requirements
 
@@ -40,15 +40,15 @@ Be mindful of model context size when running the configurations shown below. St
 
 1. ### Server Preparation
 
-    Follow the SERVER_PREP.md document in the docs folder after installing Ubuntu 26.04 on the host. The top section of the document installs several quality of life features that help manage the server, but are not strictly required for operation. The Essential Configurations section describes critical installations required for operation. The document assumes knowledge of the vi/nvim application for editing.
+    Follow the [SERVER_PREP.md](docs/SERVER_PREP.md) document in the docs folder after installing Ubuntu 26.04 on the host. The top section of the document installs several quality of life features that help manage the server, but are not strictly required for operation. The Essential Configurations section describes critical installations required for operation. The document assumes knowledge of the vi/nvim application for editing.
 
-    To use an SMB server for backups, follow the instructions in Step 1. of SMB_SERVE.md.
+    To use an SMB server for backups, follow the instructions in Step 1. of [SMB_SERVE.md](docs/SMB_SERVE.md).
 
 2. ### Set up password store and backup folder
 
-    The system will need several secret passwords for cameras, shared folders and server management. The `GPG_KEY.md` runbook contains instructions for setting up a GPG protected password store for these secrets.
+    The system will need several secret passwords for cameras, shared folders and server management. The [GPG_KEY.md](docs/GPG_KEY.md) runbook contains instructions for setting up a GPG protected password store for these secrets.
 
-    The server will need a backup location for critical data. An SMB share is a good place to do this. Assuming you have another Ubuntu machine set up on your local network, Hermes can do this for you using the instructions in the runbook SMB_SERVE.md. Other mounted storage locations work as well, but the procedures that follow will expect there to be a directory into which backup files can be written with proper file permissions.
+    The server will need a backup location for critical data. An SMB share is a good place to do this. Assuming you have another Ubuntu machine set up on your local network, Hermes can do this for you using the instructions in the runbook [SMB_SERVE.md](docs/SMB_SERVE.md). Other mounted storage locations work as well, but the procedures that follow will expect there to be a directory into which backup files can be written with proper file permissions.
 
     Assuming you have chosen the SMB strategy and have a server set up, prompt the agent to create the gpg key, password store, smb mount and backup the keys.
 
@@ -61,16 +61,16 @@ Be mindful of model context size when running the configurations shown below. St
 
     **Runbook**
 
-    ```
-    GPG_KEY.md
-    ```
+    
+    [GPG_KEY.md](docs/GPG_KEY.md)
+
     ---
 
 3. ### Set up Private Camera Subnet
 
     Attach the cameras to the second ethernet adapter. The value for `{{PRVT_CAMERA_NET_EN_NAME}}` can be found using the `nmcli dev show` command from a terminal.     The DHCP server is set up first and should be given ample opportunity to assign addresses to cameras before querying the camera MCP server tool get_cameras to discover cameras on the network. A couple of minutes should be long enough.
 
-    The NCP_HTTP.md runbook sets up the camera MCP server to communicate with the cameras, and is used by later steps to gather camera information for system configuration. 
+    The MCP_HTTP.md runbook sets up the camera MCP server to communicate with the cameras, and is used by later steps to gather camera information for system configuration. 
 
     **Required Values**
 
@@ -84,10 +84,10 @@ Be mindful of model context size when running the configurations shown below. St
 
     **Runbooks**
 
-    ```
-    DHCP.md
-    MCP_HTTP.md
-    ```
+    [DHCP.md](docs/DHCP.md)
+
+    [MCP_HTTP.md](docs/MCP_HTTP.md)
+  
     ---
 
 4. ### HTTP Services
@@ -105,18 +105,19 @@ Be mindful of model context size when running the configurations shown below. St
 
     **Runbooks**
 
-    ```
-    MEDIAMTX.md
-    SNAPSHOT.md
-    APPS.md
-    ```
+    [MEDIAMTX.md](docs/MEDIAMTX.md)
+
+    [SNAPSHOT.md](docs/SNAPSHOT.md)
+
+    [APPS.md](docs/APPS.md)
+
     ---
 
 5. ### HTTPS Encryption
 
     Included are runbooks for generating and distributing a Certificate Authority (CA) and site certificate locally. The endpoints are re-mapped to provide encryption for the suite of services. The instructions include a backup to the SMB shared drive configured earlier.
 
-    Following completion of this section, nginx will be serving the endpoints under SSL encryption and clients will need to authorize the keys from their certificate store. Instructions for client configuration are in the `CLIENT.md` runbook. The site certificate can be accessed through an unencrypted endpoint on the server.
+    Following completion of this section, nginx will be serving the endpoints under SSL encryption and clients will need to authorize the keys from their certificate store. Instructions for client configuration are in the [CLIENT.md](docs/CLIENT.md) runbook. The site certificate can be accessed through an unencrypted endpoint on the server.
 
     **Required Values**
 
@@ -133,12 +134,14 @@ Be mindful of model context size when running the configurations shown below. St
 
     **Runbooks**
 
-    ```
-    CREATE_CA_CERT.md
-    SITE_CERT.md
-    CA_DISTRIBUTE.md
-    DNS.md
-    ```
+    [CREATE_CA_CERT.md](docs/CREATE_CA_CERT.md)
+
+    [SITE_CERT.md](docs/SITE_CERT.md)
+
+    [CA_DISTRIBUTE.md](docs/CA_DISTRIBUTE.md)
+
+    [DNS.md](docs/DNS.md)
+
     ---
 
 6. ### Keycloak installation
@@ -154,14 +157,13 @@ Be mindful of model context size when running the configurations shown below. St
 
     **Runbook**
 
-    ```
-    KEYCLOAK.md
-    ```
+    [KEYCLOAK.md](docs/KEYCLOAK.md)
+
     ---
 
 7. ### Layer authentication on the rest of the site endpoints
 
-    This step will require that the camera-new http MCP server is available to the agent. This can be accomplished using the /reload-mcp directive before starting the runbook.
+    This step will require that the camera-new http MCP server is available to the agent. This can be accomplished using the `/reload-mcp` directive or by restarting hermes before starting the runbook.
 
     **Required Values**
 
@@ -173,9 +175,8 @@ Be mindful of model context size when running the configurations shown below. St
 
     **Runbook**
 
-    ```
-    STREAM_AUTH.md
-    ```
+    [STREAM_AUTH.md](docs/STREAM_AUTH.md)
+
     ---
 
 8. ### Configure Keycloak email
@@ -198,9 +199,9 @@ Be mindful of model context size when running the configurations shown below. St
 
     **Runbook**
 
-    ```
-    KEYCLOAK_EMAIL.md
-    ```
+    [KEYCLOAK_EMAIL.md](docs/KEYCLOAK_EMAIL.md)
+
+    ---
 
 9. ### Add user
 
@@ -221,9 +222,8 @@ Be mindful of model context size when running the configurations shown below. St
 
     **Runbook**
 
-    ```
-    ADD_USER_EMAIL.md
-    ```
+    [ADD_USER_EMAIL.md](docs/ADD_USER_EMAIL.md)
+
     ---
 
 10. ### Add client IP address to allowed hosts
@@ -239,20 +239,19 @@ Be mindful of model context size when running the configurations shown below. St
 
     **Runbook**
 
-    ```
-    ADD_CLIENT_ON_SERVER.md
-    ```
+    [ADD_CLIENT_ON_SERVER.md](docs/ADD_CLIENT_ON_SERVER.md)
+
     ---
 
 11. ### Firewall Protection
 
-    The document FIREWALL.md shows how to configure a firewall for this system using the built in ufw utility in Ubuntu.
+    The document [FIREWALL.md](docs/FIREWALL.md) shows how to configure a firewall for this system using the built in ufw utility in Ubuntu.
 
     ---
 
 ## Configuring the Client
 
-Clients are configured using the CLIENT.md doc. Configurations have been mapped for major Linux distros, Windows and MacOS. Limited configuration for Android mobile devices gives access to the camera web apps.
+Clients are configured using the [CLIENT.md](docs/CLIENT.md) doc. Configurations have been mapped for major Linux distros, Windows and MacOS. Limited configuration for Android mobile devices gives access to the camera web apps.
 
 If the client is using MCP services, you can optimize performance with the following prompt, which should be applied after testing the client in situ.
 
