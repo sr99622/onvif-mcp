@@ -1,235 +1,125 @@
 # ONVIF Camera MCP HTTP Server
 
-## Values Supplied by the Agent
+## Purpose
+
+Configure the HTTP-based ONVIF MCP server and expose it through nginx at `http://{{SERVER_FQDN}}/mcp`.
+
+Target state:
+
+- Service: `onvif-mcp-http.service`, enabled and active
+- Local endpoint: `http://127.0.0.1:8001/mcp`
+- Nginx endpoint: `http://{{SERVER_FQDN}}/mcp`
+- Environment file: `/etc/onvif-mcp-http.env`, mode `600 root:root`
+- Unit file: `/etc/systemd/system/onvif-mcp-http.service`, mode `644 root:root`
+- Python venv: `{{REPO_PATH}}/onvif-mcp/.venv`
+- Executable: `{{REPO_PATH}}/onvif-mcp/.venv/bin/onvif-mcp-http`
+- Hermes MCP entry: `camera` pointing to `http://{{SERVER_FQDN}}/mcp`
+
+## Required Values
 
 | Config Variable | Description |
-| --- | --- |
-| `{{SERVER_FQDN}}` | Fully Qualified Domain Name of the Server       |
-| `{{CAMERA_USERNAME}}`    | Camera Username                                 |
-| `pass camera`     | Camera password from the local password store   |
-| `{{REPO_PATH}}`   | Full Pathname of Repository Location            |
-| `{{SERVER_USER}}` | System user the service runs as (project owner) |
+|---|---|
+| `{{SERVER_FQDN}}` | Fully Qualified Domain Name of the server |
+| `{{CAMERA_USERNAME}}` | Camera username |
+| `pass show camera` | Camera password from the local password store |
+| `{{REPO_PATH}}` | Parent directory containing this repository |
+| `{{SERVER_USER}}` | System user the service runs as |
 
-These values are required for operation. Do not hard-code the camera password in
-the systemd unit, shell history, this runbook, or agent chat. Read the first line
-from `pass camera` when generating the service environment file. If GPG prompts
-for the passphrase, enter it interactively in the terminal; after that,
-`gpg-agent` normally caches the key for subsequent reads during the same build
-session. Prompt the user with instructions to prime the cache if necessary.
+Stop and ask the user if any required value is missing. Do not hard-code the camera password in the systemd unit, shell history, this runbook, or agent chat. The executable script reads the first line from `pass show camera` when generating `/etc/onvif-mcp-http.env`.
 
-## Overview
+## Agent Presentation Rules
 
-The `onvif-mcp-http` package provides an HTTP-based MCP (Model Context Protocol) server for discovering and controlling ONVIF cameras on the local network. It exposes tools through a Streamable HTTP transport (SSE + POST), accessible both locally on port 8001 and externally through nginx at `http://{{SERVER_FQDN}}/mcp/`.
-
-- **Service**: `onvif-mcp-http.service` — running, enabled for auto-start on boot
-- **Local endpoint**: `http://127.0.0.1:8001/mcp`
-- **Nginx proxy**: `http://{{SERVER_FQDN}}/mcp/` (forwarded to port 8001)
-- **Python venv**: `{{REPO_PATH}}/onvif-mcp/.venv`
-- **Executable**: `{{REPO_PATH}}/onvif-mcp/.venv/bin/onvif-mcp-http`
-- **Source**: `packages/http/src/onvif_mcp_http/main.py`
-
-## 1. Nginx Proxy Configuration
-
-All of this lives in one server block alongside the MediaMTX proxy and Camera App, at `/etc/nginx/sites-available/camera` (if already present from the MEDIAMTX.md and APPS.md installs — extend it; do not create a second vhost):
-
-```nginx
-server {
-    listen 80;
-    server_name {{SERVER_FQDN}};
-
-    # MCP endpoint - exact match to avoid redirect issues with POST
-    location = /mcp {
-        proxy_pass http://127.0.0.1:8001/mcp;
-        proxy_redirect off;
-
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        proxy_read_timeout 86400s;
-        proxy_send_timeout 86400s;
-    }
-
-    # Handle trailing slash variant - redirect to no-slash version
-    location = /mcp/ {
-        return 301 http://$host/mcp;
-    }
-}
-```
-
-**Key points:**
-- Uses `location = /mcp` (exact match) because the MCP server redirects `/mcp/` to `/mcp`, and POST requests don't survive the redirect. Nginx must forward directly to `/mcp` without trailing slash.
-- Proxy headers include Upgrade/Connection for SSE, plus standard forwarded headers.
-
-  After installing the MCP locations, verify with:
-
-  ```bash
-  # must print exactly 1 per port — a second occurrence means a conflict
-  sudo nginx -T | grep -c 'server_name {{SERVER_FQDN}}'
-  # re-test every pre-existing endpoint (apps, web player, registry), not just /mcp
-  ```
-
-## 2. Configure systemd Service and Start
-
-The camera password is a runtime secret. Store it in a protected systemd
-environment file generated from `pass camera`; keep the unit file itself free of
-secrets. Prompt the user with instructions to prime the gpg cache if necessary.
-
-Create `/etc/onvif-mcp-http.env` from the password store:
-
-```bash
-set -e
-umask 077
-tmp_env="$(mktemp "$HOME/.onvif-mcp-http.env.XXXXXX")"
-IFS= read -r CAMERA_PASSWORD < <(pass camera)
-test -n "$CAMERA_PASSWORD"
-{
-  printf 'MCP_HTTP_HOST=127.0.0.1\n'
-  printf 'MCP_HTTP_PORT=8001\n'
-  printf 'CAMERA_USERNAME=%s\n' '{{CAMERA_USERNAME}}'
-  printf 'CAMERA_PASSWORD=%s\n' "$CAMERA_PASSWORD"
-  printf 'STREAM_SERVER_URL=http://%s\n' '{{SERVER_FQDN}}'
-} > "$tmp_env"
-sudo install -o root -g root -m 0600 "$tmp_env" /etc/onvif-mcp-http.env
-shred -u "$tmp_env"
-sudo test -s /etc/onvif-mcp-http.env
-sudo stat -c '%a %U:%G %n' /etc/onvif-mcp-http.env
-```
-
-Required environment-file permissions:
+This document is a script for the agent. The executable source of truth is:
 
 ```text
-600 root:root /etc/onvif-mcp-http.env
+{{REPO_PATH}}/onvif-mcp/scripts/MCP_HTTP/mcp_http_runbook.sh
 ```
 
-Do not make `/etc/onvif-mcp-http.env` world-readable. `systemd` reads the file as
-root before starting the service as `{{SERVER_USER}}`.
+Before executing any AGENT-run command or presenting any USER-run command, replace every double-curly placeholder with the real site value. Do not ask the user to type placeholders literally.
 
-**File**: `/etc/systemd/system/onvif-mcp-http.service`
+For this runbook, the agent normally runs the commands directly. If a command must be shown to the user, include `cd {{REPO_PATH}}/onvif-mcp` as the first line of the copy-paste block after resolving `{{REPO_PATH}}`.
 
-```ini
-[Unit]
-Description=ONVIF Camera MCP HTTP Server
-After=network-online.target
-Wants=network-online.target
+Do not replace the scripted workflow with ad hoc shell fragments. If behavior must change, update `scripts/MCP_HTTP/mcp_http_runbook.sh` and keep this runbook as orchestration guidance.
 
-[Service]
-Type=simple
-User={{SERVER_USER}}
-WorkingDirectory={{REPO_PATH}}/onvif-mcp
-EnvironmentFile=/etc/onvif-mcp-http.env
-ExecStart={{REPO_PATH}}/onvif-mcp/.venv/bin/onvif-mcp-http
-Restart=on-failure
-RestartSec=5
+## 1. Apply MCP HTTP Configuration (AGENT-run)
 
-[Install]
-WantedBy=multi-user.target
-```
-
-Protect the unit file and verify that it does not contain the camera password:
+Run from the repository directory:
 
 ```bash
-sudo chown root:root /etc/systemd/system/onvif-mcp-http.service
-sudo chmod 0644 /etc/systemd/system/onvif-mcp-http.service
-sudo grep -n 'CAMERA_PASSWORD=' /etc/systemd/system/onvif-mcp-http.service && exit 1 || true
-sudo grep -n '^EnvironmentFile=/etc/onvif-mcp-http.env$' /etc/systemd/system/onvif-mcp-http.service
-sudo stat -c '%a %U:%G %n' /etc/systemd/system/onvif-mcp-http.service /etc/onvif-mcp-http.env
+cd {{REPO_PATH}}/onvif-mcp
+scripts/MCP_HTTP/mcp_http_runbook.sh apply \
+  --server-fqdn {{SERVER_FQDN}} \
+  --camera-username {{CAMERA_USERNAME}} \
+  --repo-path {{REPO_PATH}} \
+  --server-user {{SERVER_USER}}
 ```
 
-Start the service and make it persistent
+The script performs the full MCP HTTP runbook:
+
+- Installs missing Debian/Ubuntu packages when `apt-get` is available.
+- Runs `uv sync --all-packages` in `{{REPO_PATH}}/onvif-mcp`.
+- Verifies `{{REPO_PATH}}/onvif-mcp/.venv/bin/onvif-mcp-http` exists.
+- Reads the camera password from `pass show camera`.
+- Writes `/etc/onvif-mcp-http.env` with mode `600 root:root`.
+- Writes `/etc/systemd/system/onvif-mcp-http.service` with mode `644 root:root`.
+- Verifies the unit file does not contain `CAMERA_PASSWORD=`.
+- Creates or extends `/etc/nginx/sites-available/camera` with exact `/mcp` proxy locations.
+- Enables the nginx site and reloads nginx after `nginx -t` succeeds.
+- Enables and restarts `onvif-mcp-http.service`.
+- Prints non-secret status output.
+
+If `pass show camera` fails because GPG needs the passphrase, stop and ask the user to run this in their own terminal:
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now onvif-mcp-http
+cd {{REPO_PATH}}/onvif-mcp
+pass show camera >/dev/null
 ```
 
-### Management commands:
-```bash
-systemctl status onvif-mcp-http          # Check status
-journalctl -u onvif-mcp-http -f           # Follow logs
-systemctl restart onvif-mcp-http          # Restart after code changes
-sudo systemctl disable onvif-mcp-http     # Disable auto-start
-```
+After the user confirms that command succeeded, rerun the `apply` command. Do not ask the user to paste the GPG passphrase or camera password into chat.
 
-## 3. Test MCP Protocol Usage (curl examples)
+## 2. Verify MCP HTTP Service (AGENT-run)
 
-The MCP Streamable HTTP transport uses a session-based handshake. All requests must carry the session ID from the initialize response.
-
-> **Testing note:** the upstream enforces host/origin validation — a POST to
-> `http://127.0.0.1/mcp` through nginx (or directly to `127.0.0.1:8001/mcp` with a
-> loopback Host) returns `421 Misdirected Request` / `406`. Use the real FQDN
-> (`http://{{SERVER_FQDN}}/mcp`) in these tests, or add `-H "Host: {{SERVER_FQDN}}"`
-> when targeting `127.0.0.1`. This is correct security behavior, not a broken proxy.
-
-### Step 1: Initialize
+Run:
 
 ```bash
-INIT=$(curl -sD- \
-  -X POST \
-  -H "Content-Type: application/json" \
-  -H "Accept: text/event-stream, application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"curl-test","version":"1.0"}}}' \
-  http://{{SERVER_FQDN}}/mcp)
-
-SESSION_ID=$(echo "$INIT" | grep -i "^mcp-session-id:" | awk '{print $2}' | tr -d '\r')
+cd {{REPO_PATH}}/onvif-mcp
+scripts/MCP_HTTP/mcp_http_runbook.sh status \
+  --server-fqdn {{SERVER_FQDN}} \
+  --repo-path {{REPO_PATH}}
 ```
 
-### Step 2: Send Initialized Notification
+Acceptance checks:
+
+- `onvif-mcp-http.service` is enabled and active.
+- `/etc/systemd/system/onvif-mcp-http.service` is `644 root:root`.
+- `/etc/onvif-mcp-http.env` is `600 root:root`.
+- nginx has exactly one `server_name {{SERVER_FQDN}}` entry for this site.
+- A listener exists on `127.0.0.1:8001`.
+- Recent service logs show Uvicorn running on `http://127.0.0.1:8001`.
+
+## 3. Test MCP Protocol (AGENT-run)
+
+Run:
 
 ```bash
-curl -s \
-  -X POST \
-  -H "Content-Type: application/json" \
-  -H "Accept: text/event-stream, application/json" \
-  -H "mcp-session-id: $SESSION_ID" \
-  -d '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
-  http://{{SERVER_FQDN}}/mcp
+cd {{REPO_PATH}}/onvif-mcp
+scripts/MCP_HTTP/mcp_http_runbook.sh test --server-fqdn {{SERVER_FQDN}}
 ```
 
-### Step 3: List Available Tools
+The script performs the MCP Streamable HTTP initialize handshake, sends the initialized notification, calls `tools/list`, verifies the `get_cameras` and `get_adapters` tools are present, then calls `get_adapters` and requires the private adapter address `10.2.2.1` in the response.
+
+The MCP server enforces host/origin validation. Use the real FQDN endpoint in tests; loopback requests with a loopback Host can return `421 Misdirected Request` or `406` and do not indicate a broken nginx proxy.
+
+## 4. Add Camera MCP Server Configuration to Hermes (AGENT-run)
+
+Run:
 
 ```bash
-curl -s \
-  -X POST \
-  -H "Content-Type: application/json" \
-  -H "Accept: text/event-stream, application/json" \
-  -H "mcp-session-id: $SESSION_ID" \
-  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
-  http://{{SERVER_FQDN}}/mcp
+cd {{REPO_PATH}}/onvif-mcp
+scripts/MCP_HTTP/mcp_http_runbook.sh configure-hermes --server-fqdn {{SERVER_FQDN}}
 ```
 
-### Step 4: Call a Tool (get_cameras)
-
-```bash
-curl -s \
-  -X POST \
-  -H "Content-Type: application/json" \
-  -H "Accept: text/event-stream, application/json" \
-  -H "mcp-session-id: $SESSION_ID" \
-  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get_cameras","arguments":{}}}' \
-  http://{{SERVER_FQDN}}/mcp
-```
-
-### Step 5: Call a Tool (get_adapters)
-
-```bash
-curl -s \
-  -X POST \
-  -H "Content-Type: application/json" \
-  -H "Accept: text/event-stream, application/json" \
-  -H "mcp-session-id: $SESSION_ID" \
-  -d '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"get_adapters","arguments":{}}}' \
-  http://{{SERVER_FQDN}}/mcp
-```
-
-## 4. Add camera MCP server configuration to Hermes
-
-Edit the ~/.hermes/config.yaml to enable the camera MCP serever in hermes. 
-Prompt the user to re-start hermes to intialize the server.
+Then verify `~/.hermes/config.yaml` contains:
 
 ```yaml
 mcp_servers:
@@ -239,39 +129,4 @@ mcp_servers:
     timeout: 180
 ```
 
-## Architecture Diagram
-
-```
-                  ┌─────────────────────┐
-External clients  │                     │   natively uses MCP protocol.
-    ─────────────►│  Nginx (:80)        │
-                  │{{SERVER_FQDN}}/mcp/ │
-                  └──────────┬──────────┘
-                             │ reverse proxy
-                             ▼
-┌─────────────────────────────────────────────────┐
-│              systemd: onvif-mcp-http.service     │
-│                                                  │
-│  {{REPO_PATH}}/onvif-mcp/.venv/bin/              │
-│  python3 -m onvif_mcp_http.main                  │
-│                                                  │
-│  Listens on http://127.0.0.1:8001/mcp            │
-│  Uses uvicorn (ASGI server) for Streamable HTTP  │
-│  transport (SSE + POST).                         │
-│                                                  │
-│  Environment:                                    │
-│    CAMERA_USERNAME={{CAMERA_USERNAME}}           │
-│    CAMERA_PASSWORD=(from /etc/onvif-mcp-http.env │
-│                    generated by pass camera)     │
-│    STREAM_SERVER_URL=http://{{SERVER_FQDN}}      │
-│    MCP_HTTP_HOST=127.0.0.1                       │
-│    MCP_HTTP_PORT=8001                            │
-└──────────────┬───────────────────────────────────┘
-               │ libonvif.discover()
-               ▼
-          ┌─────────────┐
-          │ ONVIF       │
-          │ Cameras     │
-          │             │
-          └─────────────┘
-```
+Tell the user to reload MCP in Hermes with `/reload-mcp` or restart Hermes before relying on the new camera MCP server in the current session.

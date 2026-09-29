@@ -1,474 +1,116 @@
 # MediaMTX Server Configuration
 
-This document describes the MediaMTX RTSP-to-WebRTC/HLS streaming server. The server pulls live video from IP cameras and makes them available via WebRTC for browser playback. In this document, the server name is represented symbolically surrounded by curly braces as `{{SERVER_FQDN}}`, which should be replaced by the actual server name, e.g. `camera.home.arpa`, in production. The curly braces convention for representing symbolic values is followed throughout this document.
+## Purpose
 
-## Values provided by Agent
+Configure MediaMTX to pull camera RTSP streams, serve browser WebRTC streams, and record main camera profiles.
+
+Target state:
+
+- Binary: `/usr/local/bin/mediamtx`
+- Config: `/etc/mediamtx/mediamtx.yml`, mode `640 mediamtx:mediamtx`
+- Recordings: `/var/lib/mediamtx/recordings`
+- Service: `mediamtx.service`, enabled and active
+- RTSP: `127.0.0.1:8554` TCP only
+- WebRTC signaling: `127.0.0.1:8889`, proxied by nginx at `http://{{SERVER_FQDN}}/webrtc/`
+- WebRTC media: UDP `:8189`
+- Playback API: `127.0.0.1:9996`, proxied by nginx at `/playback/`
+- One MediaMTX path for every camera profile returned by `get_cameras`
+- Recording enabled only for the first/main profile of each camera
+
+## Required Values
 
 | Value | Description |
 |---|---|
-| `{{SERVER_FQDN}}` | Server Fully Qualified Domain Name |
-| `{{CAMERA_USERNAME}}` | Camera Username, normally `admin` |
-| `pass camera` | Camera password, stored in `~/.password-store/camera.gpg` |
+| `{{SERVER_FQDN}}` | Server fully qualified domain name |
+| `{{CAMERA_USERNAME}}` | Camera username, normally `admin` |
+| `pass show camera` | Camera password from the local password store |
+| `{{REPO_PATH}}` | Parent directory containing this repository |
 
-These values are required for operation. Do not ask the user to paste the camera password into the runbook or shell history. Read it from `pass camera`. If GPG prompts for the passphrase, complete that terminal prompt once; the local `gpg-agent` normally caches the unlocked key for a short period, allowing subsequent `pass camera` calls in the same build/restore session to run without prompting. Prompt the user with instructions to prime the cache if necessary.
+Stop and ask the user if any required value is missing. Do not ask the user to paste the camera password into the runbook, shell history, or chat. The executable script reads the first line from `pass show camera` and URL-encodes it before writing MediaMTX RTSP source URLs.
 
-## Deployment Details
+## Agent Presentation Rules
 
-| Item | Value |
-|------|-------|
-| Server URL | `http://{{SERVER_FQDN}}/webrtc/` |
-| Binary | `/usr/local/bin/mediamtx` |
-| Config | `/etc/mediamtx/mediamtx.yml` |
-| Recordings | `/var/lib/mediamtx/recordings` |
-| Service | `sudo systemctl status mediamtx` (system service, multi-user.target) |
-| User | `mediamtx:mediamtx` (dedicated system user) |
-
-## Protocols & Ports
-
-| Protocol | Port(s) | Status | Use |
-|----------|---------|--------|-----|
-| RTSP | 127.0.0.1:8554 (TCP only) | **Enabled** | Camera pulls (loopback only — not accessible from LAN) |
-| WebRTC | :8889 (TCP HTTP), :8189 (UDP ICE) | **Enabled** | Browser live streams |
-| Playback | 127.0.0.1:9996 (TCP HTTP) | **Enabled** | Recorded stream list/get API, proxied by nginx |
-| HLS | :8888 | Disabled | Low-latency HLS segments |
-| RTMP | :1935 | Disabled | RTMP ingest |
-| SRT | :8890 | Disabled | Secure Reliable Transport |
-
-Note: UDP RTP (ports 8000, 8001) and multicast ports (8002, 8003) are **disabled**. Camera streams are pulled over TCP interleaved within the RTSP connection. This reduces exposed attack surface while WebRTC clients continue working normally through port 8889.
-
-UDP port 8189 carries the actual encrypted WebRTC audio/video media between MediaMTX and the browser.
-
-The connection works in two stages:
-
-1. nginx proxies HTTP signaling to MediaMTX on TCP 8889. This loads the player and negotiates the WebRTC session.
-
-2. The browser then connects directly to MediaMTX on UDP 8189 using ICE/DTLS/SRTP. The encrypted camera stream travels over this connection.
-
-So nginx does not normally proxy UDP 8189. If it is bound to 127.0.0.1, remote browsers can load the player but cannot receive video.
-
-The appropriate arrangement is:
-```
-webrtcAddress: 127.0.0.1:8889      # signaling through nginx
-webrtcLocalUDPAddress: :8189       # media reachable by browsers
-```
-UDP 8189 carries encrypted WebRTC media, not the original unencrypted RTSP feed. A firewall can restrict it to trusted LAN/VPN client networks.
-
-## Camera Streams
-
-Each camera exposes two or more named paths in the YAML config. The streams are declared in the `paths:` section of the `mediamtx.yml`. The camera stream path consists of a name and a `source:` field. The name is a combination of the camera serial number and profile token delimited by a slash character. The source is the camera RTSP endpoint, known as the stream_uri, modified to include the username and password credentials for authorization. The camera password must be read from the local password store with `pass camera` when generating the config; do not hard-code it in this document, scripts committed to source control, or shell history. Agents can collect the necessary camera data from the stdio camera MCP server tool `get_cameras`, which returns camera data including profiles that will each have a web_player_url. The main stream is considered to be the first profile, and substream(s) follow in order.
-
-### Example Camera Stream Path Construction
-
-The camera path is constructed using the formula shown below. Values inside the curly braces are symbolic and should be replaced by concrete system values in production.
-
-```py
-  {serial_number}/{profile.token}
-    source: {stream_uri[:7]}{{CAMERA_USERNAME}}:{url_encoded_camera_password_from_pass}@{stream_uri[7:]}
-```
-
-Using concrete example values
-
-* Serial Number: DS-2CD2142022579764
-* Profile Token: Profile_1
-* Stream URI: rtsp://10.1.1.70:554/Streaming/Channels/101?transportmode=unicast&profile=Profile_1
-* Username: admin
-* Password: read from `pass camera`
-
-```yaml
-paths:
-  DS-2CD2142022579764/Profile_1:
-    source: rtsp://admin:<URL-encoded value returned by pass camera>@10.1.1.70:554/Streaming/Channels/101?transportmode=unicast&profile=Profile_1
-```
-
-When writing the real `/etc/mediamtx/mediamtx.yml`, read the first line returned by `pass camera`, URL-encode it, then replace `<URL-encoded value returned by pass camera>` with that encoded value. Characters such as `@`, `:`, `/`, `?`, `#`, `%`, and spaces have special meaning inside URLs. Do not leave `$CAMERA_PASSWORD` or another shell variable reference inside the YAML; MediaMTX does not expand shell variables in `source:` URLs.
-
-### Stream Coverage Requirement
-
-For EVERY camera returned by `get_cameras`, ALL media profiles must be added as separate
-paths — both the main stream profile AND every substream profile. A camera that reports a
-single profile gets one path; a camera reporting multiple profiles (e.g. MediaProfile000 +
-MediaProfile001, Profile_1 + Profile_2, profile1 + profile2) gets one path per profile,
-each using that profile's own token and its own stream_uri. Never omit substreams to keep
-the config short: consumers of this server depend on low-bandwidth substreams for thumbnail
-and multi-camera views. After writing the config, verify the path count matches the total
-number of profiles reported across all cameras before starting the service.
-
-## Recording
-
-MediaMTX records only paths that have `record: true`. This deployment keeps recording
-disabled in `pathDefaults` and adds `record: true` only to the first/main profile for each
-camera. Substreams remain available for live thumbnails and multi-camera views but are not
-recorded.
-
-Recordings are written under `/var/lib/mediamtx/recordings`. The configured `recordPath`
-uses `%path`, so each recorded camera/profile gets its own directory tree:
+This document is a script for the agent. The executable source of truth is:
 
 ```text
-/var/lib/mediamtx/recordings/{serial_number}/{profile_token}/YYYY-MM-DD_HH-MM-SS-microseconds.mp4
+{{REPO_PATH}}/onvif-mcp/scripts/MEDIAMTX/mediamtx_runbook.sh
 ```
 
-Example:
+Before executing any AGENT-run command or presenting any USER-run command, replace every double-curly placeholder with the real site value. Do not ask the user to type placeholders literally.
 
-```text
-/var/lib/mediamtx/recordings/DS-2CD2142022579764/Profile_1/2026-09-26_22-17-07-693849.mp4
-```
+For this runbook, the agent normally runs the commands directly. If a command must be shown to the user, include `cd {{REPO_PATH}}/onvif-mcp` as the first line of the copy-paste block after resolving `{{REPO_PATH}}`.
 
-The recording format is fMP4 (`recordFormat: fmp4`). MediaMTX appends the file extension
-automatically; with fMP4 recordings, files are written as `.mp4` segments. Segments are one
-hour long (`recordSegmentDuration: 1h`) and MediaMTX deletes segments after three days
-(`recordDeleteAfter: 3d`). This is the only file-management policy in the baseline
-configuration; no disk quota or emergency cleanup is configured by this runbook.
+Do not replace the scripted workflow with ad hoc shell fragments. If behavior must change, update `scripts/MEDIAMTX/mediamtx_runbook.sh` and keep this runbook as orchestration guidance.
 
-## Playback
+## 1. Apply MediaMTX Configuration (AGENT-run)
 
-MediaMTX exposes recorded-stream playback through a loopback-only HTTP server:
-
-```yaml
-playback: true
-playbackAddress: 127.0.0.1:9996
-```
-
-Do not bind playback to a public interface. Public browser access is through the authenticated nginx `/playback/` route, which strips the prefix and proxies to `http://127.0.0.1:9996/`.
-
-Public authenticated endpoints:
-
-```text
-https://{{SERVER_FQDN}}/playback/list?path={url_encoded_media_path}[&start={url_encoded_rfc3339}][&end={url_encoded_rfc3339}]
-https://{{SERVER_FQDN}}/playback/get?path={url_encoded_media_path}&start={url_encoded_rfc3339}&duration={seconds}[&format=fmp4|mp4]
-```
-
-Loopback diagnostic endpoints:
-
-```text
-http://127.0.0.1:9996/list?path={url_encoded_media_path}[&start={url_encoded_rfc3339}][&end={url_encoded_rfc3339}]
-http://127.0.0.1:9996/get?path={url_encoded_media_path}&start={url_encoded_rfc3339}&duration={seconds}[&format=fmp4|mp4]
-```
-
-Example path encoding:
-
-```text
-AMC014641NE6L35AT8/MediaProfile000 -> AMC014641NE6L35AT8%2FMediaProfile000
-```
-
-MediaMTX `/playback/get` is timestamp-addressable: change the `start=` parameter to jump to another wall-clock time. The dynamic response is not a normal static MP4 file and may not support Chrome's native scrub bar because the response is chunked and does not provide byte-range seeking.
-
-For normal browser seek controls, create a static MP4 from a playback slice:
+Run from the repository directory:
 
 ```bash
-work="$HOME/.hermes/cache/scratch/amcrest_0900_remux"
-mkdir -p "$work"
-src="$work/amcrest_2026-09-27_0900_10min_source.mp4"
-out="$work/amcrest_2026-09-27_0900_10min_static.mp4"
-
-curl -L --fail --silent --show-error \
-  'http://127.0.0.1:9996/get?path=AMC014641NE6L35AT8%2FMediaProfile000&start=2026-09-27T09%3A00%3A00-04%3A00&duration=600&format=mp4' \
-  -o "$src"
-
-ffmpeg -y -hide_banner -loglevel error \
-  -i "$src" \
-  -map 0 \
-  -c copy \
-  -movflags +faststart \
-  "$out"
+cd {{REPO_PATH}}/onvif-mcp
+scripts/MEDIAMTX/mediamtx_runbook.sh apply \
+  --server-fqdn {{SERVER_FQDN}} \
+  --camera-username {{CAMERA_USERNAME}} \
+  --repo-path {{REPO_PATH}}
 ```
 
-Serve remuxed files from `/srv/camera-playback-cache/` through an authenticated nginx `/playback-cache/` location. Static cached files are not managed by MediaMTX `recordDeleteAfter`; delete them manually or add separate cache retention.
+The script performs the full MediaMTX runbook:
 
-## Authentication
+- Installs missing Debian/Ubuntu packages when `apt-get` is available.
+- Downloads and installs the latest Linux amd64 MediaMTX release if `/usr/local/bin/mediamtx` is missing.
+- Creates the dedicated `mediamtx:mediamtx` system user and protected directories.
+- Calls the camera MCP HTTP server `get_cameras` tool through `http://{{SERVER_FQDN}}/mcp`.
+- Reads the camera password from `pass show camera` and URL-encodes it.
+- Generates `/etc/mediamtx/mediamtx.yml` with one path per camera profile.
+- Adds `record: true` only to the first/main profile for each camera.
+- Writes `/etc/systemd/system/mediamtx.service`.
+- Adds nginx locations for `/webrtc/`, `/playback/`, and `/playback-cache/` to the existing camera site.
+- Enables and restarts nginx and MediaMTX.
+- Prints non-secret status output.
 
-MediaMTX uses **internal database mode** with permissive access rules — no password is required for any user (`pass:` is empty). The config grants full permissions (publish, read, playback) to all cameras. Access control is managed by the nginx proxy front end.
-
-## 1. Get Binary Executable
-
-location: https://github.com/bluenviron/mediamtx/releases
-
-look for the latest amd64 binary, it will look something like
-
-`mediamtx_v1.20.0_linux_amd64.tar.gz`
-
-In this example, the most recent version is 1.20.0, which can change. The generic representation of this name with the version represented symbolically and surrounded by curly braces would be:
-
-`mediamtx_v{version}_linux_amd64.tar.gz`
-
-Example Deployment steps (the symbolic version in curly braces should be replaced with the actual version):
-```bash
-# Download latest version
-curl -sL "https://github.com/bluenviron/mediamtx/releases/download/v{version}/mediamtx_v{version}_linux_amd64.tar.gz" | tar xz
-
-# Install binary
-sudo cp mediamtx /usr/local/bin/mediamtx && sudo chmod 755 /usr/local/bin/mediamtx
-```
-
-## 2. Create System User
+If `pass show camera` fails because GPG needs the passphrase, stop and ask the user to run this in their own terminal:
 
 ```bash
-sudo groupadd --system mediamtx
-sudo useradd --system --no-create-home --shell /usr/sbin/nologin -g mediamtx mediamtx
-sudo mkdir -p /etc/mediamtx /var/log/mediamtx /var/lib/mediamtx/recordings
-sudo chown -R mediamtx:mediamtx /etc/mediamtx /var/log/mediamtx /var/lib/mediamtx
-sudo chmod 750 /etc/mediamtx /var/lib/mediamtx /var/lib/mediamtx/recordings
+cd {{REPO_PATH}}/onvif-mcp
+pass show camera >/dev/null
 ```
 
-## 3. Create MediaMTX Configuration File (`/etc/mediamtx/mediamtx.yml`)
+After the user confirms that command succeeded, rerun the `apply` command. Do not ask the user to paste the GPG passphrase or camera password into chat.
 
-* Camera credentials are embedded in RTSP URLs in the generated config file (`/etc/mediamtx/mediamtx.yml`). Keep this file protected (mode 640 or stricter, owned by mediamtx:mediamtx).
-* The camera password source of truth is `pass camera`. Use the first line returned by `pass camera` when generating RTSP `source:` URLs.
-* URL-encode the password before embedding it in `rtsp://{{CAMERA_USERNAME}}:...@host/...`.
-* If `pass camera` prompts for a GPG passphrase, enter it interactively in the terminal. Once the GPG agent cache is primed, repeated reads during the same build usually do not prompt again.
-* Do not write the generated YAML through commands that expose the password in shell history. Prefer a script, editor, or here-document that reads the password from `pass camera` into a variable and writes the file with restrictive permissions.
+## 2. Verify MediaMTX (AGENT-run)
 
-Password read pattern for build/restore scripts:
+Run:
 
 ```bash
-IFS= read -r CAMERA_PASSWORD < <(pass camera)
-test -n "$CAMERA_PASSWORD"
-CAMERA_PASSWORD_URLENCODED="$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$CAMERA_PASSWORD")"
+cd {{REPO_PATH}}/onvif-mcp
+scripts/MEDIAMTX/mediamtx_runbook.sh status --server-fqdn {{SERVER_FQDN}}
 ```
 
-After generating `/etc/mediamtx/mediamtx.yml`, enforce ownership and permissions:
+Acceptance checks:
+
+- `/usr/local/bin/mediamtx` exists and prints a version.
+- `mediamtx.service` is enabled and active.
+- `/etc/mediamtx` is `750 mediamtx:mediamtx`.
+- `/etc/mediamtx/mediamtx.yml` is `640 mediamtx:mediamtx`.
+- Listeners exist on `127.0.0.1:8554`, `127.0.0.1:8889`, `127.0.0.1:9996`, and UDP `:8189`.
+- The generated path count equals the total number of profiles returned by `get_cameras`.
+- Recent MediaMTX logs show camera paths becoming `stream is available and online`.
+
+Warnings about skipped generic tracks or occasional RTP packet loss are not, by themselves, a failure if the stream is online.
+
+## 3. Test WebRTC Proxy (AGENT-run)
+
+Run:
 
 ```bash
-sudo chown mediamtx:mediamtx /etc/mediamtx /etc/mediamtx/mediamtx.yml
-sudo chmod 750 /etc/mediamtx
-sudo chmod 640 /etc/mediamtx/mediamtx.yml
+cd {{REPO_PATH}}/onvif-mcp
+scripts/MEDIAMTX/mediamtx_runbook.sh test --server-fqdn {{SERVER_FQDN}}
 ```
 
-```yaml
-logLevel: info
-logDestinations: [stdout]
+The script selects the first configured MediaMTX path and requests `http://{{SERVER_FQDN}}/webrtc/<serial>/<profile>/` through nginx. The test passes when the endpoint returns an HTTP success or redirect status.
 
-# RTSP server (loopback only)
-rtsp: true
-rtspTransports: [tcp]
-rtspAddress: 127.0.0.1:8554
+## Operational Notes
 
-# WebRTC server
-webrtc: true
-webrtcAddress: 127.0.0.1:8889
-webrtcLocalUDPAddress: :8189
+MediaMTX camera credentials are embedded in `/etc/mediamtx/mediamtx.yml` as RTSP source URLs. Keep that file protected and never copy it into chat or source control.
 
-# Playback server for recorded streams (loopback only, proxied/authenticated by nginx)
-playback: true
-playbackAddress: 127.0.0.1:9996
-
-# Disable unused protocols to reduce attack surface
-rtmp: false
-hls: false
-srt: false
-moq: false
-api: false  # Not needed for basic operation
-
-# Authentication - internal mode, no password required
-authMethod: internal
-authInternalUsers:
-  - user: any
-    pass: ""
-    ips: []
-    permissions:
-      - action: publish
-        path: ""
-      - action: read
-        path: ""
-      - action: playback
-        path: ""
-
-# Recording defaults. Recording is disabled by default and enabled only
-# on the main stream path for each camera.
-pathDefaults:
-  record: false
-  recordPath: /var/lib/mediamtx/recordings/%path/%Y-%m-%d_%H-%M-%S-%f
-  recordFormat: fmp4
-  recordPartDuration: 1s
-  recordMaxPartSize: 50M
-  recordSegmentDuration: 1h
-  recordDeleteAfter: 3d
-
-# Camera paths (pull from RTSP sources)
-paths:
-  DS-2CD2142022579764/Profile_1:
-    source: rtsp://admin:<URL-encoded value returned by pass camera>@10.1.1.70:554/Streaming/Channels/101?transportmode=unicast&profile=Profile_1
-    record: true
-  DS-2CD2142022579764/Profile_2:
-    source: rtsp://admin:<URL-encoded value returned by pass camera>@10.1.1.70:554/Streaming/Channels/102?transportmode=unicast&profile=Profile_2
-  # ... one additional path per profile: the main stream AND every substream, for every camera.
-  # Add record: true only to the first/main profile for each camera.
-```
-
-## 4. Systemd Service Setup
-
-Service file at `/etc/systemd/system/mediamtx.service`:
-
-```ini
-[Unit]
-Description=MediaMTX RTSP-to-WebRTC streaming server
-Documentation=https://github.com/bluenviron/mediamtx
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=mediamtx
-Group=mediamtx
-WorkingDirectory=/var/lib/mediamtx
-ExecStart=/usr/local/bin/mediamtx /etc/mediamtx/mediamtx.yml
-Restart=on-failure
-RestartSec=5
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=mediamtx
-
-ReadWritePaths=/var/log/mediamtx /var/lib/mediamtx
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Installation steps:
-```bash
-sudo cp mediamtx.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable mediamtx
-sudo systemctl start mediamtx
-sudo systemctl status mediamtx  # verify active (running)
-```
-
-## 5. Nginx Reverse Proxy Configuration
-
-Install nginx if necessary.
-
-**Critical:** The nginx reverse proxy requires TWO specific directives that are often missing:
-
-1. **Trailing slash in `proxy_pass`**: `http://127.0.0.1:8889/` (note the trailing slash)
-2. **`proxy_redirect / /webrtc/;`** — this ensures MediaMTX's redirects preserve the `/webrtc/` prefix
-
-Without these, MediaMTX returns a redirect like `302 Location: /camera/path/`, which nginx then tries to serve as a static file (causing 405 errors or broken behavior).
-
-All of this lives in one server block at `/etc/nginx/sites-available/camera` (if already present from the MCP_HTTP.md — extend it; do not create a second vhost):
-
-
-```nginx
-server {
-    listen 80;
-    server_name {{SERVER_FQDN}};
-
-    location /webrtc/ {
-        proxy_pass http://127.0.0.1:8889/;   # trailing slash REQUIRED
-        proxy_redirect / /webrtc/;            # preserve /webrtc/ in redirects
-
-        # WebSocket support for WebRTC signaling
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        # Long timeouts for WebRTC sessions
-        proxy_read_timeout 86400s;
-        proxy_send_timeout 86400s;
-    }
-
-    location = /playback {
-        return 301 /playback/;
-    }
-
-    location /playback/ {
-        auth_request /oauth2/auth;
-        error_page 401 = @oauth2_signin;
-        auth_request_set $auth_cookie $upstream_http_set_cookie;
-        add_header Set-Cookie $auth_cookie always;
-
-        proxy_pass http://127.0.0.1:9996/;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        proxy_read_timeout 300s;
-        proxy_send_timeout 300s;
-    }
-
-    location /playback-cache/ {
-        auth_request /oauth2/auth;
-        error_page 401 = @oauth2_signin;
-        auth_request_set $auth_cookie $upstream_http_set_cookie;
-        add_header Set-Cookie $auth_cookie always;
-
-        alias /srv/camera-playback-cache/;
-        add_header Accept-Ranges bytes always;
-    }
-
-    location = / {
-        return 200 "MediaMTX server at {{SERVER_FQDN}}\n";
-        add_header Content-Type text/plain;
-    }
-}
-```
-
-Installation:
-```bash
-sudo cp camera /etc/nginx/sites-available/camera
-sudo ln -sf /etc/nginx/sites-available/camera /etc/nginx/sites-enabled/camera
-sudo rm -f /etc/nginx/sites-enabled/default  # if needed
-sudo nginx -t                              # test configuration
-sudo systemctl reload nginx                # apply changes
-```
-
-### URL Format (Trailing Slash Required)
-
-MediaMTX requires a **trailing slash** at the end of camera paths. Note that the symbolic value in the curly braces {{SERVER_FQDN}} should be replaced with the actual server host name, e.g. `camera.home.arpa`.
-
-- ✅ `http://{{SERVER_FQDN}}/webrtc/DS-2CD2142022579764/Profile_1/`
-- ❌ `http://{{SERVER_FQDN}}/webrtc/DS-2CD2142022579764/Profile_1` (redirects but browser may not follow)
-
-The `proxy_redirect / /webrtc/;` directive ensures that MediaMTX's internal redirects preserve the `/webrtc/` prefix.
-
-## Operations
-
-### Check status and logs
-```bash
-sudo systemctl status mediamtx --no-pager
-sudo journalctl -u mediamtx -f                    # live logs
-sudo tail -n 50 /var/log/mediamtx/mediamtx.log     # file log (if configured)
-```
-
-### Restart
-```bash
-sudo systemctl restart mediamtx
-```
-
-### View running cameras (from status output)
-MediaMTX prints a startup line showing which paths have online streams. Look for:
-- `INF [path {name}] stream is available and online, N track(s)` = healthy
-- `ERR [path {name}] bad status code: 401` = camera auth failure (occurs on HIKVISION Profile_2)
-
-### Adding a new camera
-1. Add new path entries in the `paths:` section of `/etc/mediamtx/mediamtx.yml` as described above in **Camera Streams** — one entry per profile, including all substreams (see **Stream Coverage Requirement**).
-
-2. Restart the service:
-```bash
-sudo systemctl restart mediamtx
-```
-
-### Removing a camera
-Delete the path entry from the `paths:` section of `/etc/mediamtx/mediamtx.yml` and restart.
-
-## Security Notes
-
-- MediaMTX listens on `127.0.0.1` for WebRTC TCP ports, but access flows through Nginx at `/webrtc/`.
-- Without authentication layers, anyone on the network who can reach port 8889 (or port 80 via nginx) gets a live stream.
-- All cameras use the same camera username and the password stored in `pass camera`.
-
-## Known Issues
-
-### RTP Packet Loss
-Some camera streams show warnings in logs:
-```
-WAR [path DS-2CD2142022579764/Profile_1] [RTSP source] 14 RTP packets lost
-WAR [path DS-2CD2142022579764/Profile_1] 23 processing errors, last was: invalid FU-A packet (non-starting)
-```
-
-These are common with Hikvision cameras and do not prevent streaming. The streams remain available despite the warnings. Amcrest cameras on certain substreams may show similar behavior.
-
+Public browser access to `/webrtc/` is plain HTTP at this stage. TLS and Keycloak are added by later runbooks.

@@ -2,596 +2,228 @@
 
 ## Purpose
 
-This runbook documents the tested, end-to-end process used to:
+Create the private root Certificate Authority used by the camera system, store the
+CA unlock secrets in the existing local `pass` + GPG vault, and back up the
+complete CA state to the mounted SMB backup share.
 
-- Create a private root Certificate Authority on a trusted host.
-- Add the two secrets that protect the CA (the CA key passphrase and the age-archive
-  passphrase) to the existing local, offline `pass` + GPG password store, so they
-  are recoverable without relying on an agent transcript.
-- Back up the complete CA state — and the vault entries that unlock it — to an SMB
-  share under authenticated `age` encryption and GPG-encrypted store backups.
+The executable workflow lives in:
 
-No cloud service or account is involved. Everything is encrypted locally; encrypted
-copies live on the SMB share at `{{BACKUP_PATH}}/Camera-CA-Backups/`.
+```bash
+scripts/CREATE_CA_CERT/create_ca_cert_runbook.sh
+```
 
-Complete `GPG_KEY.md` before starting this runbook. Its GPG key export and
-password-store backup must already be verified on the backup share, and the
-store must already contain the `camera` and `smb` entries.
+That script is the single source of truth for executable actions. Do not replace
+it with ad hoc shell fragments from this document. This document is the agent
+script: it defines sequencing, user/agent boundaries, safety checks, and the
+copy-paste prompts that must be shown when interactive user action is required.
 
 ## Required Values
 
 | Name | Meaning |
 |---|---|
 | `{{CA_ROOT_PATH}}` | Private CA root directory |
-| `{{BACKUP_PATH}}`     | Mounted SMB share path |
-| `{{TIMESTAMP}}` | generated timestamp at capture time with `date -u +%Y%m%d%H%M%SZ` |
+| `{{BACKUP_PATH}}` | Mounted SMB share path |
+| `{{REPO_PATH}}` | Full path to this repository on the camera host |
+| `{{TIMESTAMP}}` | generated UTC timestamp, `YYYYMMDDhhmmssZ` |
 
-For password-store backups, append a unique suffix when more than one store
-backup is made on the same day, for example `{{TIMESTAMP}}-initial`,
-`{{TIMESTAMP}}-ca-passphrases`, or `{{TIMESTAMP}}-pre-ca-archive`.
+For the current implementation, the CA working directory is
+`{{CA_ROOT_PATH}}/camera-system-ca`, local encrypted backups are written under
+`{{CA_ROOT_PATH}}/backups`, and SMB encrypted backups are written under
+`{{BACKUP_PATH}}/Camera-CA-Backups`.
 
-Passphrases are **not** supplied as variables and never echoed. Both live in the local
-`pass` vault under the store's GPG key:
+## Prerequisites
+
+Complete `GPG_KEY.md` before starting this runbook. The backup share must already
+be a real mounted CIFS filesystem, not merely a local directory or an autofs
+placeholder, and the password store must already contain `camera` and `smb`.
+The SMB backup folder must already contain the GPG secret-key export created by
+`GPG_KEY.md`:
+
+```text
+{{BACKUP_PATH}}/Camera-CA-Backups/ca-vault-gpg.key.gpg
+```
+
+Passphrases are not supplied as variables and must never be pasted into chat.
+The script generates these vault entries with a CSPRNG and stores them with
+`pass`:
 
 | Vault entry | Protects |
 |---|---|
-| `camera-ca/root-key-passphrase` | The CA private key (used for signing) |
-| `camera-ca/age-archive-<DATE>` | The age archive from that date (local + SMB copy) |
+| `camera-ca/root-key-passphrase` | The CA private key used for signing |
+| `camera-ca/age-archive-{{TIMESTAMP}}` | The encrypted CA-state archive from this run |
 
-## Site-specific values
+## Agent Presentation Rules
 
-| Purpose | Value |
-|---|---|
-| Root CA name | `Camera System Root CA` |
-| CA working directory | `{{CA_ROOT_PATH}}/camera-system-ca` |
-| Local encrypted backups | `{{CA_ROOT_PATH}}/backups` |
-| SMB encrypted backups | `{{BACKUP_PATH}}/Camera-CA-Backups` |
+Before presenting any USER-run command or executing any AGENT-run command,
+replace every double-curly placeholder with the real site value. Do not ask the
+user to type or edit placeholders such as `{{CA_ROOT_PATH}}`, `{{BACKUP_PATH}}`,
+or `{{REPO_PATH}}`.
 
-## Security model
+When a USER-run command invokes a repository script, include `cd {{REPO_PATH}}`
+as the first line after resolving it to the real repository path. The user must
+be able to copy and paste the prompt without modification.
 
-- The CA private key remains on the host.
-- The CA private key is encrypted with AES-256 and protected by a strong passphrase.
-- The root CA certificate (and any issued site certificates) are public and may be
-  distributed; the private key never leaves the host.
-- The complete CA state is archived using authenticated `age` encryption.
-- The archive passphrase and the CA-key passphrase are stored **separately from the
-  files**, GPG-encrypted in the local `pass` store, with an encrypted backup on SMB.
-- The CA is backed up after every issuance or revocation operation (see SITE_CERT.md).
+The script never accepts passwords or passphrases as command-line arguments.
+If GPG needs a passphrase, the user primes the GPG agent from their own terminal
+using the scripted command in step 2.
 
-## Hard rules
+## Security model and hard rules
 
-1. **The GPG key and password store are created and backed up first**, by the user
-   in a real terminal following `GPG_KEY.md`. The store must already contain the
-   `camera` and `smb` entries. The GPG passphrase must never pass through an
-   agent session, command line, or file. This runbook only verifies and uses the
-   existing store.
-2. **The two CA passphrases are generated by the agent with a CSPRNG** (`openssl rand`),
-   written into `pass` via stdin from 0700 temp files, and every intermediate copy is
-   wiped with `shred -u`. They are never printed, and they are never typed interactively
-   at an `openssl`/`age` prompt (see §5 and "Pitfalls and notes").
-3. **Back up the password store after every manipulation.** Any `pass insert`,
-   `pass edit`, `pass rm`, generated CA passphrase, camera password rotation, or
-   SMB password rotation must be followed by a fresh password-store backup before
-   the process continues.
-4. **Secrets are verified by their consumers** (`openssl pkey -check`, `tar -tzf` after
-   `age -d`), never by reading them back or echoing them.
+1. The GPG key and password store are created and backed up first, following
+   `GPG_KEY.md`. Do not run `pass init` here.
+2. The CA private key remains on the host and is encrypted with AES-256.
+3. The root CA certificate is public and may be distributed; the private key must
+   never leave the host except inside the encrypted CA-state archive.
+4. Back up the password store immediately after the script creates the CA
+   passphrase entries and again immediately before the CA archive is created.
+5. Secrets are verified by consumers (`openssl pkey -check`, `age -d` and
+   `tar -tzf`), never by printing secret values.
+6. Do not write backups into `{{BACKUP_PATH}}` unless it is verified as a real
+   mounted CIFS filesystem.
 
----
+## 1. Prepare the CA workstation (AGENT-run)
 
-## 1. Prepare the CA workstation
-
-Verify OpenSSL:
+Install required packages, configure safe GPG-agent cache settings, and print
+non-secret state:
 
 ```bash
-openssl version -a
+cd {{REPO_PATH}}
+scripts/CREATE_CA_CERT/create_ca_cert_runbook.sh agent-prep
+scripts/CREATE_CA_CERT/create_ca_cert_runbook.sh status \
+  --ca-root {{CA_ROOT_PATH}} \
+  --backup-path {{BACKUP_PATH}}
 ```
 
-Install `age`:
+`agent-prep` may install `openssl`, `pass`, `gnupg`, `age`, and `util-linux` on
+Debian/Ubuntu hosts. It also removes the invalid `cache-ttl` GPG-agent directive
+if present and sets `default-cache-ttl 7200` plus `max-cache-ttl 7200`.
+
+## 2. Prime the GPG cache if interactive unlock is required (USER-run)
+
+If the agent-side `apply` command cannot decrypt or write password-store entries
+because GPG needs a pinentry prompt, stop and show the user this exact resolved
+copy-paste block:
 
 ```bash
-sudo apt install age      # Debian/Ubuntu; use `brew install age` on macOS
-age --version
+cd {{REPO_PATH}}
+scripts/CREATE_CA_CERT/create_ca_cert_runbook.sh prime-gpg-cache
 ```
 
-Verify `pass` is available. It should already be installed and initialized by
-`GPG_KEY.md`:
+Tell the user to enter the GPG passphrase in their terminal if prompted, and to
+report when the command prints `prime-gpg-cache-ok`. Do not ask the user to paste
+any passphrase or password into chat.
+
+## 3. Create and back up the CA (AGENT-run)
+
+Run the script with resolved paths. Omit `--timestamp` unless continuing a known
+attempt that already reserved a timestamp; otherwise the script generates one.
 
 ```bash
-pass --version            # expect v1.7.x
+cd {{REPO_PATH}}
+scripts/CREATE_CA_CERT/create_ca_cert_runbook.sh apply \
+  --ca-root {{CA_ROOT_PATH}} \
+  --backup-path {{BACKUP_PATH}}
 ```
 
-Create the protected CA directory structure:
+The `apply` command performs the full workflow:
+
+- verifies the mounted CIFS backup path;
+- verifies the existing password store, `camera` and `smb` entries, prior
+  password-store backup, and `ca-vault-gpg.key.gpg`;
+- creates the protected CA directory tree and OpenSSL CA database;
+- writes `openssl.cnf` with `copy_extensions = none` and the root/server
+  certificate profiles;
+- generates the CA-key and archive passphrases into protected temporary files,
+  stores them in `pass`, and shreds the temporary files;
+- backs up the whole password store as
+  `password-store-backup-{{TIMESTAMP}}-ca-passphrases.tar.gz`;
+- creates the encrypted RSA root CA key and verifies it with OpenSSL;
+- creates and verifies the ten-year self-signed root CA certificate named
+  `camera-system-root-ca.crt.pem` with subject `CN=Camera System Root CA`;
+- backs up the whole password store again as
+  `password-store-backup-{{TIMESTAMP}}-pre-ca-archive.tar.gz`;
+- creates and verifies the authenticated `age` archive
+  `camera-system-ca-initial-{{TIMESTAMP}}.tar.gz.age`;
+- copies the age archive to SMB without overwriting an existing archive and
+  verifies the local and SMB copies match.
+
+Record the timestamp printed by `apply-ok timestamp=...`; later runbooks need it
+for recovery and audit references.
+
+## 4. Verify final state (AGENT-run)
+
+Run verification with the exact timestamp printed by `apply`:
 
 ```bash
-install -d -m 700 "{{CA_ROOT_PATH}}"
-install -d -m 700 "{{CA_ROOT_PATH}}/camera-system-ca"
-install -d -m 700 "{{CA_ROOT_PATH}}/camera-system-ca/private"
-install -d -m 700 \
-  "{{CA_ROOT_PATH}}/camera-system-ca/certs" \
-  "{{CA_ROOT_PATH}}/camera-system-ca/csr" \
-  "{{CA_ROOT_PATH}}/camera-system-ca/crl" \
-  "{{CA_ROOT_PATH}}/camera-system-ca/issued" \
-  "{{CA_ROOT_PATH}}/camera-system-ca/newcerts"
-install -d -m 700 "{{CA_ROOT_PATH}}/backups"
+cd {{REPO_PATH}}
+scripts/CREATE_CA_CERT/create_ca_cert_runbook.sh verify \
+  --ca-root {{CA_ROOT_PATH}} \
+  --backup-path {{BACKUP_PATH}} \
+  --timestamp {{TIMESTAMP}}
 ```
 
-Verify permissions:
+Then inspect non-secret status:
 
 ```bash
-ls -ld "{{CA_ROOT_PATH}}/camera-system-ca" \
-  "{{CA_ROOT_PATH}}/camera-system-ca"/*
+cd {{REPO_PATH}}
+scripts/CREATE_CA_CERT/create_ca_cert_runbook.sh status \
+  --ca-root {{CA_ROOT_PATH}} \
+  --backup-path {{BACKUP_PATH}}
 ```
 
-All directories must be mode `700`.
-
-## 2. Verify the backed-up GPG key and existing password store
-
-The user has already completed `GPG_KEY.md`. Verify the key, the key backup, the
-initialized password store, and the required operational entries before storing
-CA passphrases:
-
-```bash
-gpg --list-secret-keys        # note the full fingerprint and encryption subkey
-test -s "{{BACKUP_PATH}}/Camera-CA-Backups/ca-vault-gpg.key.gpg"
-test -s ~/.password-store/.gpg-id
-pass show camera >/dev/null
-pass show smb >/dev/null
-test -n "$(find ~/.password-store -maxdepth 2 -type f -name '*.gpg' -print -quit)"
-```
-
-Do not run `pass init` here. If the store is missing or the `camera`/`smb`
-entries are absent, stop and return to `GPG_KEY.md`.
-
-Confirm the password-store backup created by `GPG_KEY.md` exists on SMB. Use the
-most recent dated backup file:
-
-```bash
-ls -l "{{BACKUP_PATH}}/Camera-CA-Backups"/password-store-backup-*.tar.gz
-```
-
-## 3. Initialize CA state
-
-Create the empty certificate database:
-
-```bash
-touch "{{CA_ROOT_PATH}}/camera-system-ca/index.txt"
-chmod 600 "{{CA_ROOT_PATH}}/camera-system-ca/index.txt"
-```
-
-Initialize the certificate serial counter:
-
-```bash
-printf '1000\n' > "{{CA_ROOT_PATH}}/camera-system-ca/serial"
-chmod 600 "{{CA_ROOT_PATH}}/camera-system-ca/serial"
-```
-
-Initialize the CRL counter:
-
-```bash
-printf '1000\n' > "{{CA_ROOT_PATH}}/camera-system-ca/crlnumber"
-chmod 600 "{{CA_ROOT_PATH}}/camera-system-ca/crlnumber"
-```
-
-The counters use hexadecimal values. The first issued site certificate therefore receives
-serial `0x1000`.
-
-## 4. Create the OpenSSL CA configuration
-
-Create `{{CA_ROOT_PATH}}/camera-system-ca/openssl.cnf` with mode `600`:
-
-```ini
-[ ca ]
-default_ca = CA_default
-
-[ CA_default ]
-dir               = {{CA_ROOT_PATH}}/camera-system-ca
-certs             = $dir/certs
-crl_dir           = $dir/crl
-new_certs_dir     = $dir/newcerts
-database          = $dir/index.txt
-serial            = $dir/serial
-crlnumber         = $dir/crlnumber
-certificate       = $dir/certs/camera-system-root-ca.crt.pem
-private_key       = $dir/private/camera-system-root-ca.key.pem
-crl               = $dir/crl/camera-system-root-ca.crl.pem
-
-default_md        = sha256
-default_days      = 397
-default_crl_days  = 30
-policy            = policy_loose
-unique_subject    = no
-copy_extensions   = none
-preserve          = no
-
-name_opt          = ca_default
-cert_opt          = ca_default
-
-[ policy_loose ]
-countryName             = optional
-stateOrProvinceName     = optional
-localityName            = optional
-organizationName        = optional
-organizationalUnitName  = optional
-commonName              = supplied
-emailAddress            = optional
-
-[ req ]
-default_bits        = 4096
-default_md          = sha256
-string_mask         = utf8only
-distinguished_name = req_distinguished_name
-x509_extensions     = v3_ca
-prompt              = yes
-
-[ req_distinguished_name ]
-commonName = Common Name
-
-[ v3_ca ]
-subjectKeyIdentifier   = hash
-authorityKeyIdentifier = keyid:always,issuer
-basicConstraints       = critical, CA:true, pathlen:0
-keyUsage               = critical, digitalSignature, cRLSign, keyCertSign
-
-[ server_cert ]
-subjectKeyIdentifier   = hash
-authorityKeyIdentifier = keyid,issuer
-basicConstraints       = critical, CA:false
-keyUsage               = critical, digitalSignature, keyEncipherment
-extendedKeyUsage       = serverAuth
-```
-
-`copy_extensions = none` prevents a CSR from injecting unreviewed extensions. A separate
-reviewed extension file controls each issued certificate (see SITE_CERT.md §4).
-
-## 5. Generate the passphrases into the vault (single source of truth)
-
-This is the **only** place either passphrase originates. Both are independent random
-values, generated by the agent with a CSPRNG into 0700 temp files, stored in `pass`, and
-wiped immediately. They are never echoed, and they are never typed at an interactive
-prompt downstream — every later `openssl`/`age` step that needs one feeds it headlessly
-from the vault using this section's pattern (§6 for the CA key, §10 for the age archive).
-
-Generate two independent random values (each into a 0700 temp file, never echoed):
-
-```bash
-umask 077
-openssl rand -base64 24 | tr -d '=+/' | cut -c1-28 > /tmp/.ca-root-key-pass   # CA root key passphrase
-openssl rand -base64 24 | tr -d '=+/' | cut -c1-28 > /tmp/.ca-age-archive     # age archive passphrase
-```
-
-Store them (masked), then wipe the temp files in the same command chain:
-
-```bash
-pass insert -m camera-ca/root-key-passphrase < /tmp/.ca-root-key-pass
-pass insert -m camera-ca/age-archive-{{TIMESTAMP}}    < /tmp/.ca-age-archive
-shred -u /tmp/.ca-root-key-pass /tmp/.ca-age-archive
-ls -la ~/.password-store/camera-ca/   # per-entry .gpg files, mode 600
-```
-
-Immediately back up the password store after adding these entries. Do not proceed
-to key generation until this fresh backup exists and lists the expected store
-contents:
-
-```bash
-backup_dir="{{BACKUP_PATH}}/Camera-CA-Backups"
-backup_label="{{TIMESTAMP}}-ca-passphrases"
-backup_file="$backup_dir/password-store-backup-$backup_label.tar.gz"
-mkdir -p "$backup_dir"
-test ! -e "$backup_file"
-tar -C "$HOME" -czf "$backup_file" .password-store
-test -s "$backup_file"
-chmod 600 "$backup_file"
-cat ~/.password-store/.gpg-id > "$backup_dir/pass-gpg-id.txt"
-tar -tzf "$backup_file" | sed -n '1,40p'
-```
-
-`pass show camera-ca/<name>` prompts for the GPG passphrase; gpg-agent caches it, so once
-the user has typed it a few times (e.g. when they set it in their terminal), later `pass
-show` calls work headless within the same session.
-
-If the cache window must be longer than the agent's default 60 s (e.g. the user primes
-the cache in their own terminal, then hands off to an agent that cannot prompt),
-extend it in `~/.gnupg/gpg-agent.conf`:
-
-```ini
-default-cache-ttl 7200
-max-cache-ttl 7200
-```
-
-then restart the agent (`gpgconf --homedir ~/.gnupg --launch gpg-agent`) and prime it
-with a single sign in the user's terminal. Note the conf keys are `default-cache-ttl`
-and `max-cache-ttl` — bare `cache-ttl` is *not* a valid config directive (it is only the
-long option form of `--default-cache-ttl`), and an invalid line makes gpgconf report
-"Configuration file of component GPG Agent is broken" and refuse to start the agent at
-all, blocking every headless sign until the line is fixed.
-
-Both stored values are 28 characters (`pass show … | wc -c` → 29 bytes, value + newline).
-
-## 6. Generate the encrypted CA private key (passphrase supplied from the vault)
-
-Generate a 4096-bit RSA key encrypted with AES-256. The passphrase is fed headlessly from
-the vault — it is never placed in a command, script, configuration file, repository, or
-backup directory.
-
-**OpenSSL encrypted writes reject `-passin file:` and non-tty stdin on OpenSSL 3.5.5**
-(`openssl genpkey -aes-256-cbc` errors with "Multiple cipher or unknown options"; even the
-plain form aborts its UI on non-tty stdin). The verified route feeds both prompt lines
-("passphrase" + "verify") into a PTY via `script`, with stdin supplied from *outside* so
-the wrapper cannot hang:
-
-```bash
-bash -lc 'pass show camera-ca/root-key-passphrase; pass show camera-ca/root-key-passphrase' \
-  | script -qec "stty -echo 2>/dev/null; \
-      openssl genpkey -algorithm RSA -aes-256-cbc -pkeyopt rsa_keygen_bits:4096 \
-        -out {{CA_ROOT_PATH}}/camera-system-ca/private/camera-system-root-ca.key.pem" /dev/null
-```
-
-Verify the header and mode:
-
-```bash
-ls -l "{{CA_ROOT_PATH}}/camera-system-ca/private/camera-system-root-ca.key.pem"
-sed -n '1p' "{{CA_ROOT_PATH}}/camera-system-ca/private/camera-system-root-ca.key.pem"
-```
-
-Expected header:
+A complete run leaves these key artifacts:
 
 ```text
------BEGIN ENCRYPTED PRIVATE KEY-----
+{{CA_ROOT_PATH}}/camera-system-ca/private/camera-system-root-ca.key.pem
+{{CA_ROOT_PATH}}/camera-system-ca/certs/camera-system-root-ca.crt.pem
+{{CA_ROOT_PATH}}/camera-system-ca/openssl.cnf
+{{CA_ROOT_PATH}}/backups/camera-system-ca-initial-{{TIMESTAMP}}.tar.gz.age
+{{BACKUP_PATH}}/Camera-CA-Backups/camera-system-ca-initial-{{TIMESTAMP}}.tar.gz.age
+{{BACKUP_PATH}}/Camera-CA-Backups/password-store-backup-{{TIMESTAMP}}-ca-passphrases.tar.gz
+{{BACKUP_PATH}}/Camera-CA-Backups/password-store-backup-{{TIMESTAMP}}-pre-ca-archive.tar.gz
+{{BACKUP_PATH}}/Camera-CA-Backups/pass-gpg-id.txt
+{{BACKUP_PATH}}/Camera-CA-Backups/ca-vault-gpg.key.gpg
 ```
-
-## 7. Verify the CA private key (decryption reads use a plain pipe)
-
-Decryption/verification reads work with plain piped stdin — no PTY needed:
-
-```bash
-pass show camera-ca/root-key-passphrase | \
-  openssl pkey -in "{{CA_ROOT_PATH}}/camera-system-ca/private/camera-system-root-ca.key.pem" \
-    -check -noout
-```
-
-Expected:
-
-```text
-Key is valid
-```
-
-## 8. Create the root CA certificate (passphrase supplied from the vault)
-
-Create a ten-year self-signed root. The certificate should be named 
-`camera-system-root-ca.crt.pem`. The passphrase is again fed from the vault via a plain
-pipe (this is a read/verify-style `req`, so no PTY is required):
-
-```bash
-pass show camera-ca/root-key-passphrase | \
-  openssl req -config "{{CA_ROOT_PATH}}/camera-system-ca/openssl.cnf" \
-    -key "{{CA_ROOT_PATH}}/camera-system-ca/private/camera-system-root-ca.key.pem" \
-    -new -x509 -days 3650 -sha256 -extensions v3_ca \
-    -subj "/CN=Camera System Root CA" \
-    -out "{{CA_ROOT_PATH}}/camera-system-ca/certs/camera-system-root-ca.crt.pem"
-```
-
-Inspect it:
-
-```bash
-openssl x509 \
-  -in "{{CA_ROOT_PATH}}/camera-system-ca/certs/camera-system-root-ca.crt.pem" \
-  -noout -subject -issuer -dates -serial
-```
-
-Verify its self-signature:
-
-```bash
-openssl verify \
-  -CAfile "{{CA_ROOT_PATH}}/camera-system-ca/certs/camera-system-root-ca.crt.pem" \
-  "{{CA_ROOT_PATH}}/camera-system-ca/certs/camera-system-root-ca.crt.pem"
-```
-
-Expected:
-
-```text
-camera-system-root-ca.crt.pem: OK
-```
-
-Inspect extensions:
-
-```bash
-openssl x509 \
-  -in "{{CA_ROOT_PATH}}/camera-system-ca/certs/camera-system-root-ca.crt.pem" \
-  -noout -text |
-sed -n '/X509v3 extensions:/,/Signature Algorithm/p'
-```
-
-Required properties include:
-
-- `CA:TRUE, pathlen:0`
-- `Certificate Sign`
-- `CRL Sign`
-- Critical basic constraints and key usage
-
-## 9. Back up the password store to SMB
-
-Back up the vault **now** if any password-store entry has changed since the last
-backup. The encrypted CA-state archive created in §10 is unlocked by a
-passphrase already present in this snapshot, so the password-store backup and CA
-archive must be self-consistent.
-
-This `pass` version stores **per-entry `.gpg` files**, not a single `store.gpg`,
-so store backups must include the whole directory including the hidden `.gpg-id`.
-
-```bash
-backup_label="{{TIMESTAMP}}-pre-ca-archive"
-mkdir -p "{{BACKUP_PATH}}/Camera-CA-Backups"
-tar -C "$HOME" -czf \
-  "{{CA_ROOT_PATH}}/backups/password-store-backup-$backup_label.tar.gz" .password-store
-test ! -e "{{BACKUP_PATH}}/Camera-CA-Backups/password-store-backup-$backup_label.tar.gz"
-cp --update=none \
-  "{{CA_ROOT_PATH}}/backups/password-store-backup-$backup_label.tar.gz" \
-  "{{BACKUP_PATH}}/Camera-CA-Backups/"
-cat ~/.password-store/.gpg-id > "{{BACKUP_PATH}}/Camera-CA-Backups/pass-gpg-id.txt"
-sha256sum \
-  "{{CA_ROOT_PATH}}/backups/password-store-backup-$backup_label.tar.gz" \
-  "{{BACKUP_PATH}}/Camera-CA-Backups/password-store-backup-$backup_label.tar.gz"   # hashes must match exactly
-```
-
-## 10. Create and verify an encrypted age archive of the CA state
-
-Create an authenticated, passphrase-encrypted archive of the full CA state. The passphrase
-is fed from the vault.
-
-Before archiving, re-enforce and verify the CA directory permissions. The archive preserves
-filesystem modes exactly, so a drifted directory mode would otherwise be restored onto a
-new machine:
-
-```bash
-find "{{CA_ROOT_PATH}}/camera-system-ca" -type d -exec chmod 700 {} +
-find "{{CA_ROOT_PATH}}/camera-system-ca" -type d -exec stat -c '%a %n' {} \; |
-  awk '$1 != "700" { bad=1; print } END { exit bad }'
-```
-
-The `awk` command must produce no output and exit successfully. Stop and fix the source
-tree if any CA directory is not mode `700`; do not archive non-compliant permissions.
-
-**age reads its passphrase from `/dev/tty`** — a file redirect (`age -p < file`) fails with
-"/dev/tty not available". Use the stdin-fed `script` PTY pattern, with both prompt lines
-("Enter passphrase" + "Confirm passphrase") supplied from outside:
-
-```bash
-# encrypt (two prompts)
-bash -lc 'pass show camera-ca/age-archive-{{TIMESTAMP}}; pass show camera-ca/age-archive-{{TIMESTAMP}}' \
-  | script -qec "stty -echo 2>/dev/null; set -o pipefail; \
-      tar -C {{CA_ROOT_PATH}} -czf - camera-system-ca | \
-      age -p -o {{CA_ROOT_PATH}}/backups/camera-system-ca-initial-{{TIMESTAMP}}.tar.gz.age" /dev/null
-
-# set mode 600
-chmod 600 "{{CA_ROOT_PATH}}/backups/camera-system-ca-initial-{{TIMESTAMP}}.tar.gz.age"
-```
-
-Verify decryption without extracting (one prompt):
-
-```bash
-bash -lc 'pass show camera-ca/age-archive-{{TIMESTAMP}}' \
-  | script -qec "stty -echo 2>/dev/null; age -d {{CA_ROOT_PATH}}/backups/camera-system-ca-initial-{{TIMESTAMP}}.tar.gz.age > /tmp/.ca-decrypted.tgz" /dev/null
-tar -tzf /tmp/.ca-decrypted.tgz    # must list key, cert, openssl.cnf, index.txt, serial, crlnumber
-shred -u /tmp/.ca-decrypted.tgz    # wipe the decrypted copy immediately
-```
-
-The listing must contain the encrypted CA key, public CA certificate, configuration,
-database (`index.txt`), and counters (`serial`, `crlnumber`).
-
-A one-shot foreground `script` wrapper that runs everything *inside* hangs (~60 s
-timeout); always pipe the passphrase lines in from outside as shown.
-
-## 11. Copy the age archive to SMB and verify integrity
-
-Copy without overwriting (on GNU/Linux prefer `cp --update=none`; `-n` is non-portable
-there):
-
-```bash
-cp --update=none \
-  "{{CA_ROOT_PATH}}/backups/camera-system-ca-initial-{{TIMESTAMP}}.tar.gz.age" \
-  "{{BACKUP_PATH}}/Camera-CA-Backups/"
-sha256sum \
-  "{{CA_ROOT_PATH}}/backups/camera-system-ca-initial-{{TIMESTAMP}}.tar.gz.age" \
-  "{{BACKUP_PATH}}/Camera-CA-Backups/camera-system-ca-initial-{{TIMESTAMP}}.tar.gz.age"   # hashes must match exactly
-```
-
-## 12. Confirm the GPG key backup
-
-The secret key was exported and backed up before this runbook began, following
-`GPG_KEY.md`. Confirm its file is still present at
-`{{BACKUP_PATH}}/Camera-CA-Backups/ca-vault-gpg.key.gpg`. Losing both the live
-GPG key and this export makes the password-store backup unrecoverable.
-
-## 13. Verify Backup Contents
-Final SMB contents after a full run:
-
-```text
-{{BACKUP_PATH}}/Camera-CA-Backups/
-├── camera-system-ca-initial-{{TIMESTAMP}}.tar.gz.age   # full CA state (age, passphrase)
-├── password-store-backup-{{TIMESTAMP}}-*.tar.gz        # full ~/.password-store snapshots after each manipulation
-└── pass-gpg-id.txt                                # the store's .gpg-id value
-```
-
-All files must be present. This concludes the CA creation and backup.
-
----
 
 ## Recovery
 
-In order:
+Recovery still depends on the GPG key export and password-store backups created
+by `GPG_KEY.md` and this runbook. The user must import the GPG key from a real
+terminal so pinentry can request the key passphrase. Resolve paths before showing
+commands.
 
-1. Import the GPG key. The user must run this in another terminal:
-
-   ```bash
-    export GPG_TTY=$(tty)                                                                                                          
-    gpg --import ~/ca-vault-gpg.key.gpg    
-   ```
-
-   Using your sign on credentials
-
-   ```
-   gpg --pinentry-mode loopback --clearsign -u "{{FULL_NAME}} <{{EMAIL}}>" <<< prime
-   ```
-
-2. Restore the store (per-entry `.gpg` files + `.gpg-id`):
+1. Copy the backed-up GPG export to the recovery host, then import it in the
+   user's terminal:
 
    ```bash
-   mkdir -p ~/.password-store
-   tar -xzf password-store-backup-{{TIMESTAMP}}.tar.gz -C "$HOME"
+   cd {{REPO_PATH}}
+   scripts/GPG_KEY/gpg_key_runbook.sh import-key --key-file ca-vault-gpg.key.gpg
    ```
 
-3. Ensure `pass` is installed and check a secret:
+2. Restore the password store backup that corresponds to the CA archive:
 
    ```bash
-   pass show camera >/dev/null
-   pass show smb >/dev/null
-   pass show camera-ca/age-archive-{{TIMESTAMP}} | wc -c    # 29 bytes (28-char value + newline) -> readable
+   cd {{REPO_PATH}}
+   scripts/GPG_KEY/gpg_key_runbook.sh restore-store --backup-file password-store-backup-{{TIMESTAMP}}-pre-ca-archive.tar.gz
    ```
 
-4. Decrypt and restore the CA state (§10 one-line PTY pattern):
+3. Decrypt the CA-state archive using the restored vault entry. Prefer adding a
+   restore subcommand to `scripts/CREATE_CA_CERT/create_ca_cert_runbook.sh` before
+   performing a production recovery so this document does not become a second
+   executable source of truth.
 
-   ```bash
-   bash -lc 'pass show camera-ca/age-archive-{{TIMESTAMP}}' \
-     | script -qec "stty -echo 2>/dev/null; age -d camera-system-ca-initial-{{TIMESTAMP}}.tar.gz.age > /tmp/.ca-decrypted.tgz" /dev/null
-   tar -xzf /tmp/.ca-decrypted.tgz -C "{{CA_ROOT_PATH}}"   # restores the camera-system-ca/ tree
-   shred -u /tmp/.ca-decrypted.tgz
-   ```
+## Pitfalls and notes
 
-## Pitfalls and notes (learned the hard way)
-
-- **Create and back up the GPG key and password store first.** Follow
-  `GPG_KEY.md` in the user's terminal before this runbook. Agent-side creation
-  with a placeholder passphrase once left the user facing a prompt for a secret
-  nobody knew.
-- **One passphrase origin, not two.** The earlier CA-creation draft implied typing the CA
-  passphrase at OpenSSL's interactive prompt, while the password-store record generated it
-  once into the vault and fed it headlessly. This runbook standardizes on the latter: §5
-  is the sole creation point; §6/§8/§10 consume it via `pass show`. Do not introduce a
-  second, manually-typed passphrase for the same key — that would desync the backup from
-  the actual secret.
-- **Do not initialize the password store in this runbook.** If the store is missing,
-  return to `GPG_KEY.md` and complete the key/store creation and initial backup there.
-- **Per-entry `.gpg` files** in this `pass` version: back up the whole directory including
-  the hidden `.gpg-id`, not one file.
-- **Back up the password store after every manipulation.** Any generated CA
-  passphrase, `pass insert`, `pass edit`, or `pass rm` must be followed by a new
-  password-store backup before proceeding to later build steps.
-- **OpenSSL encrypted writes reject `-passin file:` and non-tty stdin** on 3.5.5; use the
-  two-line `script -qec` PTY pattern (§6). Decryption reads are fine with a plain pipe (§7).
-- **age's passphrase is `/dev/tty`-only**: file redirects fail; use the stdin-fed `script`
-  pattern, and keep it outside-in so the one-shot wrapper can't hang (§10). In interactive
-  use `age -p` prompts twice ("Enter passphrase" + "Confirm passphrase") — that is expected,
-  not an error.
-- **GPG-agent PIN cache blocks headless `pass` work.** gpg-agent holds your key's PIN for
-  only ~60 s by default. An agent session with no tty cannot prompt, so all `pass
-  insert`/`show` must happen while the cache is warm. If the handoff window can't be kept
-  inside 60 s, extend it in `~/.gnupg/gpg-agent.conf` (`default-cache-ttl 7200` +
-  `max-cache-ttl 7200`, then restart the agent and prime with one sign in the user's
-  terminal — §5). Do NOT use `cache-ttl` as a conf line: it is not a valid directive, and
-  the resulting "Configuration file of component GPG Agent is broken" state prevents the
-  agent from starting at all, breaking every subsequent headless sign.
-- **Wipe every intermediate secret file with `shred -u` in the same command chain** that used
-  it; a single stray copy survived a cleanup sweep once and had to be hunted down.
-- The GPG key guards the vault and CA passphrases permanently; treat it as long-lived
-  infrastructure — a user ID chosen ad hoc for this purpose is still what recovery (§13)
-  depends on. Do not rotate or delete it without rebuilding the store backups first.
+- Do not create a second origin for the CA private-key passphrase. The scripted
+  `pass insert` step is the only origin.
+- Do not initialize or recreate the password store here. If the store is missing,
+  return to `GPG_KEY.md`.
+- A mounted `autofs` row alone is not enough. The script requires a concrete
+  `cifs` row for `{{BACKUP_PATH}}` before backing up CA state.
+- GPG-agent cache expiry can block headless `pass` operations. Use the scripted
+  USER-run `prime-gpg-cache` command, not ad hoc `pass show` fragments.
+- `age -p` and encrypted OpenSSL key generation need PTY handling on this host;
+  the script contains the verified `script -qec` patterns. Do not duplicate or
+  alter those patterns in the runbook.
+- Never print passphrase values, decrypted archives, private-key material, or
+  password-store contents in an agent transcript.

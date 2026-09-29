@@ -1,251 +1,106 @@
 # Camera Applications — Installation Guide
 
-This document describes how to install the two local camera-viewing
-applications in `apps/` so they are served by nginx on this host
-and pull live streams from the MediaMTX server
-(see `docs/MEDIAMTX.md`).
+## Purpose
+
+Configure the two static camera web applications in `apps/` and serve them through nginx.
+
+Target state:
+
+- Camera Switchboard: `http://{{SERVER_FQDN}}/cameras/`
+- Four-Camera View: `http://{{SERVER_FQDN}}/multiview/`
+- Runtime registry: `/etc/onvif-mcp/camera_registry.json`
+- Registry URL: `http://{{SERVER_FQDN}}/outputs/camera_registry.json`
+- nginx worker user: `webcam`, with group access to the repository owner's group
+- App files are served in place from `{{REPO_PATH}}/onvif-mcp/apps/`; they are not copied into `/usr/share/nginx/html`
 
 ## Required Values
 
-| Value Name | Description|
-|------------|------------|
-| `{{SERVER_FQDN}}` | Server Fully Qualified Domain Name e.g. camera.home.arpa |
-| `{{REPO_PATH}}` | Path Location of git repo, most likely $HOME |
+| Value | Description |
+|---|---|
+| `{{SERVER_FQDN}}` | Server fully qualified domain name |
+| `{{REPO_PATH}}` | Parent directory containing this repository |
+| `{{SERVER_USER}}` | Repository owner / server user |
 
-These values are required for operation. Stop and prompt the user if they are not provided.
+Stop and ask the user if any required value is missing.
 
-## Applications
+## Agent Presentation Rules
 
-| App | URL | Purpose |
-|-----|-----|---------|
-| Camera Switchboard | `http://{{SERVER_FQDN}}/cameras/` | One large live stream with fast camera switching (uses each camera's **main** stream) |
-| Four-Camera View | `http://{{SERVER_FQDN}}/multiview/` | Four simultaneous streams in a responsive 2x2 layout (uses each camera's **substream**) |
+This document is a script for the agent. The executable source of truth is:
 
-Both apps are static HTML/CSS/JS. They need no build step and run as the
-system nginx user, not under a per-user `python -m http.server` process.
-
-## Prerequisites
-
-1. **MediaMTX must already be installed and running** with every camera
-   path online (see `docs/MEDIAMTX.md`). Verify with:
-   ```bash
-   sudo systemctl status mediamtx --no-pager
-   sudo journalctl -u mediamtx | grep "stream is available"
-   ```
-   Each healthy line looks like
-   `INF [path <SERIAL>/<PROFILE>] stream is available and online, N track(s)`.
-
-2. **nginx installed**:
-   ```bash
-   sudo apt-get install nginx
-   ```
-
-3. The apps live at `{{REPO_PATH}}/onvif-mcp/apps/` with this layout:
-   ```
-   apps/
-     cameras/index.html  app.js  styles.css     # Camera Switchboard
-     multiview/index.html  app.js  styles.css   # Four-Camera View
-     outputs/camera_registry.json               # shared registry (authoritative)
-   ```
-
-## 1. Fix the camera registry URLs
-
-`/etc/onvif-mcp/camera_registry.json` is the runtime source of truth for
-stream URLs. Nginx serves it at `/outputs/camera_registry.json`. The checked-in
-`apps/outputs/camera_registry.json` file is only a template, not deployed state.
-Required camera fields can be found in the data returned from the camera MCP
-server get_data tool call.
-Every `media_player_url` / `substream_player_url` must point at
-the **MediaMTX WebRTC player URL** — not directly at a camera RTSP URI and
-not at HTTPS (this host has no TLS):
-
-```
-http://{{SERVER_FQDN}}/webrtc/<SERIAL_NUMBER>/<PROFILE_TOKEN>/
+```text
+{{REPO_PATH}}/onvif-mcp/scripts/APPS/apps_runbook.sh
 ```
 
-Populate the "cameras": [] section of the file with each camera's data.
+Before executing any AGENT-run command or presenting any USER-run command, replace every double-curly placeholder with the real site value. Do not ask the user to type placeholders literally.
 
-- `<SERIAL_NUMBER>` = the camera `serial_number` from `get_cameras`
-  (camera MCP server).
-- `<PROFILE_TOKEN>` = the profile token for that stream. Main stream token
-  → `media_player_url`, lower-bandwidth substream token →
-  `substream_player_url`.
-- **The trailing slash is required.** MediaMTX returns a redirect without it
-  and browsers (notably Firefox) may not follow it inside an iframe.
-- Use plain `http://` — nginx serves port 80 with no TLS certificate.
+For this runbook, the agent normally runs the commands directly. If a command must be shown to the user, include `cd {{REPO_PATH}}/onvif-mcp` as the first line of the copy-paste block after resolving `{{REPO_PATH}}`.
 
-Example entry:
+Do not replace the scripted workflow with ad hoc shell fragments. If behavior must change, update `scripts/APPS/apps_runbook.sh` and keep this runbook as orchestration guidance.
 
-```json
-{
-  "hostname": "Hikvision",
-  "ip_address": "10.1.1.70",
-  "manufacturer": "HIKVISION",
-  "model": "DS-2CD2142FWD-IS",
-  "media_player_url": "http://{{SERVER_FQDN}}/webrtc/DS-2CD2142FWD-IS20171118BBWR129028868/Profile_1/",
-  "substream_player_url": "http://{{SERVER_FQDN}}/webrtc/DS-2CD2142FWD-IS20171118BBWR129028868/Profile_2/"
-}
-```
+## 1. Apply App Configuration (AGENT-run)
 
-Every path referenced by the registry must exist in `paths:` of
-`/etc/mediamtx/mediamtx.yml` (same serial/token naming). Add missing paths
-there and restart mediamtx before proceeding.
-
-## 2. Let nginx read the project folder
-
-nginx workers run as a system user that cannot traverse `/home/stephen`
-(mode `750`). Create a dedicated web user in the owner's group:
+Run from the repository directory:
 
 ```bash
-sudo useradd --system --no-create-home --shell /usr/sbin/nologin webcam
-sudo usermod -aG stephen webcam     # 'stephen' = the project owner's group
-sudo sed -i 's/^user www-data;/user webcam;/' /etc/nginx/nginx.conf
+cd {{REPO_PATH}}/onvif-mcp
+scripts/APPS/apps_runbook.sh apply \
+  --server-fqdn {{SERVER_FQDN}} \
+  --repo-path {{REPO_PATH}} \
+  --server-user {{SERVER_USER}}
 ```
 
-The group membership is what grants `x` (traverse) + `r` on
-`{{REPO_PATH}}/...`. No setuid bits or extra file permissions are
-needed.
+The script performs the full apps runbook:
 
-## 3. Configure the nginx vhost
+- Installs missing Debian/Ubuntu packages when `apt-get` is available.
+- Calls the camera MCP HTTP server `get_cameras` tool through `http://{{SERVER_FQDN}}/mcp`.
+- Generates `/etc/onvif-mcp/camera_registry.json` from the discovered cameras.
+- Uses each camera's first profile as `media_player_url` for the switchboard.
+- Uses each camera's second profile as `substream_player_url` for multiview when present; otherwise it reuses the first profile.
+- Creates the system user `webcam` if missing.
+- Adds `webcam` to the `{{SERVER_USER}}` group so nginx can traverse and read the repository app files.
+- Sets nginx to run as `webcam`.
+- Adds nginx locations for `/cameras/`, `/multiview/`, and `/outputs/camera_registry.json` to the existing camera site.
+- Validates and restarts nginx.
+- Prints non-secret status output.
 
-All of this lives in **one** server block alongside the MediaMTX proxy, at
-`/etc/nginx/sites-available/camera` (already present from the
-MEDIAMTX.md install — extend it; do not create a second vhost):
+## 2. Verify App Configuration (AGENT-run)
 
-```nginx
-server {
-    listen 80;
-    server_name {{SERVER_FQDN}};
-
-    # --- MediaMTX WebRTC proxy (from docs/MEDIAMTX.md, unchanged) ---
-    location /webrtc/ {
-        proxy_pass http://127.0.0.1:8889/;   # trailing slash REQUIRED
-        proxy_redirect / /webrtc/;            # preserve /webrtc/ in redirects
-
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        proxy_read_timeout 86400s;
-        proxy_send_timeout 86400s;
-    }
-
-    # --- Camera applications (static, straight from the project folder) ---
-    location = /cameras { return 301 /cameras/; }
-    location = /multiview { return 301 /multiview/; }
-
-    location /cameras/ {
-        alias {{REPO_PATH}}/onvif-mcp/apps/cameras/;
-    }
-
-    location /multiview/ {
-        alias {{REPO_PATH}}/onvif-mcp/apps/multiview/;
-    }
-
-    # Shared camera registry — both apps fetch it at this root-relative path.
-    # The runtime file is generated outside the git checkout so git pulls cannot
-    # erase site-specific camera data.
-    location = /outputs/camera_registry.json {
-        alias /etc/onvif-mcp/camera_registry.json;
-    }
-
-    location /outputs/ {
-        return 404;
-    }
-
-    location = / {
-        return 200 "MediaMTX server at {{SERVER_FQDN}} | apps: /cameras/ (switchboard), /multiview/ (four-camera view)\n";
-        add_header Content-Type text/plain;
-    }
-}
-```
-
-Installation:
+Run:
 
 ```bash
-sudo cp <your-vhost> /etc/nginx/sites-available/camera
-sudo ln -sf /etc/nginx/sites-available/camera /etc/nginx/sites-enabled/camera
-sudo rm -f /etc/nginx/sites-enabled/default   # if a default site is enabled
-sudo nginx -t
-sudo systemctl reload nginx
+cd {{REPO_PATH}}/onvif-mcp
+scripts/APPS/apps_runbook.sh status \
+  --server-fqdn {{SERVER_FQDN}} \
+  --repo-path {{REPO_PATH}}
 ```
 
-### Configuration notes (lessons learned)
+Acceptance checks:
 
-- **`alias`, not `root`.** The app URLs are `/cameras/...` but the files
-  live under `apps/cameras/`, so each location needs an `alias` pointing at
-  the real directory.
-- **No copies of the app files.** Serving by alias means edits to the apps
-  take effect immediately — no rebuild, no deploy step. Do not copy them
-  into `/usr/share/nginx/html`.
-- **Trailing-slash redirects are required in practice.** Browsers request
-  `/cameras` (no slash) and Firefox does not append it. Without the two
-  `location = /cameras { return 301 ...; }` lines the request falls through
-  to nginx's default static root and returns **404** even though
-  `/cameras/` works fine.
-- **Root-relative asset paths.** The apps reference `/cameras/styles.css`,
-  `/multiview/app.js`, and fetch `/outputs/camera_registry.json` with a
-  leading slash, so the `location`s above (not relative paths) are what make
-  them work. If you move the app roots, update both the vhost and any
-  hardcoded references in the HTML/JS.
-- **Single-line `return` strings.** A multi-line `"a\n" "b"` form in a
-  `return` directive fails `nginx -t` with "invalid number of arguments".
+- nginx is enabled and active.
+- `/etc/nginx/nginx.conf` runs workers as `webcam`.
+- `/etc/onvif-mcp/camera_registry.json` is present and readable.
+- The registry contains at least one camera.
+- These endpoints return HTTP 200:
+  - `/cameras/`
+  - `/multiview/`
+  - `/outputs/camera_registry.json`
+  - `/cameras/styles.css`
+  - `/cameras/app.js`
+  - `/multiview/app.js`
 
-## 4. Verify
+## 3. Test App Endpoints (AGENT-run)
+
+Run:
 
 ```bash
-# All endpoints should be 200:
-for u in /cameras/ /multiview/ /outputs/camera_registry.json \
-         /cameras/styles.css /cameras/app.js /multiview/app.js; do
-  printf "%-35s %s\n" "$u" "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1$u)"
-done
-
-# Slash-less URLs must redirect, not 404:
-curl -sI http://127.0.0.1/cameras | head -3        # expect 301 -> /cameras/
-
-# A player page through the proxy (trailing slash!):
-curl -s -o /dev/null -w '%{http_code}\n' \
-  http://127.0.0.1/webrtc/4B0013BPAABE264/MediaProfile000/
+cd {{REPO_PATH}}/onvif-mcp
+scripts/APPS/apps_runbook.sh test --server-fqdn {{SERVER_FQDN}}
 ```
 
-Then open `http://{{SERVER_FQDN}}/cameras/` in a browser. If a tile stays
-black, check `sudo journalctl -u mediamtx` for that path — common causes are
-a missing path in `mediamtx.yml`, camera auth failure (`bad status code: 401`),
-or a registry URL with the wrong serial/token or a missing trailing slash.
+The script verifies the app endpoints through `http://{{SERVER_FQDN}}`, verifies slashless `/cameras` and `/multiview` redirect to trailing-slash URLs, and validates that every registry camera has a plain-HTTP player URL ending in `/`.
 
-## Browser behavior
+## Operational Notes
 
-- Each app remembers its state in browser localStorage:
-  - Switchboard key: `camera-switchboard:last-camera`
-  - Multi-view key: `camera-multiview:selected-cameras` (per-tile selections)
-- Changing the registry only takes effect after a page refresh.
-- The switchboard plays main streams; multi-view deliberately prefers
-  substreams to keep four simultaneous connections light on bandwidth.
+Changing camera inventory requires regenerating `/etc/onvif-mcp/camera_registry.json` by rerunning the `apply` command. The static app files do not need a build step.
 
-## Operations
-
-- **Add a camera:** add its entry to `outputs/camera_registry.json` (with
-  both stream URLs), make sure the matching paths exist in
-  `/etc/mediamtx/mediamtx.yml`, restart mediamtx, refresh the browser. No
-  nginx change needed — new cameras are picked up from the registry alone.
-- **Restart / reload:**
-  ```bash
-  sudo systemctl reload nginx     # after vhost changes (nginx -t first)
-  sudo systemctl restart mediamtx # after mediamtx.yml changes
-  ```
-- **Logs:** `sudo tail -n 50 /var/log/nginx/access.log` and
-  `sudo journalctl -u mediamtx -f`.
-
-## Security notes
-
-- The apps carry no credentials themselves; camera authentication happens
-  inside MediaMTX (`/etc/mediamtx/mediamtx.yml`, mode 640). Access to the
-  web UIs is open to anyone who can reach port 80 on this host — same
-  posture as documented in `docs/MEDIAMTX.md`. Add an nginx auth layer (e.g.
-  `auth_basic`) on the app locations and/or `/webrtc/` if that is not
-  acceptable.
-
+At this stage the web apps are plain HTTP and open to anyone who can reach port 80 on this host. TLS and Keycloak are added by later runbooks.

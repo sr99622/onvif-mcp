@@ -52,7 +52,7 @@ Be mindful of model context size when running the configurations shown below. St
 
     Assuming you have chosen the SMB strategy and have a server set up, prompt the agent to create the gpg key, password store, smb mount and backup the keys.
 
-    During this step, the user will be prompted to create the GPG key on the local host. Advise the user that this key should be kept in a secure location. Once the key has been created, the password store will be created and the user will be prompted to enter the password for the cameras. This system assumes that the camera password is shared by the cameras on the network. The user will also be prompted to enter the SMB password associated with the SMB_UUSERNAME. The password store and GPG key will then be backed up on the SMB_MOUNT shared folder.
+    During this step, the user will be prompted to create the GPG key on the local host. Advise the user that this key should be kept in a secure location. Once the key has been created, the password store will be created and the user will be prompted to enter the password for the cameras. This system assumes that the camera password is shared by the cameras on the network. The user will also be prompted to enter the SMB password associated with the SMB_USERNAME. The password store and GPG key will then be backed up on the SMB_MOUNT shared folder.
 
     **Required Values**
 

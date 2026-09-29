@@ -2,321 +2,140 @@
 
 ## Purpose
 
-This runbook documents the tested procedure used to make an Ubuntu camera server provide local DNS for a private camera-viewing hostname while forwarding public DNS queries upstream.
+Configure the Ubuntu camera server to provide local DNS for the private camera
+hostname while forwarding public DNS queries upstream.
 
-The resulting design is:
+The executable workflow lives in:
 
-```text
-Wired clients
-    |
-    | DHCP configuration from macOS bootpd
-    | DNS queries to {{SERVER_IP}}
-    v
-{{SERVER_FQDN}} / dnsmasq
-    |-- {{SERVER_FQDN}} -> {{SERVER_IP}}
-    |-- {{SERVER_IP}} -> {{SERVER_FQDN}}
-    `-- other queries -> {{UPSTREAM_DNS}}
+```bash
+scripts/DNS/dns_runbook.sh
 ```
+
+That script is the single source of truth for executable actions. Do not replace
+it with ad hoc shell fragments from this document.
 
 ## Required Values
 
-| Symbol | Description | Example Value |
-|---|---|---|
-| {{SERVER_FQDN}} | Fully Qualified Domain Name of the server | camera.home.arpa |
-| {{SERVER_IP}} | IP Address of the server | 10.1.1.3 |
-| {{RVRS_SRV_IP}} | Reverse IP address of the server for DNS Lookup | 3.1.1.10 |
-| {{UPSTREAM_DNS}} | Upstream DNS resolver | 192.168.68.1 |
-| {{BACKUP_PATH}} | Mounted backup root supplied for this installation | /mnt/backup/Camera-System-Backup |
+| Symbol | Description |
+|---|---|
+| `{{SERVER_FQDN}}` | Fully Qualified Domain Name of the server |
+| `{{SERVER_IP}}` | LAN IP address of the server |
+| `{{RVRS_SRV_IP}}` | Reverse IP address of the server for PTR lookup |
+| `{{UPSTREAM_DNS}}` | Upstream DNS resolver |
+| `{{BACKUP_PATH}}` | Mounted backup root |
 
-## Important design decisions
+## Design decisions
 
 - `home.arpa` is used as the private DNS namespace.
-- dnsmasq provides DNS only. It does not provide DHCP on `{{SERVER_FQDN}}`.
-- dnsmasq listens only on `{{SERVER_IP}}`, not on the camera interface, Wi-Fi interface, wildcard address, or loopback.
-- `systemd-resolved` remains the Ubuntu host resolver on `127.0.0.53` and `127.0.0.54`.
+- dnsmasq provides DNS only. It does not provide DHCP.
+- dnsmasq listens only on `{{SERVER_IP}}`, not on the camera interface, Wi-Fi
+  interface, wildcard address, or loopback.
+- `systemd-resolved` remains the Ubuntu host resolver on `127.0.0.53` and
+  `127.0.0.54`.
 - Backups and rollback copies must live outside all dnsmasq include directories.
 
 ## DNS backup checkpoint
 
-After §§8–10 verify the installation, complete
-[DNS_BACKUP.md](DNS_BACKUP.md). Record DNS.md as the trigger and capture the
-complete dnsmasq configuration, defaults, and service overrides under
-`{{BACKUP_PATH}}/dns/YYYYMMDDHHMMSSZ/` with `dns.tar`, `metadata.txt`, and
-verified `SHA256SUMS`.
+After the DNS service verifies, the script calls the DNS_BACKUP runbook's
+checkpoint script:
 
-Repeat after later record, upstream, binding or service-configuration changes.
-Keep pre-change rollback copies outside all include directories. The shared
-document defines backup publication, newest-checkpoint selection, and restore;
-do not create per-procedure archive fragments or append execution logs to
-BACKUP.md. DNS must be working before dependent client HTTPS checks.
+```bash
+scripts/DNS_BACKUP/dns_backup_runbook.sh create-checkpoint ... --trigger DNS.md
+```
+
+That creates a complete checkpoint under:
+
+```text
+{{BACKUP_PATH}}/dns/YYYYMMDDHHMMSSZ/
+├── dns.tar
+├── metadata.txt
+└── SHA256SUMS
+```
+
+Repeat this runbook after later record, upstream, binding, include, or service
+configuration changes.
+
+## Agent Presentation Rules
+
+Before presenting or executing any command, replace every double-curly placeholder
+with the real site value. Do not ask the user to type or edit placeholders.
+
+## 1. Configure and verify DNS (AGENT-run)
+
+Run the script with resolved values:
+
+```bash
+cd {{REPO_PATH}}/onvif-mcp
+scripts/DNS/dns_runbook.sh apply \
+  --server-fqdn {{SERVER_FQDN}} \
+  --server-ip {{SERVER_IP}} \
+  --rvrs-srv-ip {{RVRS_SRV_IP}} \
+  --upstream-dns {{UPSTREAM_DNS}} \
+  --backup-path {{BACKUP_PATH}}
+```
+
+The `apply` command performs the full workflow:
+
+- masks `dnsmasq.service` before package installation when installation is needed;
+- installs `dnsmasq`, `dnsutils`, and required networking tools;
+- verifies port 53 is not held by an unexpected DNS service;
+- enables `/etc/dnsmasq.d/*.conf` includes in `/etc/dnsmasq.conf`;
+- writes `/etc/dnsmasq.d/camera-system.conf` with:
+  - `listen-address={{SERVER_IP}}`
+  - `bind-interfaces`
+  - `local=/home.arpa/`
+  - `address=/{{SERVER_FQDN}}/{{SERVER_IP}}`
+  - `no-resolv`
+  - `server={{UPSTREAM_DNS}}`
+  - `ptr-record={{RVRS_SRV_IP}}.in-addr.arpa,{{SERVER_FQDN}}`
+- writes the systemd drop-in that disables resolver-registration hooks;
+- sets `IGNORE_RESOLVCONF=yes` in `/etc/default/dnsmasq`;
+- validates with `dnsmasq --test`, restarts and enables dnsmasq;
+- verifies listeners, A record, PTR record, public forwarding, and private-zone
+  NXDOMAIN behavior;
+- creates the DNS_BACKUP checkpoint.
+
+## 2. Verify final state (AGENT-run)
+
+Run:
+
+```bash
+cd {{REPO_PATH}}/onvif-mcp
+scripts/DNS/dns_runbook.sh verify \
+  --server-fqdn {{SERVER_FQDN}} \
+  --server-ip {{SERVER_IP}} \
+  --rvrs-srv-ip {{RVRS_SRV_IP}} \
+  --upstream-dns {{UPSTREAM_DNS}}
+```
+
+Then inspect status:
+
+```bash
+cd {{REPO_PATH}}/onvif-mcp
+scripts/DNS/dns_runbook.sh status \
+  --server-fqdn {{SERVER_FQDN}} \
+  --server-ip {{SERVER_IP}}
+```
+
+Verification requires:
+
+- `dnsmasq --test` succeeds.
+- dnsmasq is active and enabled.
+- dnsmasq listens on UDP/TCP `{{SERVER_IP}}:53` only.
+- `{{SERVER_FQDN}}` resolves to `{{SERVER_IP}}` through `@{{SERVER_IP}}`.
+- `ubuntu.com` resolves through the configured upstream.
+- `nonexistent-test.home.arpa` returns NXDOMAIN.
+- reverse lookup for `{{SERVER_IP}}` returns `{{SERVER_FQDN}}.`.
+- resolver-registration hooks are disabled and `IGNORE_RESOLVCONF=yes` is set.
 
 ## Client configurations
 
-- The LAN DHCP server should be edited to advertise `{{SERVER_IP}}` to wired DHCP clients, or clients may edit their local hosts file for name resolution
-- No public resolver is advertised by the DHCP server as a secondary DNS server because clients might bypass the private resolver and fail to resolve `{{SERVER_FQDN}}`.
-- Clients using static IP will need to be edited individually
-
-## 1. Preflight checks on Ubuntu
-
-Confirm which processes already use DNS port 53:
-
-```bash
-sudo ss -lntup 'sport = :53'
-sudo ss -lnup 'sport = :53'
-```
-
-In the tested system, `systemd-resolved` listened only on:
-
-```text
-127.0.0.53:53
-127.0.0.54:53
-```
-
-That left `{{SERVER_IP}}:53` available for dnsmasq.
-
-Check installed DNS packages:
-
-```bash
-dpkg -l | grep -E 'dnsmasq|bind9|unbound|adguard'
-```
-
-The system already had `dnsmasq-base`. The `dnsmasq` package was added to provide the managed system service.
-
-## 2. Install dnsmasq safely
-
-The default dnsmasq service may attempt to start before its listening address is restricted. Temporarily mask it:
-
-```bash
-sudo systemctl mask dnsmasq.service
-sudo apt update
-sudo apt install dnsmasq
-```
-
-During installation, messages saying that the masked service could not be preset or started are expected. Confirm afterward that the package is installed.
-
-## 3. Enable the configuration directory
-
-Ubuntu's packaged `/etc/dnsmasq.conf` contained several commented examples. The desired line was:
-
-```ini
-conf-dir=/etc/dnsmasq.d/,*.conf
-```
-
-Inspect the relevant area before editing because line numbers may differ by release:
-
-```bash
-sudo nl -ba /etc/dnsmasq.conf | sed -n '674,687p'
-```
-
-On the tested dnsmasq 2.92 configuration, line 684 was uncommented:
-
-```bash
-sudo sed -i '684s/^#//' /etc/dnsmasq.conf
-```
-
-Verify the effective include directive:
-
-```bash
-grep -n '^[^#]*conf-dir' /etc/dnsmasq.conf
-```
-
-Do not reuse the line-number command on another release until the file has been inspected.
-
-## 4. Create the camera DNS configuration
-
-Create `/etc/dnsmasq.d/camera-system.conf` with:
-
-```ini
-# Camera-system DNS service
-listen-address={{SERVER_IP}}
-bind-interfaces
-
-# Private local namespace
-local=/home.arpa/
-address=/{{SERVER_FQDN}}/{{SERVER_IP}}
-
-# Explicit upstream resolver
-no-resolv
-server={{UPSTREAM_DNS}}
-
-domain-needed
-bogus-priv
-cache-size=1000
-
-# Reverse lookup for clearer diagnostics
-ptr-record={{RVRS_SRV_IP}}.in-addr.arpa,{{SERVER_FQDN}}
-```
-
-The PTR owner is the reversed IPv4 address. For example, `{{SERVER_IP}}` becomes `{{RVRS_SRV_IP}}.in-addr.arpa`.
-
-Validate before every initial start or restart:
-
-```bash
-sudo dnsmasq --test
-```
-
-Expected result:
-
-```text
-dnsmasq: syntax check OK.
-```
-
-## 5. Prevent inappropriate resolver integration
-
-Ubuntu's dnsmasq service normally runs helper hooks that try to register dnsmasq as the host's loopback resolver. This conflicted with the selected architecture, where `systemd-resolved` remains the host resolver and dnsmasq listens only on `{{SERVER_IP}}`.
-
-The original service emitted:
-
-```text
-Failed to set DNS configuration: Unit dbus-org.freedesktop.network1.service not found.
-```
-
-Create a systemd drop-in that disables only the resolver-registration hooks:
-
-```bash
-printf '%s\n' \
-'[Service]' \
-'ExecStartPost=' \
-'ExecStop=' \
-| sudo systemctl edit dnsmasq.service --stdin
-```
-
-The resulting file is:
-
-```text
-/etc/systemd/system/dnsmasq.service.d/override.conf
-```
-
-with:
-
-```ini
-[Service]
-ExecStartPost=
-ExecStop=
-```
-
-Using a drop-in preserves the package-owned unit at `/usr/lib/systemd/system/dnsmasq.service`.
-
-Inspect the combined unit:
-
-```bash
-systemctl cat dnsmasq.service
-```
-
-## 6. Stop the package helper from supplying a resolver file
-
-Because the camera configuration uses `no-resolv` and an explicit `server={{UPSTREAM_DNS}}`, enable the package-supported setting in `/etc/default/dnsmasq`:
-
-```ini
-IGNORE_RESOLVCONF=yes
-```
-
-This removes the otherwise confusing warning:
-
-```text
-warning: ignoring resolv-file flag because no-resolv is set
-```
-
-The related `DNSMASQ_EXCEPT="lo"` setting was not used as the complete solution because the packaged stop helper does not apply the same exception. The systemd drop-in disables both inappropriate hooks consistently.
-
-## 7. Start and enable dnsmasq
-
-Remove the temporary mask:
-
-```bash
-sudo systemctl unmask dnsmasq.service
-```
-
-Start the service without initially enabling it:
-
-```bash
-sudo systemctl start dnsmasq.service
-```
-
-Inspect its status and logs:
-
-```bash
-systemctl --no-pager --full status dnsmasq.service
-```
-
-After successful verification, enable automatic startup:
-
-```bash
-sudo systemctl enable dnsmasq.service
-systemctl is-enabled dnsmasq.service
-```
-
-Expected final state:
-
-```text
-enabled
-```
-
-## 8. Verify listening addresses
-
-```bash
-sudo ss -lntup 'sport = :53'
-```
-
-Expected arrangement:
-
-- dnsmasq listens on `{{SERVER_IP}}:53` over UDP and TCP.
-- `systemd-resolved` listens on `127.0.0.53:53` and `127.0.0.54:53`.
-- dnsmasq does not listen on `10.2.2.1`, the Wi-Fi address, or `0.0.0.0`.
-
-## 9. Test DNS on the server
-
-Test the private record:
-
-```bash
-dig @{{SERVER_IP}} {{SERVER_FQDN}} +noall +answer
-```
-
-Expected answer:
-
-```text
-{{SERVER_FQDN}}.  0  IN  A  {{SERVER_IP}}
-```
-
-Test public forwarding:
-
-```bash
-dig @{{SERVER_IP}} ubuntu.com +noall +answer
-```
-
-Test that unknown private names are not forwarded publicly:
-
-```bash
-dig @{{SERVER_IP}} nonexistent-test.home.arpa +noall +comments +answer
-```
-
-Expected status:
-
-```text
-NXDOMAIN
-```
-
-Test reverse lookup:
-
-```bash
-dig @{{SERVER_IP}} -x {{SERVER_IP}} +noall +answer
-```
-
-Expected answer:
-
-```text
-{{RVRS_SRV_IP}}.in-addr.arpa.  0  IN  PTR  {{SERVER_FQDN}}.
-```
-
-Important: `systemctl reload dnsmasq` does not reread every configuration directive. When adding a `ptr-record` directive, a reload did not activate it. After validating the configuration, use a full restart:
-
-```bash
-sudo systemctl restart dnsmasq.service
-```
-
-## 10. Test a client explicitly
-
-Before changing client or DHCP settings, query the server directly.
+The LAN DHCP server should advertise `{{SERVER_IP}}` as the DNS server to wired
+clients. Do not advertise a public resolver as a secondary DNS server, because
+clients might bypass the private resolver and fail to resolve `{{SERVER_FQDN}}`.
+Clients using static IP settings must be edited individually.
+
+## Client tests
 
 On macOS:
 
@@ -332,3 +151,11 @@ nslookup {{SERVER_FQDN}} {{SERVER_IP}}
 nslookup ubuntu.com {{SERVER_IP}}
 ```
 
+## Pitfalls and notes
+
+- Use a full `systemctl restart dnsmasq.service` after changing records or
+  `ptr-record`; reload is not sufficient for every directive.
+- Keep rollback copies and checkpoint staging outside `/etc/dnsmasq.d` and any
+  other dnsmasq include path.
+- This runbook does not configure DHCP. DHCP/DNS advertisement is a separate
+  client-network step.

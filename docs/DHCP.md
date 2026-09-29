@@ -2,275 +2,95 @@
 
 ## Purpose
 
-This configuration creates an isolated IPv4 network on {{PRVT_CAMERA_NET_EN_NAME}}:
+Configure an isolated IPv4 camera network on `{{PRVT_CAMERA_NET_EN_NAME}}`.
+
+Target state:
 
 - Server address: `10.2.2.1/24`
 - DHCP pool: `10.2.2.100` through `10.2.2.200`
-- DHCP interface: {{PRVT_CAMERA_NET_EN_NAME}}
-- No DNS server supplied to clients
-- No routing between this subnet and the server's other network interface
+- DHCP interface: `{{PRVT_CAMERA_NET_EN_NAME}}`
+- Kea DHCPv4 listens on UDP 67 for that interface
+- IPv4 and IPv6 forwarding are disabled
+- No routing is added between this subnet and the server's LAN interface
 
-The server's other interface and its existing LAN/Internet configuration are not changed.
+The server's other interface and existing LAN/Internet configuration must not be changed.
 
-## Required Value
+## Required Values
+
 | Value | Description |
 |---|---|
-| {{PRVT_CAMERA_NET_EN_NAME}} | Ethernet Adapter Interface name hosting the private camera subnet |
+| `{{PRVT_CAMERA_NET_EN_NAME}}` | Ethernet adapter hosting the private camera subnet |
+| `{{REPO_PATH}}` | Parent directory containing this repository |
 
-This value is required for operation. Stop and prompt the user if it is not provided.
+Stop and ask the user if any required value is missing.
 
-## 1. Configure Private Network Interface with NetworkManager
+## Agent Presentation Rules
 
-Review current connections first:
-
-```bash
-nmcli -f NAME,UUID,TYPE,DEVICE connection show
-nmcli device status
-```
-
-Create the isolated connection profile:
-
-```bash
-sudo nmcli connection add \
-  type ethernet \
-  ifname {{PRVT_CAMERA_NET_EN_NAME}} \
-  con-name isolated \
-  ipv4.method manual \
-  ipv4.addresses 10.2.2.1/24 \
-  ipv4.never-default yes \
-  ipv4.ignore-auto-dns yes \
-  ipv6.method disabled \
-  connection.autoconnect yes
-```
-
-Explicitly remove gateway, DNS, and static route settings:
-
-```bash
-sudo nmcli connection modify isolated \
-  ipv4.gateway "" \
-  ipv4.dns "" \
-  ipv4.routes ""
-```
-
-Activate the profile:
-
-```bash
-sudo nmcli connection up isolated
-```
-
-If another NetworkManager profile is already active on {{PRVT_CAMERA_NET_EN_NAME}}, deactivate that profile before activating `isolated`:
-
-```bash
-sudo nmcli connection down "OLD-CONNECTION-NAME"
-sudo nmcli connection up isolated
-```
-
-Note: a netplan-generated profile (e.g. `netplan-{{PRVT_CAMERA_NET_EN_NAME}}`) may already be active on {{PRVT_CAMERA_NET_EN_NAME}} even when the port shows no carrier — that is the expected "old" profile to deactivate.
-
-Verify the result:
-
-```bash
-nmcli device show {{PRVT_CAMERA_NET_EN_NAME}}
-ip address show dev {{PRVT_CAMERA_NET_EN_NAME}}
-ip route show dev {{PRVT_CAMERA_NET_EN_NAME}}
-```
-
-The interface should have `10.2.2.1/24`. Its route table should contain only the directly connected subnet, similar to:
+This document is a script for the agent. The executable source of truth is:
 
 ```text
-10.2.2.0/24 proto kernel scope link src 10.2.2.1
+{{REPO_PATH}}/onvif-mcp/scripts/DHCP/dhcp_runbook.sh
 ```
 
-There must be no default route through {{PRVT_CAMERA_NET_EN_NAME}}.
+Before executing any AGENT-run command or presenting any USER-run command, replace every double-curly placeholder with the real site value. Do not ask the user to type placeholders literally.
 
-## 2. Install Kea DHCPv4
+For this runbook, the agent normally runs the commands directly. If a command must be shown to the user, include `cd {{REPO_PATH}}/onvif-mcp` as the first line of the copy-paste block after resolving `{{REPO_PATH}}`.
+
+Do not replace the scripted workflow with ad hoc shell fragments. If behavior must change, update `scripts/DHCP/dhcp_runbook.sh` and keep this runbook as orchestration guidance.
+
+## 1. Apply DHCP Network Configuration (AGENT-run)
+
+Run from the repository directory:
 
 ```bash
-sudo apt update
-sudo apt install kea-dhcp4-server
+cd {{REPO_PATH}}/onvif-mcp
+scripts/DHCP/dhcp_runbook.sh apply --interface {{PRVT_CAMERA_NET_EN_NAME}}
 ```
 
-## 3. Configure Kea
+The script performs the full DHCP runbook:
 
-Back up the packaged configuration:
+- Installs missing Debian/Ubuntu packages when `apt-get` is available.
+- Creates or updates the NetworkManager `isolated` profile on `{{PRVT_CAMERA_NET_EN_NAME}}`.
+- Assigns `10.2.2.1/24` to the private camera interface.
+- Removes gateway, DNS, and static route settings from the private interface profile.
+- Deactivates any other active NetworkManager profile on that interface.
+- Writes `/etc/kea/kea-dhcp4.conf` with the interface-specific Kea configuration.
+- Sets `/etc/kea/kea-dhcp4.conf` ownership and mode for the `_kea` service user.
+- Disables IPv4 and IPv6 forwarding persistently via `/etc/sysctl.d/90-isolated.conf`.
+- Validates the Kea configuration in the service context.
+- Enables and restarts `kea-dhcp4-server`.
+- Prints non-secret status output.
+
+## 2. Verify DHCP Network Configuration (AGENT-run)
+
+Run:
 
 ```bash
-sudo cp /etc/kea/kea-dhcp4.conf /etc/kea/kea-dhcp4.conf.backup
-sudoedit /etc/kea/kea-dhcp4.conf
+cd {{REPO_PATH}}/onvif-mcp
+scripts/DHCP/dhcp_runbook.sh status --interface {{PRVT_CAMERA_NET_EN_NAME}}
 ```
 
-If writing the file programmatically (e.g. `sudo install` or `sudo tee`) instead of using `sudoedit`, set ownership and mode so the service user can read it:
+Acceptance checks:
 
-```bash
-sudo chown root:_kea /etc/kea/kea-dhcp4.conf
-sudo chmod 640 /etc/kea/kea-dhcp4.conf
-```
+- `{{PRVT_CAMERA_NET_EN_NAME}}` is connected to the `isolated` NetworkManager profile.
+- `{{PRVT_CAMERA_NET_EN_NAME}}` has `10.2.2.1/24`.
+- The route table for `{{PRVT_CAMERA_NET_EN_NAME}}` contains the directly connected `10.2.2.0/24` route only.
+- There is no default route through `{{PRVT_CAMERA_NET_EN_NAME}}`.
+- `net.ipv4.ip_forward = 0`.
+- `net.ipv6.conf.all.forwarding = 0`.
+- Kea configuration validation exits successfully.
+- `kea-dhcp4-server` is enabled and active.
+- A Kea DHCP listener is present on UDP 67.
 
-The `kea-dhcp4-server` unit runs as the `_kea` user (see `systemctl cat kea-dhcp4-server`). On Ubuntu the netplan config files under `/etc/netplan/` are mode 600 root-only, so inspect NM state with `nmcli` instead of reading them directly.
+## 3. Camera-Side Acceptance
 
-Use this configuration:
+A client attached to the isolated camera network should:
 
-```json
-{
-  "Dhcp4": {
-    "interfaces-config": {
-      "interfaces": [ "enp171s0" ],
-      "dhcp-socket-type": "raw"
-    },
+- Receive an address between `10.2.2.100` and `10.2.2.200`.
+- Receive subnet mask `/24` (`255.255.255.0`).
+- Reach `10.2.2.1`.
+- Be unable to reach the main LAN or Internet through this server.
 
-    "lease-database": {
-      "type": "memfile",
-      "persist": true,
-      "name": "/var/lib/kea/kea-leases4.csv"
-    },
+Some camera models require a DHCP router option to accept the lease. The script includes router `10.2.2.1` and DHCP server identifier `10.2.2.1`, while host forwarding remains disabled so the server does not route camera traffic to the LAN.
 
-    "match-client-id": false,
-    "decline-probation-period": 0,
-
-    "valid-lifetime": 3600,
-    "renew-timer": 900,
-    "rebind-timer": 1800,
-
-    "subnet4": [
-      {
-        "id": 1,
-        "subnet": "10.2.2.0/24",
-        "pools": [
-          {
-            "pool": "10.2.2.100 - 10.2.2.200"
-          }
-        ],
-        // Dahua style cameras reject DHCP replies if these options are missing
-        "option-data": [
-          {
-            "name": "routers",
-            "data": "10.2.2.1"
-          },
-          {
-            "name": "dhcp-server-identifier",
-            "data": "10.2.2.1"
-          }
-        ]
-      }
-    ],
-
-    "loggers": [
-      {
-        "name": "kea-dhcp4",
-        "output-options": [
-          {
-            "output": "stdout"
-          }
-        ],
-        "severity": "INFO"
-      }
-    ]
-  }
-}
-```
-
-## 4. Prevent Routing Between Interfaces
-
-The configuration contains no `domain-name-servers` DHCP options. Many cameras have hard coded DNS entries anyway. Some cameras may not operate properly under DHCP if no gateway is specified. The server address is included under `routers` so that these cameras will accept the DHCP configuration.
-
-The server does not have forwarding capability, but the server must also have IP forwarding disabled to enforce isolation:
-
-```bash
-sysctl net.ipv4.ip_forward
-sysctl net.ipv6.conf.all.forwarding
-```
-
-Both values should be `0`. To disable forwarding immediately:
-
-```bash
-sudo sysctl -w net.ipv4.ip_forward=0
-sudo sysctl -w net.ipv6.conf.all.forwarding=0
-```
-
-To make this persistent, create `/etc/sysctl.d/90-isolated.conf`:
-
-```ini
-net.ipv4.ip_forward=0
-net.ipv6.conf.all.forwarding=0
-```
-
-Then apply it:
-
-```bash
-sudo sysctl --system
-```
-
-Disabling forwarding does not prevent the Ubuntu server itself from using its LAN-facing interface. If forwarding is required for some unrelated workload, enforce isolation with interface-specific firewall forwarding rules instead of globally disabling it.
-
-## 5. Validate and Start Kea
-
-Check the configuration before restarting the service:
-
-```bash
-sudo kea-dhcp4 -t /etc/kea/kea-dhcp4.conf
-```
-
-Known pitfall (observed on Ubuntu 26.04): that command as **root** can fail with
-`Syntax check failed with: Unable to open file /etc/kea/kea-dhcp4.conf` even when the
-file is root-readable. The enforced AppArmor profile `kea-dhcp4` denies the process the
-`dac_read_search`/`dac_override` capabilities it probes during startup
-(`audit: apparmor="DENIED" ... capability=2 capname="dac_read_search"`). This does NOT
-affect the systemd service, which runs as `_kea` and reads the file via group access.
-
-Validate in the same context the service will run under:
-
-```bash
-sudo -u _kea kea-dhcp4 -t /etc/kea/kea-dhcp4.conf   # exit 0 = valid (warnings are informational)
-```
-
-If you want the literal `sudo kea-dhcp4 -t ...` command to work as root, add these lines
-to `/etc/apparmor.d/usr.sbin.kea-dhcp4` inside the profile block and reload it with
-`sudo apparmor_parser -r /etc/apparmor.d/usr.sbin.kea-dhcp4`:
-
-```text
-  capability dac_read_search,
-  capability dac_override,
-```
-
-If validation succeeds:
-
-```bash
-sudo systemctl enable --now kea-dhcp4-server
-sudo systemctl restart kea-dhcp4-server
-sudo systemctl status kea-dhcp4-server
-```
-
-Confirm that Kea is listening on DHCP server port UDP 67:
-
-```bash
-sudo ss -ulpn | grep ':67'
-```
-
-View recent logs:
-
-```bash
-sudo journalctl -u kea-dhcp4-server -n 100 --no-pager
-```
-
-Follow logs during client testing:
-
-```bash
-sudo journalctl -u kea-dhcp4-server -f
-```
-
-## 6. Acceptance Checks
-
-A client attached to the isolated network should:
-
-- Receive an address between `10.2.2.100` and `10.2.2.200`
-- Receive subnet mask `/24` (`255.255.255.0`)
-- Receive no default gateway
-- Receive no DNS server
-- Reach `10.2.2.1`
-- Be unable to reach the main LAN or Internet through this server
-
-Inspect issued leases on the server with:
-
-```bash
-sudo cat /var/lib/kea/kea-leases4.csv
-```
+Issued leases are reported in the script status output when Kea has created `/var/lib/kea/kea-leases4.csv`; absence of leases before cameras are connected is not a failure.

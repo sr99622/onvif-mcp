@@ -20,6 +20,8 @@ a new machine.
 | `{{SMB_SERVER_FQDN}}` | SMB server Fully Qualified Domain Name |
 | `{{SMB_MOUNT}}` | Mounted SMB shared folder |
 | `{{SMB_USERNAME}}` | Samba username for the private camera CA backup share |
+| `{{REPO_PATH}}` | Full path to this repository on the camera host |
+| `{{GPG_FINGERPRINT}}` | Full fingerprint copied from the step 2 `sec` output |
 | `{{TIMESTAMP}}` | generated timestamp at capture time with `date -u +%Y%m%d%H%M%SZ` |
 
 The exported secret key is stored at
@@ -33,61 +35,72 @@ backup; create a new timestamped copy after any password-store manipulation.
 
 The backup mount may not exist until the SMB client mount step is complete. Do not
 create backup files under an unmounted local directory by mistake; after step 7,
-`{{SMB_MOUNT}}` should resolve contain the mounted private Samba share. If you are 
-unable to mount or create the full backup path, stop and warn the user; do not 
+`{{SMB_MOUNT}}` should resolve to the mounted private Samba share. If you are
+unable to mount or create the full backup path, stop and warn the user; do not
 continue with the runbook.
+
+## Agent Presentation Rules
+
+This document is a script for the agent. The user should only see concrete,
+copy-pasteable commands.
+
+Before presenting any USER-run command or executing any AGENT-run command, replace
+every double-curly placeholder with the real site value. Do not ask the user to
+type or edit placeholders such as `{{SMB_MOUNT}}`, `{{REPO_PATH}}`, or
+`{{GPG_FINGERPRINT}}`. If a value is not known, ask for that value before showing
+or running the command.
+
+When a USER-run command must be executed from the repository, include
+`cd {{REPO_PATH}}` as the first line of the copy-paste block after resolving
+`{{REPO_PATH}}` to the real path. The user should not need to know where the
+repository is or modify the command.
+
+After step 2, extract the full fingerprint from the `sec` block and use it to
+replace `{{GPG_FINGERPRINT}}` in later commands. Preserve the fingerprint exactly,
+including spaces, and quote it in shell commands.
 
 ## Key Generation
 
 1. ### Configure terminal pinentry (AGENT-run)
 
       The agent performs this setup before handing the terminal to the user. It
-      requires no GPG passphrase or interactive terminal. Verify GPG and terminal
-      pinentry are installed:
+      requires no GPG passphrase or interactive terminal. The helper script is
+      the source of truth for the executable setup commands. Run it from the
+      repository root:
 
       ```bash
-      gpg --version
-      test -x /usr/bin/pinentry-curses
+      cd {{REPO_PATH}}
+      scripts/GPG_KEY/gpg_key_runbook.sh agent-prep
+      scripts/GPG_KEY/gpg_key_runbook.sh status \
+        --smb-mount {{SMB_MOUNT}} \
+        --smb-server-fqdn {{SMB_SERVER_FQDN}} \
+        --smb-username {{SMB_USERNAME}}
       ```
 
-      On Debian/Ubuntu, install a missing terminal pinentry with
-      `sudo apt install pinentry-curses`. Ensure `~/.gnupg/gpg-agent.conf` contains
-      the following line, preserving unrelated settings and replacing any existing
-      `pinentry-program` line that selects a GUI:
-
-      ```ini
-      pinentry-program /usr/bin/pinentry-curses
-      ```
-
-      Reload the agent and check the configuration file:
-
-      ```bash
-      gpgconf --reload gpg-agent
-      grep -Fx 'pinentry-program /usr/bin/pinentry-curses' ~/.gnupg/gpg-agent.conf
-      ```
-
-      Verify that the ca-vault-gpg.key.gpg does not already exist.
+      The `agent-prep` command installs missing Debian/Ubuntu packages when
+      `apt-get` is available, configures terminal pinentry, and leaves secret
+      entry to the user. The `status` command prints non-secret state only. It is
+      safe for the agent to run before the user creates the GPG key and again
+      after each later stage. Do not replace the scripted workflow with ad hoc
+      fragments.
 
       Do not run `gpg --full-gen-key` or enter a passphrase in the agent session.
       The user performs the next step in their own terminal.
 
 2. ### Generate and identify the key (USER-run)
 
-      Prompt the user to open another terminal session and run this command set
-      in that terminal. Display the command set to the user offset from other text 
-      in the prompt so that the intent is clear. Do not clutter up the prompt with 
+      Prompt the user to open another terminal session and run the helper script
+      in that terminal. Display the command to the user offset from other text in
+      the prompt so that the intent is clear. Do not clutter up the prompt with
       meaningless explanations irrelevant to the task at hand.
 
       ```bash
-      tty
-      export GPG_TTY=$(tty)
-      gpg-connect-agent updatestartuptty /bye
-      gpg --full-gen-key
-      gpg --list-secret-keys --fingerprint
+      cd {{REPO_PATH}}
+      scripts/GPG_KEY/gpg_key_runbook.sh generate-key
       ```
 
-      Tell the user to run these commands accepting the default settings, then paste 
-      the result in the prompt window for your evaluation. Wait for the user to 
+      Tell the user to run the command accepting the default settings, then paste
+      the result in the prompt window for your evaluation. Wait for the user to
       finish. They may have questions, so be prepared to respond in that event.
 
       Record the **full fingerprint** displayed below `sec`; use it to select the key
@@ -100,9 +113,9 @@ continue with the runbook.
 
 3. ### Export the secret key locally (USER-run)
 
-      Replace `YOUR_FULL_FINGERPRINT` with the full fingerprint from step 2. The 
+      Replace `{{GPG_FINGERPRINT}}` with the full fingerprint from step 2. The
       fingerprint is the string under the sec line from `gpg --list-secret-keys --fingerprint`
-      surrounded by double quotes to escape the spaces. For example, if the output 
+      surrounded by double quotes to escape the spaces. For example, if the output
       is
 
       ```
@@ -113,41 +126,36 @@ continue with the runbook.
       ssb   cv25519 2026-09-18 [E]
       ```
 
-      Then YOUR_FULL_FINGERPRINT is "AC3C 1053 FEFE 526E 26BD  3895 7247 25B2 87EE 7E5D".
+      Then `{{GPG_FINGERPRINT}}` is "AC3C 1053 FEFE 526E 26BD  3895 7247 25B2 87EE 7E5D".
 
       The SMB share cannot be mounted until the `smb` password is available in
       step 6. Export the secret key to a protected local file now; copy it to SMB
       after the client mount is configured in step 7. A failure must stop the
       sequence rather than leaving a false backup.
 
-      ```bash
-      set -e
-      umask 077
-      fpr="YOUR_FULL_FINGERPRINT"
-      local_export="$HOME/ca-vault-gpg.key.gpg"
-
-      test ! -e "$local_export"
-      gpg --armor --output "$local_export" --export-secret-keys "$fpr"
-      test -s "$local_export"
-      chmod 600 "$local_export"
-      ```
-
       GPG may ask for the key's passphrase through `pinentry-curses`. The exported
       file is sensitive even though the key is passphrase protected. Do not print,
       paste, email, or commit it. Do not use `sudo` for GPG: that would select root's
       key store instead of the user's.
 
+      Run the script in the same terminal where `GPG_TTY` was set. Replace
+      `{{GPG_FINGERPRINT}}` with the full fingerprint from step 2, preserving
+      spaces and quoting:
+
+      ```bash
+      cd {{REPO_PATH}}
+      scripts/GPG_KEY/gpg_key_runbook.sh export-key --fingerprint "{{GPG_FINGERPRINT}}"
+      ```
+
 4. ### Verify the local export before password-store creation
 
       The export must be nonempty and readable as a secret-key export. These
-      commands display metadata, not the private key bytes:
+      checks display metadata, not the private key bytes. Use the script as the
+      source of truth for the verification commands:
 
       ```bash
-      fpr="YOUR_FULL_FINGERPRINT"
-      local_export="$HOME/ca-vault-gpg.key.gpg"
-      ls -l "$local_export"                 # mode 600
-      gpg --list-packets "$local_export" | sed -n '/secret key packet/p;/secret sub key packet/p'
-      gpg --list-secret-keys "$fpr"         # primary key and encryption subkey
+      cd {{REPO_PATH}}
+      scripts/GPG_KEY/gpg_key_runbook.sh verify-export --fingerprint "{{GPG_FINGERPRINT}}"
       ```
 
       The packet listing must show a secret primary key and a secret subkey. Keep the
@@ -160,21 +168,12 @@ continue with the runbook.
 
       Install `pass` if it is missing, then initialize the store with the same full
       fingerprint used for the GPG key backup. Bare `pass init` can select the wrong
-      key or fail on some systems, so use the explicit fingerprint.
+      key or fail on some systems, so use the explicit fingerprint through the
+      helper script. Run this after `pass` is installed:
 
       ```bash
-      set -e
-      pass --version
-      fpr="YOUR_FULL_FINGERPRINT"
-      pass init "$fpr"
-      test "$(cat ~/.password-store/.gpg-id)" = "$fpr"
-      chmod 700 ~/.password-store
-      ```
-
-      If `pass` is not installed on Debian/Ubuntu:
-
-      ```bash
-      sudo apt install pass
+      cd {{REPO_PATH}}
+      scripts/GPG_KEY/gpg_key_runbook.sh init-store --fingerprint "{{GPG_FINGERPRINT}}"
       ```
 
 6. ### Add camera and SMB passwords (USER-run)
@@ -184,8 +183,8 @@ continue with the runbook.
       an agent transcript, or a committed runbook.
 
       ```bash
-      pass insert camera
-      pass insert smb
+      cd {{REPO_PATH}}
+      scripts/GPG_KEY/gpg_key_runbook.sh insert-passwords
       ```
 
       `camera` is the shared camera password used in RTSP/ONVIF camera access.
@@ -198,9 +197,8 @@ continue with the runbook.
       the agent chat or logs:
 
       ```bash
-      pass show camera >/dev/null
-      pass show smb >/dev/null
-      find ~/.password-store -maxdepth 2 -type f -name '*.gpg' -print
+      cd {{REPO_PATH}}
+      scripts/GPG_KEY/gpg_key_runbook.sh verify-passwords
       ```
 
 7. ### Mount the private SMB backup share on the camera host (USER-run)
@@ -218,87 +216,19 @@ continue with the runbook.
       | `{{SMB_USERNAME}}` | Username as recognized on the SMB server |
       | `pass show smb` | Password as recognized on the SMB server |
 
-      Install the CIFS mount helper and verify {{SMB_SERVER_FQDN}} resolves before continuing:
-
-      ```bash
-      sudo apt install cifs-utils
-      getent ahosts {{SMB_SERVER_FQDN}}
-      ```
-
       Confirm `{{SMB_MOUNT}}` and
       `/etc/cifs-utils/credentials/camera-backup` are not already used for a
       different purpose. For a partially completed setup, reuse and correct the
       existing configuration instead of creating a duplicate.
 
-      Create the credentials file from the password store without putting the SMB
-      password in shell history, command arguments, chat, or logs:
-
-      ```bash
-      set -e
-      umask 077
-      tmp_creds="$(mktemp "$HOME/.smb-creds.XXXXXX")"
-      {
-        printf 'username=%s\n' '{{SMB_USERNAME}}'
-        printf 'password='
-        pass show smb | head -n 1
-      } > "$tmp_creds"
-      sudo install -d -m 0700 /etc/cifs-utils/credentials
-      sudo install -o root -g root -m 0600 "$tmp_creds" /etc/cifs-utils/credentials/camera-backup
-      shred -u "$tmp_creds"
-      sudo test -s /etc/cifs-utils/credentials/camera-backup
-      ```
-
       Add `domain=...` to `/etc/cifs-utils/credentials/camera-backup` only if
       this Samba server requires it. Do not copy the old mount's credentials
       without confirming they belong to the new share account.
-
-      Create the mount point if needed, get the local numeric UID/GID for the user
-      who owns the build files, then edit `/etc/fstab`:
-
-      ```bash
-      if [ ! -d {{SMB_MOUNT}} ]; then
-          sudo install -d -m 0700 {{SMB_MOUNT}}
-      fi
-      id -u stephen
-      id -g stephen
-      sudoedit /etc/fstab
-      ```
-
-      Add this line, replacing `LOCAL_UID` and `LOCAL_GID` with those numeric IDs.
-      If an entry for `{{SMB_MOUNT}}` already exists, correct that entry
-      instead of adding a duplicate:
-
-      ```fstab
-      //{{SMB_SERVER_FQDN}}/camera-ca-private {{SMB_MOUNT}} cifs credentials=/etc/cifs-utils/credentials/camera-backup,vers=3.1.1,uid=LOCAL_UID,gid=LOCAL_GID,file_mode=0600,dir_mode=0700,nosuid,nodev,noexec,_netdev,noauto,x-systemd.automount 0 0
-      ```
-
-      Validate fstab and resolve any errors before continuing:
-
-      ```bash
-      sudo findmnt --verify --fstab
-      ```
-
-      Reload systemd, clear any failed mount attempt from a partial setup, start
-      the automount, and access the directory to trigger the CIFS mount:
-
-      ```bash
-      sudo systemctl daemon-reload
-      sudo systemctl reset-failed 'mnt-camera-backup\x2dcamera\x2dca.mount'
-      sudo systemctl start 'mnt-camera-backup\x2dcamera\x2dca.automount'
-      ls -la {{SMB_MOUNT}}/
-      findmnt -rn -t cifs -o TARGET,SOURCE,FSTYPE,OPTIONS
-      ```
 
       Require a `cifs` row for `{{SMB_MOUNT}}` naming
       `//{{SMB_SERVER_FQDN}}/camera-ca-private`, with `rw`, the intended numeric
       UID/GID, and `file_mode=0600,dir_mode=0700`. An `autofs` mount alone is not
       success.
-
-      If mounting fails, inspect the current error before changing settings:
-
-      ```bash
-      sudo journalctl -b -u 'mnt-camera-backup\x2dcamera\x2dca.mount' --no-pager -n 30
-      ```
 
       A `Password for root@...` prompt means the saved login is not being supplied.
       Check that the credentials file has correctly formatted nonempty `username=`
@@ -306,11 +236,24 @@ continue with the runbook.
       login gets permission denied, verify the Samba credentials and share access
       on {{SMB_SERVER_FQDN}}.
 
-      Create the backup directory on the mounted share before continuing:
+      Run the script for the full SMB client mount step after the `smb` password
+      has been inserted into `pass`. The script reads the SMB password from
+      `pass show smb`, writes `/etc/cifs-utils/credentials/camera-backup`, creates
+      or updates the single `/etc/fstab` entry for `{{SMB_MOUNT}}`, starts the
+      systemd automount, requires a real `cifs` mount, and creates
+      `{{SMB_MOUNT}}/Camera-CA-Backups`:
+
+      The agent must resolve the site-specific placeholders before presenting or
+      running this command. Do not ask the user to type the double-curly-brace
+      values literally.
 
       ```bash
-      install -d -m 0700 {{SMB_MOUNT}}/Camera-CA-Backups
-      stat -c '%a %U:%G %n' {{SMB_MOUNT}} {{SMB_MOUNT}}/Camera-CA-Backups
+      cd {{REPO_PATH}}
+      scripts/GPG_KEY/gpg_key_runbook.sh mount-smb \
+        --smb-mount {{SMB_MOUNT}} \
+        --smb-server-fqdn {{SMB_SERVER_FQDN}} \
+        --smb-username {{SMB_USERNAME}} \
+        --local-user "$USER"
       ```
 
 8. ### Back up the password store (USER-run)
@@ -319,68 +262,51 @@ continue with the runbook.
       verify the copy. This is the first point where the SMB mount is available,
       because the SMB password was only added to `pass` in step 6.
 
-      ```bash
-      set -e
-      umask 077
-      backup_dir="{{SMB_MOUNT}}/Camera-CA-Backups"
-      local_export="$HOME/ca-vault-gpg.key.gpg"
-      backup_export="$backup_dir/ca-vault-gpg.key.gpg"
-
-      test -s "$local_export"
-      mkdir -p "$backup_dir"
-      test ! -e "$backup_export"
-      install -m 600 "$local_export" "$backup_export"
-      cmp -s "$local_export" "$backup_export"
-      gpg --list-packets "$backup_export" | sed -n '/secret key packet/p;/secret sub key packet/p'
-      ```
-
       Back up the whole password store immediately after adding or changing any
       password. This `pass` version stores per-entry `.gpg` files plus the hidden
       `.gpg-id`; the backup must include the entire store, not just one entry.
-
-      Resolve `{{SMB_MOUNT}}` and `{{TIMESTAMP}}` before running the commands; do not
-      type the braces literally.
-
-      ```bash
-      set -e
-      umask 077
-      backup_dir="{{SMB_MOUNT}}/Camera-CA-Backups"
-      backup_label="{{TIMESTAMP}}-initial"
-      backup_file="$backup_dir/password-store-backup-$backup_label.tar.gz"
-      mkdir -p "$backup_dir"
-      test ! -e "$backup_file"
-      tar -C "$HOME" -czf "$backup_file" .password-store
-      test -s "$backup_file"
-      chmod 600 "$backup_file"
-      cat ~/.password-store/.gpg-id > "$backup_dir/pass-gpg-id.txt"
-      tar -tzf "$backup_file" | sed -n '1,20p'
-      ```
 
       Any later `pass insert`, `pass edit`, `pass rm`, generated CA passphrase, SMB
       password rotation, or camera password rotation must be followed by another
       password-store backup with a new `{{TIMESTAMP}}`/label. Do not continue a build or
       restore after changing the store until the new backup exists.
 
+      Run the script only after `{{SMB_MOUNT}}` is confirmed to be a mounted CIFS
+      share. Omit `--label` to let the script generate
+      `$(date -u +%Y%m%d%H%M%SZ)-initial`; pass a site-specific label for later
+      backups such as `20260929021726Z-camera-rotation`:
+
+      The agent must resolve `{{SMB_MOUNT}}` before presenting or running this
+      command. Do not ask the user to type the double-curly-brace value literally.
+
+      ```bash
+      cd {{REPO_PATH}}
+      scripts/GPG_KEY/gpg_key_runbook.sh backup --smb-mount {{SMB_MOUNT}}
+      ```
+
+      The backup command refuses to write into an unmounted local directory,
+      copies `ca-vault-gpg.key.gpg` without overwriting a different existing
+      export, creates `password-store-backup-<label>.tar.gz`, writes
+      `pass-gpg-id.txt`, and prints non-secret verification metadata.
+
 ## Recovery
 
-Copy `{{SMB_MOUNT}}/Camera-CA-Backups/ca-vault-gpg.key.gpg` unchanged to the new machine. 
-Configure terminal pinentry as in step 1, then import the key as the intended user in a real 
-terminal with `GPG_TTY` set as in step 2:
+Copy `{{SMB_MOUNT}}/Camera-CA-Backups/ca-vault-gpg.key.gpg` unchanged to the new machine.
+Configure terminal pinentry as in step 1, then import the key as the intended user.
+The agent must resolve `{{REPO_PATH}}` and any backup file path before presenting
+these commands:
 
 ```bash
-chmod 600 ca-vault-gpg.key.gpg
-gpg --import ca-vault-gpg.key.gpg
-gpg --list-secret-keys
+cd {{REPO_PATH}}
+scripts/GPG_KEY/gpg_key_runbook.sh import-key --key-file ca-vault-gpg.key.gpg
 ```
 
 The export alone does not restore the password store. Restore its separate
 backup after importing the key:
 
 ```bash
-mkdir -p ~/.password-store
-tar -xzf password-store-backup-{{TIMESTAMP}}.tar.gz -C "$HOME"
-pass show camera >/dev/null
-pass show smb >/dev/null
+cd {{REPO_PATH}}
+scripts/GPG_KEY/gpg_key_runbook.sh restore-store --backup-file password-store-backup-{{TIMESTAMP}}.tar.gz
 ```
 
 If the backup was created with an older procedure that archived only selected
