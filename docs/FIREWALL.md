@@ -120,7 +120,7 @@ sudo ss -H -ltnp 'sport = :443'
 Check the camera MCP locally or through Hermes:
 
 ```bash
-hermes mcp test camera-new
+hermes mcp test camera
 ```
 
 Then run the camera MCP tool `get_cameras`. It must return camera summaries, not an empty string. A healthy result on this deployment includes cameras from `{{CAMERA_SUBNET}}`.

@@ -27,21 +27,7 @@ Google app password named Camera Keycloak at the hidden prompt. It is not
 the Gmail account's main password. Do not paste either password into Hermes.
 
 ```bash
-sudo python3 - <<'PY'
-import getpass
-import os
-import re
-import warnings
-warnings.simplefilter('error', getpass.GetPassWarning)
-password = ''.join(getpass.getpass('Camera Keycloak app password (hidden): ').split())
-if not re.fullmatch(r'[a-zA-Z]{16}', password):
-    raise SystemExit('Expected the 16-letter Google app password; nothing saved.')
-path = '/opt/keycloak/gmail-smtp.pass'
-fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-with os.fdopen(fd, 'w') as out:
-    out.write(password + '\n')
-print('Saved app password in a root-owned file; value not displayed.')
-PY
+sudo python3 -c 'import getpass, os, warnings; warnings.simplefilter("error", getpass.GetPassWarning); password="".join(getpass.getpass("Camera Keycloak SMTP/app password (hidden): ").split()); assert len(password) >= 8, "Password too short; nothing saved."; path="/opt/keycloak/gmail-smtp.pass"; fd=os.open(path, os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW, 0o600); f=os.fdopen(fd, "w"); f.write(password+"\n"); f.close(); print("Saved SMTP password in a root-owned file; value not displayed.")'
 ```
 
 An existing file is not overwritten. If it already exists, determine whether
@@ -110,41 +96,63 @@ Do not display a full realm representation: it can include SMTP credentials.
 
 ## 3. Configure SMTP in the mcp realm
 
-The password is read by root Python and piped directly into kcadm. Only the
-smtpServer property is updated. This replaces any previous SMTP configuration
-for this realm; preserve the pre-change backup for recovery.
+The password is read by root Python and sent to Keycloak through the Admin
+REST API without printing it or placing it in command arguments. This replaces
+any previous SMTP configuration for this realm; preserve the pre-change backup
+for recovery.
 
 ```bash
-sudo python3 - "$GMAIL_ADDRESS" <<'PY' |
+sudo python3 - "$GMAIL_ADDRESS" <<'PY'
 import json
 import pathlib
 import sys
+import urllib.parse
+import urllib.request
+
+server = 'http://127.0.0.1:8080/auth'
+realm = 'mcp'
 address = sys.argv[1]
 if not address.endswith('@gmail.com') or any(c.isspace() for c in address):
     raise SystemExit('Supply the dedicated full @gmail.com address.')
-password = pathlib.Path('/opt/keycloak/gmail-smtp.pass').read_text().strip()
-if not password:
+admin_password = pathlib.Path('/opt/keycloak/admin.pass').read_text().strip()
+smtp_password = pathlib.Path('/opt/keycloak/gmail-smtp.pass').read_text().strip()
+if not smtp_password:
     raise SystemExit('SMTP password file is empty.')
-json.dump({'smtpServer': {
+
+def req(url, method='GET', data=None, token=None, content_type='application/json'):
+    headers = {}
+    if token:
+        headers['Authorization'] = 'Bearer ' + token
+    body = None
+    if data is not None:
+        body = data if isinstance(data, bytes) else data.encode()
+        headers['Content-Type'] = content_type
+    request = urllib.request.Request(url, data=body, headers=headers, method=method)
+    with urllib.request.urlopen(request, timeout=30) as response:
+        return response.read()
+
+form = urllib.parse.urlencode({
+    'grant_type': 'password', 'client_id': 'admin-cli',
+    'username': 'keycloak-admin', 'password': admin_password,
+}).encode()
+token = json.loads(req(server + '/realms/master/protocol/openid-connect/token',
+                       'POST', form, content_type='application/x-www-form-urlencoded'))['access_token']
+realm_rep = json.loads(req(server + '/admin/realms/' + realm, token=token))
+realm_rep['smtpServer'] = {
     'host': 'smtp.gmail.com', 'port': '587',
     'from': address, 'fromDisplayName': 'Camera System',
-    'auth': 'true', 'user': address, 'password': password,
+    'auth': 'true', 'user': address, 'password': smtp_password,
     'starttls': 'true', 'ssl': 'false'
-}}, sys.stdout)
+}
+req(server + '/admin/realms/' + realm, 'PUT', json.dumps(realm_rep), token=token)
+
+smtp = json.loads(req(server + '/admin/realms/' + realm, token=token)).get('smtpServer', {})
+expected = {'host':'smtp.gmail.com','port':'587','auth':'true','starttls':'true','ssl':'false'}
+assert all(str(smtp.get(k)) == v for k, v in expected.items()), 'SMTP settings mismatch'
+assert smtp.get('from') == address and smtp.get('user') == address, 'SMTP address mismatch'
+for k in ('host','port','from','fromDisplayName','user','auth','starttls','ssl'):
+    print(k + ': ' + str(smtp.get(k, '')))
 PY
-  kc update "realms/$MCP_REALM" -n -f -
-```
-
-Verify only the non-secret settings, keeping any full API response in the pipe:
-
-```bash
-kc get "realms/$MCP_REALM" --fields smtpServer |
-  python3 -c 'import json,sys
-s=json.load(sys.stdin)["smtpServer"]
-expected={"host":"smtp.gmail.com","port":"587","auth":"true","starttls":"true","ssl":"false"}
-assert all(s.get(k)==v for k,v in expected.items()), "SMTP settings mismatch"
-for k in ("host","port","from","fromDisplayName","user","auth","starttls","ssl"):
-    print(k + ": " + str(s.get(k,"")))'
 ```
 
 Require From and user to match the dedicated Gmail address. Do not enable

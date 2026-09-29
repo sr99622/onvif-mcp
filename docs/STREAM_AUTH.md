@@ -70,7 +70,7 @@ Replace every symbolic value with the target environment's actual value.
 | `{{ACTIVE_SITE_LINK}}` | — (no symlink; see preflight note) | Enabled Nginx site name; in this deployment the live config is a plain file in `/etc/nginx/conf.d/`, not a symlink |
 | `{{NGINX_SITE}}` | /etc/nginx/conf.d/{{SERVER_FQDN}}.conf | Active Nginx site for this deployment |
 | `{{PRIVATE_CA_FILE}}` | /etc/nginx/tls/camera-system-root-ca.crt.pem | Public private-CA root certificate on the server |
-| `{{HERMES_SERVER_NAME}}` | camera-new | Existing Hermes MCP entry used for regression testing (resolve via `hermes mcp list`: the entry whose transport is `https://{{SERVER_FQDN}}/mcp`) |
+| `{{HERMES_SERVER_NAME}}` | camera | Existing Hermes MCP entry used for regression testing (resolve via `hermes mcp list`: the entry whose transport is `https://{{SERVER_FQDN}}/mcp`) |
 
 Derived URLs:
 
@@ -861,11 +861,11 @@ the actual authorization request includes `scope=mcp:tools` (and
 scope does not prove that the authorization URL requests it. For this deployment:
 
 ```bash
-hermes config set mcp_servers.camera-new.oauth.scope 'offline_access mcp:tools'
-hermes config set mcp_servers.camera-new.ssl_verify /etc/ssl/certs/ca-certificates.crt
+hermes config set mcp_servers.camera.oauth.scope 'offline_access mcp:tools'
+hermes config set mcp_servers.camera.ssl_verify /etc/ssl/certs/ca-certificates.crt
 ```
 
-Resolve the entry name first; do not blindly modify `camera-new` on another host.
+Resolve the entry name first; do not blindly modify `camera` on another host.
 The CA bundle must contain the private root. Hermes' HTTP client may otherwise
 use a bundled public CA store instead of the host store. Do not set
 `ssl_verify=false`. Run only one login at a time: `hermes mcp login`/`reauth`
@@ -886,7 +886,7 @@ fresh-session) served real JPEGs with `no-store`. `get_cameras` returned all
 seven cameras with HTTPS-origin `web_snapshot_url` values; `get_snapshot` for
 `4B0013BPAABE264`/`MediaProfile000` returned a valid 181 KB JPEG without
 browser cookies; `SNAPSHOT_PROXY_URL` is unset on the MCP service, so the
-loopback default applies; `hermes mcp test camera-new` connected via saved
+loopback default applies; `hermes mcp test camera` connected via saved
 OAuth state.
 
 ## 10. Backup checkpoint

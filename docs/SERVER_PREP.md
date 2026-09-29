@@ -213,60 +213,12 @@ sudo env USER="$USER" onvif-mcp/scripts/enable-nopasswd.sh
 curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
 ```
 
-Use the minimal configuration and add the LLM model of your choice, the source the environment.
-
-```bash
-source ~/.bashrc
-```
-
-Edit the .hermes/config.yaml to set up the camera MCP stdio, replacing the values in {{ }} double curly braces to fit your own configuration.
-
-```bash
-nvim .hermes/config.yaml
-```
-
-The STREAM_SERVER_URL should be something like `<hostname>.home.arpa`, where .arpa is the reserved DNS domain name for internal servers. If you have a DNS sever on the local network, you can add this hostname and static IP to the DNS address mappings. If not, just add the name to your /etc/hosts file for now. At a later stage in the configuration, the DNS server issue will become more prominent, and you can add the DNS serving capability to the machine for use by other machines on the local network for local name resolution. Depending on your network topology, it may be preferable to use hosts files on client computers rather than local DNS resolution. This topic will be explored in detail later.
+Once the installation is complete run 
 
 ```
-mcp_servers:
-  camera:
-    command: uv
-    args:
-    - run
-    - onvif-stdio
-    enabled: true
-```
+hermes setup tools
+``` 
 
-Configuration of the system will require more turns than are configured by default. Edit the `.hermes/config.yaml` file to adjust
-
-```
-agent:
-  max_turns: 150
-```
-
-Launch hermes and inspect the header. The first launch will show connecting to the MCP server, the second launch will stabilize the header. Look for the mcp servers section it should look something like:
-
-```
-MCP Servers
-camera (stdio) - 42 tool(s)
-```
-
-If you have issues at this step and everything is set up properly, try restarting the terminal.
-
-You can test the camera MCP using the prompt
-
-```
-use the camera MCP server to get its version
-```
-
-It should reply with both the MCP version and the libonvif version.
-
-## Install nginx
-
-A HTTP server is needed as well, install nginx using the prompt
-
-```
-install nginx
-```
-
+and enable browser automation.
+ 
 Reboot the machine to verify that settings are correct and survive reboot.

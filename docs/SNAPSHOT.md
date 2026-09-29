@@ -38,7 +38,7 @@ location, the proxy's route table keys, and that scheme must all agree.
 | `{{SERVER_FQDN}}`   | Server Fully Qualified Domain Name            |
 | `{{REPO_PATH}}`     | Parent directory containing the onvif-mcp repository (repo lives at `{{REPO_PATH}}/onvif-mcp`) |
 | `{{SERVER_USER}}`   | System user the proxy runs as (owner of `{{REPO_PATH}}`, so it can read the repo source and its venv) |
-| `{{USERNAME}}`      | Camera username                                |
+| `{{CAMERA_USERNAME}}`      | Camera username                                |
 | `pass camera`       | Camera password from the local password store  |
 
 These values are required for operation. Do not hard-code the camera password in
@@ -68,7 +68,7 @@ dependencies). Bind and credentials come from environment:
 | SNAPSHOT_PROXY_HOST | 127.0.0.1  | Bind address — keep loopback only |
 | SNAPSHOT_PROXY_PORT | 8891       | Bind port                         |
 | SNAPSHOT_ROUTES_FILE | /etc/onvif-mcp/snapshot_routes.json | Generated site route table |
-| CAMERA_USERNAME   | {{USERNAME}} | Camera login                      |
+| CAMERA_USERNAME   | {{CAMERA_USERNAME}} | Camera login                      |
 | CAMERA_PASSWORD   | `pass camera` | Camera login                     |
 
 Do not edit credentials into the source file or the unit file. The service reads
@@ -105,7 +105,7 @@ Read the password once from the password store before testing:
 * Digest Version of the Command
 
   ```bash
-  curl -s --digest -u "{{USERNAME}}:$CAMERA_PASSWORD" --max-time 20 \
+  curl -s --digest -u "{{CAMERA_USERNAME}}:$CAMERA_PASSWORD" --max-time 20 \
     -o /tmp/snap.jpg -w '%{http_code} %{content_type}\n' '<snapshot_uri>'
   file /tmp/snap.jpg        # must say "JPEG image data"
   ```
@@ -113,7 +113,7 @@ Read the password once from the password store before testing:
 * Basic Version of the Command
 
   ```bash
-  curl -s --basic -u "{{USERNAME}}:$CAMERA_PASSWORD" --max-time 20 \
+  curl -s --basic -u "{{CAMERA_USERNAME}}:$CAMERA_PASSWORD" --max-time 20 \
     -o /tmp/snap.jpg -w '%{http_code} %{content_type}\n' '<snapshot_uri>'
   file /tmp/snap.jpg        # must say "JPEG image data"
   ```
@@ -184,7 +184,7 @@ test -n "$CAMERA_PASSWORD"
   printf 'SNAPSHOT_PROXY_HOST=127.0.0.1\n'
   printf 'SNAPSHOT_PROXY_PORT=8891\n'
   printf 'SNAPSHOT_ROUTES_FILE=/etc/onvif-mcp/snapshot_routes.json\n'
-  printf 'CAMERA_USERNAME=%s\n' '{{USERNAME}}'
+  printf 'CAMERA_USERNAME=%s\n' '{{CAMERA_USERNAME}}'
   printf 'CAMERA_PASSWORD=%s\n' "$CAMERA_PASSWORD"
   printf 'STREAM_SERVER_URL=http://%s\n' '{{SERVER_FQDN}}'
 } > "$tmp_env"

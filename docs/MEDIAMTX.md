@@ -7,7 +7,7 @@ This document describes the MediaMTX RTSP-to-WebRTC/HLS streaming server. The se
 | Value | Description |
 |---|---|
 | `{{SERVER_FQDN}}` | Server Fully Qualified Domain Name |
-| `{{USERNAME}}` | Camera Username, normally `admin` |
+| `{{CAMERA_USERNAME}}` | Camera Username, normally `admin` |
 | `pass camera` | Camera password, stored in `~/.password-store/camera.gpg` |
 
 These values are required for operation. Do not ask the user to paste the camera password into the runbook or shell history. Read it from `pass camera`. If GPG prompts for the passphrase, complete that terminal prompt once; the local `gpg-agent` normally caches the unlocked key for a short period, allowing subsequent `pass camera` calls in the same build/restore session to run without prompting. Prompt the user with instructions to prime the cache if necessary.
@@ -63,7 +63,7 @@ The camera path is constructed using the formula shown below. Values inside the 
 
 ```py
   {serial_number}/{profile.token}
-    source: {stream_uri[:7]}{{USERNAME}}:{url_encoded_camera_password_from_pass}@{stream_uri[7:]}
+    source: {stream_uri[:7]}{{CAMERA_USERNAME}}:{url_encoded_camera_password_from_pass}@{stream_uri[7:]}
 ```
 
 Using concrete example values
@@ -213,7 +213,7 @@ sudo chmod 750 /etc/mediamtx /var/lib/mediamtx /var/lib/mediamtx/recordings
 
 * Camera credentials are embedded in RTSP URLs in the generated config file (`/etc/mediamtx/mediamtx.yml`). Keep this file protected (mode 640 or stricter, owned by mediamtx:mediamtx).
 * The camera password source of truth is `pass camera`. Use the first line returned by `pass camera` when generating RTSP `source:` URLs.
-* URL-encode the password before embedding it in `rtsp://{{USERNAME}}:...@host/...`.
+* URL-encode the password before embedding it in `rtsp://{{CAMERA_USERNAME}}:...@host/...`.
 * If `pass camera` prompts for a GPG passphrase, enter it interactively in the terminal. Once the GPG agent cache is primed, repeated reads during the same build usually do not prompt again.
 * Do not write the generated YAML through commands that expose the password in shell history. Prefer a script, editor, or here-document that reads the password from `pass camera` into a variable and writes the file with restrictive permissions.
 
@@ -333,6 +333,8 @@ sudo systemctl status mediamtx  # verify active (running)
 ```
 
 ## 5. Nginx Reverse Proxy Configuration
+
+Install nginx if necessary.
 
 **Critical:** The nginx reverse proxy requires TWO specific directives that are often missing:
 

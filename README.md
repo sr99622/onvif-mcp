@@ -52,12 +52,15 @@ Be mindful of model context size when running the configurations shown below. St
 
     Assuming you have chosen the SMB strategy and have a server set up, prompt the agent to create the gpg key, password store, smb mount and backup the keys.
 
+    During this step, the user will be prompted to create the GPG key on the local host. Advise the user that this key should be kept in a secure location. Once the key has been created, the password store will be created and the user will be prompted to enter the password for the cameras. This system assumes that the camera password is shared by the cameras on the network. The user will also be prompted to enter the SMB password associated with the SMB_UUSERNAME. The password store and GPG key will then be backed up on the SMB_MOUNT shared folder.
+
     **Required Values**
 
     | Name | Description |
     |---|---|
     | `{{SMB_MOUNT}}` | Mounted SMB shared folder |
     | `{{SMB_USERNAME}}` | Samba username for the private camera CA backup share |
+    | `{{SMB_SERVER_FQDN}}` | Samba server Fully Qualified Domain Name |
 
     **Runbook**
 
@@ -69,7 +72,7 @@ Be mindful of model context size when running the configurations shown below. St
 
     Attach the cameras to the second ethernet adapter. The value for `{{PRVT_CAMERA_NET_EN_NAME}}` can be found using the `nmcli dev show` command from a terminal.     The DHCP server is set up first and should be given ample opportunity to assign addresses to cameras before querying the camera MCP server tool get_cameras to discover cameras on the network. A couple of minutes should be long enough.
 
-    The MCP_HTTP.md runbook sets up the camera MCP server to communicate with the cameras, and is used by later steps to gather camera information for system configuration. 
+    The MCP_HTTP.md runbook sets up the camera MCP server to communicate with the cameras, and is used by later steps to gather camera information for system configuration. The user must reload the MCP using the command `/reload-mcp` or restart hermes to incorporate the camera MCP server into the current session.
 
     **Required Values**
 
@@ -77,7 +80,7 @@ Be mindful of model context size when running the configurations shown below. St
     |------|-------------|
     | `{{PRVT_CAMERA_NET_EN_NAME}}` | Ethernet adapter hosting the private camera network |
     | `{{SERVER_FQDN}}` | Fully Qualified Domain Name of the Server |
-    | `{{USERNAME}}`    | Camera Username |
+    | `{{CAMERA_USERNAME}}`    | Camera Username |
     | `{{REPO_PATH}}`   | Full Pathname of Repository Location |
     | `{{SERVER_USER}}` | System user the service runs as (project owner) |
 
@@ -98,7 +101,7 @@ Be mindful of model context size when running the configurations shown below. St
     | Name | Description |
     |------|-------------|
     | `{{SERVER_FQDN}}` | Fully Qualified Domain Name of the server, e.g. camera.home.arpa |
-    | `{{USERNAME}}` | Common username for cameras |
+    | `{{CAMERA_USERNAME}}` | Common username for cameras |
     | `{{REPO_PATH}}` | Parent directory of this repository |
     | `{{SERVER_USER}}` | Account name on the server under which Hermes is run |
 
@@ -162,7 +165,7 @@ Be mindful of model context size when running the configurations shown below. St
 
 7. ### Layer authentication on the rest of the site endpoints
 
-    This step will require that the camera-new http MCP server is available to the agent. This can be accomplished using the `/reload-mcp` directive or by restarting hermes before starting the runbook.
+    This step will require that the camera http MCP server is available to the agent. This can be accomplished using the `/reload-mcp` directive or by restarting hermes before starting the runbook.
 
     **Required Values**
 

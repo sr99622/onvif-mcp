@@ -609,7 +609,7 @@ Then run these functional checks before declaring recovery complete:
      token.
 
 2. Run `KEYCLOAK.md` §13, **Verify the Hermes login end-to-end**, for the
-   deployment's real MCP server entry (for example `camera-new`).
+   deployment's real MCP server entry (for example `camera`).
    - Configure the entry with `auth: oauth`, the HTTPS `/mcp` URL, and an
      explicit `ssl_verify` path to the private CA; never set `ssl_verify=false`.
    - Prevent concurrent OAuth flows as described in §13.2.
