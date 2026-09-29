@@ -2,353 +2,201 @@
 
 ## Purpose
 
-Server-side configuration for keycloak client access. It adds one new Hermes
+Server-side configuration for Keycloak client access. It adds one new Hermes
 client's source address to the anonymous Dynamic Client Registration (DCR)
 Trusted Hosts policy in Keycloak, so that machine can register its own public
 OAuth client.
 
 This document is written for a single server where Nginx fronts both the MCP
-server and Keycloak, and where Keycloak runs locally (native install or
-compose project). All calls are made from the server host against the
-loopback Keycloak listener; nothing here touches the network-facing stack.
+server and Keycloak, and where Keycloak runs locally through the `/opt/keycloak`
+Compose project. All Admin REST calls are made from the server host against the
+loopback Keycloak listener; nothing here changes the network-facing stack.
 
 ## Required Values
 
 | Symbol | Description |
 |--------|-------------|
-| `{{CLIENT_SOURCE_IP}}` | Client IP address as observed by the server. Note that clients running in a virtual machine or container may be observed by the server as coming from the client host computer. Attempt a login from the client prior to running these instructions to place the observed IP address in the server cache for verification. |
+| `{{CLIENT_SOURCE_IP}}` | Client IP address as observed by the server. Clients running in a virtual machine or container may be observed by the server as coming from the client host computer. Attempt a login from the client prior to running these instructions to place the observed IP address in the server cache for verification. |
 | `{{BACKUP_PATH}}` | Backup folder |
 
-Runbook values used by this document:
+Runbook defaults used by the script:
 
 | Symbol | Meaning | Typical value in this deployment |
 |---|---|---|
 | `{{MCP_REALM}}` | Keycloak realm hosting the MCP client-registration policy | `mcp` |
 | `{{KEYCLOAK_ADMIN_USER}}` | Permanent administrator user in the `master` realm | `keycloak-admin` |
 | `{{KEYCLOAK_PORT}}` | Loopback TCP port of the Keycloak listener | `8080` |
-| `{{KEYCLOAK_PATH}}` | Keycloak relative path on loopback (`KC_HTTP_RELATIVE_PATH`) | `/auth` |
-| `{{CLIENT_SOURCE_IP}}` | Address supplied by agent representing the client IP | e.g. `192.168.68.51` |
+| `{{KEYCLOAK_PATH}}` | Keycloak relative path on loopback | `/auth` |
 
-The admin password lives in a root-owned, mode `0600` file
-(`/opt/keycloak/admin.pass` in this deployment). Create the token body and
-token stash with a restrictive umask so the credential never appears on a
-command line, in an environment variable, or in an untrusted location.
+The admin password lives in `/opt/keycloak/admin.pass`, a root-owned mode `0600`
+file. It must never appear on a command line, in an environment variable, or in
+an untrusted location.
 
-Token lifetime rule (hard): Keycloak access tokens here carry a 60-second
-lifespan (`exp - iat = 60`, the container default when no token lifespan is
-configured), and there is no keepalive or renewal. Any Admin REST call that
-presents an expired token returns `401` with a JSON error body; a step that
-captures such a body into a file can mistake it for a normal response.
-Therefore every mutating step in this runbook is self-contained: it mints its
-own token at the top of its own bounded command, performs all of its Admin
-REST calls inside that same command, verifies its own result inside it, and
-cleans up before the command exits. No step may depend on a token or a file
-minted by a previous step. If any verification fails or an unexpected response
-is seen, re-run the entire step with a fresh mint; do not retry individual
-calls with an old credential.
+## Executable source of truth
+
+Executable actions for this runbook are implemented by:
+
+```bash
+scripts/ADD_CLIENT_ON_SERVER/add_client_on_server_runbook.sh
+```
+
+That script is the single source of truth for commands that inspect Nginx DCR
+logs, resolve the live Trusted Hosts component, update the host list, verify the
+result, check cleanup, and create a Keycloak checkpoint. The prose below states
+intent, boundaries, and expected verification output without duplicating shell
+fragments that can drift from the script.
+
+## Token lifetime and Step 3 gotcha
+
+Keycloak access tokens used here are short-lived. The mutating operation must not
+mint a token in one step and reuse it later. The script preserves this hard rule:
+its update sequence runs inside one root-controlled Python process that mints the
+token, resolves the component live, fetches the component by ID, edits the current
+representation, sends the PUT, performs a second direct by-ID fetch, verifies the
+stored result, and exits without leaving token/body/update files behind.
+
+If that sequence fails, re-run the whole script. Do not retry individual Admin
+REST calls with an old token or a component UUID remembered from another run.
 
 ## Security rules
 
-- Never print the admin password, the access token, or DCR registration
-  artifacts to chat, logs, or shell history (avoid `set -x`).
-- Keep every temporary file for secrets at mode `0600` and remove all of
-  them at the end, including after a failed run.
-- Add exactly one address per client. Do not widen the policy to a subnet
-  unless the installed Keycloak provider is confirmed to accept CIDR syntax;
-  do not disable Trusted Hosts to simplify onboarding.
+- Never print the admin password, access token, or DCR registration artifacts to
+  chat, logs, or shell history.
+- Add exactly one address per client. Do not widen the policy to a subnet unless
+  the installed Keycloak provider is confirmed to accept CIDR syntax; do not
+  disable Trusted Hosts to simplify onboarding.
 - Change only the anonymous `trusted-hosts` component of the MCP realm.
-  Never copy a component UUID from another installation, another realm, or a
-  previous deployment — always resolve it live as in Steps 2 and 3 below.
+- Resolve the component live every time. Never copy a component UUID from another
+  installation, another realm, or a previous deployment.
+- Preserve pre-existing trusted hosts and keep both matching controls set to
+  `["true"]`.
 
-## 1. Confirm the server identity and the client source address
+## 1. Add the client source IP (AGENT-run)
 
-Confirm this is the machine that fronts the realm, and confirm Keycloak is
-listening on loopback:
-
-```bash
-hostname -I
-ss -ltnp | grep ':8080\b' || true
-curl -sS -o /dev/null -w 'Health: HTTP %{http_code}\n' \
-  http://127.0.0.1:{{KEYCLOAK_PORT}}{{KEYCLOAK_PATH}}/realms/master/.well-known/openid-configuration
-```
-
-Expected result: `HTTP 200`. If Keycloak is not up, start it before
-continuing; do not attempt DCR policy changes against a dead or restarting
-server.
-
-`{{CLIENT_SOURCE_IP}}` is supplied by the agent. If there is ambiguity around 
-this value, please refer to the CLIENT.md document for details.
+Run with resolved values:
 
 ```bash
-sudo grep 'clients-registrations/openid-connect' \
-  /var/log/nginx/access.log | tail -n 5
+cd {{REPO_PATH}}/onvif-mcp
+scripts/ADD_CLIENT_ON_SERVER/add_client_on_server_runbook.sh apply \
+  --client-source-ip {{CLIENT_SOURCE_IP}} \
+  --backup-path {{BACKUP_PATH}} \
+  --repo-path {{REPO_PATH}}
 ```
 
-If no entry exists yet, the client has not attempted registration; the
-policy change is harmless but cannot be confirmed against traffic. Echo back
-to the user the results of this observation.
-
-## 2. Resolve the live anonymous Trusted Hosts component (preflight)
-
-Mint a token and resolve the component in one bounded command. This step is a
-confirmation only; Step 3 resolves the component live again immediately before
-the write, so no state is carried between steps:
+For this deployment, the resolved command is:
 
 ```bash
-umask 077
-pass="$(sudo cat /opt/keycloak/admin.pass)" || exit 1
-body=$(mktemp /tmp/.kctmp.XXXXXX)
-printf 'grant_type=password&client_id=admin-cli&username={{KEYCLOAK_ADMIN_USER}}&password=%s' "$pass" > "$body"
-tok=$(curl -sS -X POST --data @"$body" \
-  http://127.0.0.1:{{KEYCLOAK_PORT}}{{KEYCLOAK_PATH}}/realms/master/protocol/openid-connect/token \
-  | python3 -c 'import sys,json; print(json.load(sys.stdin)["access_token"])') || { rm -f "$body"; unset pass; exit 1; }
-rm -f "$body"; unset pass
-[ -n "$tok" ] || exit 1
-
-tfile=$(mktemp /tmp/.kctok.XXXXXX); chmod 600 "$tfile"
-printf '%s' "$tok" > "$tfile"; unset tok
-
-curl -sS -H "Authorization: Bearer $(cat "$tfile")" \
-  'http://127.0.0.1:{{KEYCLOAK_PORT}}{{KEYCLOAK_PATH}}/admin/realms/{{MCP_REALM}}/components?subType=anonymous' > /tmp/kc-components.json
-
-python3 - <<'EOF'
-import json, sys
-data = json.load(open('/tmp/kc-components.json'))
-matches = [c for c in data if c.get('providerId') == 'trusted-hosts' and c.get('subType') == 'anonymous']
-print("exact matches:", len(matches))
-for m in matches:
-    print("id:", m['id'], "| name:", m.get('name'))
-assert len(matches) == 1, "stop: zero or multiple components; the realm was modified by hand or the wrong realm is in use"
-EOF
-rc=$?
-
-rm -f "$tfile" /tmp/kc-components.json
-[ $rc -eq 0 ]
+cd /home/stephen/onvif-mcp
+scripts/ADD_CLIENT_ON_SERVER/add_client_on_server_runbook.sh apply \
+  --client-source-ip 10.1.1.4 \
+  --backup-path /mnt/camera-backup/ \
+  --repo-path /home/stephen
 ```
 
-Select the component whose:
+The script performs these executable stages:
+
+1. Validates `{{CLIENT_SOURCE_IP}}` as an IP address.
+2. Prints server addresses, verifies Keycloak loopback discovery returns HTTP
+   200, and shows recent Nginx DCR access-log entries.
+3. Resolves exactly one anonymous `trusted-hosts` component and prints its
+   current trusted hosts and matching controls.
+4. Runs the required single bounded root-controlled update command:
+   mint token, resolve component live, fetch by ID, append the client IP if
+   absent, PUT the full current representation, fetch by ID again, and verify.
+5. Verifies the stored list contains `{{CLIENT_SOURCE_IP}}`, preserves
+   `localhost` and `127.0.0.1`, and keeps both matching controls at `["true"]`.
+6. Writes non-secret update evidence to
+   `scripts/ADD_CLIENT_ON_SERVER/last-trusted-hosts-update.json`.
+7. Confirms no known Keycloak token/body/update temporary files remain.
+8. Reads the Trusted Hosts component back again as a final status check.
+9. Creates a Keycloak checkpoint through KEYCLOAK_BACKUP.md's script.
+10. Shows recent DCR log entries again and reports client DCR/login verification
+    as pending until the client retries.
+
+## 2. Status checks (AGENT-run)
+
+```bash
+cd {{REPO_PATH}}/onvif-mcp
+scripts/ADD_CLIENT_ON_SERVER/add_client_on_server_runbook.sh status \
+  --client-source-ip {{CLIENT_SOURCE_IP}}
+```
+
+For this deployment:
+
+```bash
+cd /home/stephen/onvif-mcp
+scripts/ADD_CLIENT_ON_SERVER/add_client_on_server_runbook.sh status \
+  --client-source-ip 10.1.1.4
+```
+
+Required outcomes before handing back to the client:
+
+- Keycloak loopback discovery returns HTTP 200.
+- Exactly one anonymous `trusted-hosts` component exists in realm `mcp`.
+- Trusted hosts include `10.1.1.4` plus the pre-existing hosts.
+- `host-sending-registration-request-must-match` is `["true"]`.
+- `client-uris-must-match` is `["true"]`.
+- No `.kctmp.*`, `.kctok.*`, `kc-components.json`, `kc-cid.txt`, or `kc-th-*`
+  temp artifacts remain in `/tmp`.
+
+## 3. Hand back to the client
+
+Tell the client to retry the OAuth login so it can run DCR from the newly trusted
+source address. Confirm success by watching Nginx record a `201` for the
+`clients-registrations/openid-connect` POST from `{{CLIENT_SOURCE_IP}}`.
+
+If the client receives `Host not trusted` again, its observed source address
+differs from the one added (NAT/routing change). Re-run the script only with the
+new observed address; do not broaden to a subnet by default.
+
+## 4. Individual addresses versus subnets
+
+The strict default is to allow each observed client address individually. This
+gives clear registration boundaries but requires stable addresses or DHCP
+reservations. A narrowly scoped trusted subnet may reduce administration on a
+controlled LAN, but use it only after confirming that the installed Keycloak
+provider accepts the intended CIDR syntax. Do not assume CIDR support, and do not
+disable Trusted Hosts merely to simplify onboarding.
+
+## 5. Keycloak backup checkpoint
+
+The script creates a stage-close checkpoint under:
 
 ```text
-providerType = org.keycloak.services.clientregistration.policy.ClientRegistrationPolicy
-providerId   = trusted-hosts
-subType      = anonymous
-name          "Trusted Hosts" (informational; not required)
+{{BACKUP_PATH}}/keycloak/YYYYMMDDHHMMSSZ/
 ```
 
-Require exactly one match. If zero or multiple components match, stop: the realm
-was modified by hand or the wrong realm is in use. Never substitute a UUID
-remembered from another machine or an earlier realm — each step below resolves
-it live.
+That checkpoint is created through KEYCLOAK_BACKUP.md's shared script and
+contains a fresh PostgreSQL dump with the trusted-host policy write, a fresh
+`keycloak.tar`, metadata, and verified `SHA256SUMS`.
 
-Two operational notes learned in practice:
-
-- An *unfiltered* `/components` collection GET may omit `providerType` on
-  some entries (it came back as absent/null), which makes type-based
-  filtering on the raw list silently return nothing. Prefer the filtered
-  query above and confirm on `providerId`/`subType`.
-- Collection views can also show `config: {}` even when component
-  configuration exists. Never read or write policy values from a collection
-  view — always fetch the single component by ID.
-
-## 3. Fetch, update, and push the component (single bounded command)
-
-The entire mint, resolve, fetch, change, push, verify, and cleanup sequence
-runs in one root-controlled command. Mint-to-verify wall time is seconds, so
-it cannot cross the token's 60-second lifetime, and verification happens in
-the same process directly after the PUT. If this step fails for any reason,
-re-run the whole command — a fresh mint is taken at its top, the component is
-re-resolved live, and the presence guard makes a retry idempotent (an address
-already present is a no-success, not an error):
-
-```bash
-umask 077
-pass="$(sudo cat /opt/keycloak/admin.pass)" || exit 1
-body=$(mktemp /tmp/.kctmp.XXXXXX)
-printf 'grant_type=password&client_id=admin-cli&username={{KEYCLOAK_ADMIN_USER}}&password=%s' "$pass" > "$body"
-tok=$(curl -sS -X POST --data @"$body" \
-  http://127.0.0.1:{{KEYCLOAK_PORT}}{{KEYCLOAK_PATH}}/realms/master/protocol/openid-connect/token \
-  | python3 -c 'import sys,json; print(json.load(sys.stdin)["access_token"])') || { rm -f "$body"; unset pass; exit 1; }
-rm -f "$body"; unset pass
-[ -n "$tok" ] || exit 1
-
-# Resolve the component live in this same command (never from a previous step).
-curl -sS -H "Authorization: Bearer ***" \
-  'http://127.0.0.1:{{KEYCLOAK_PORT}}{{KEYCLOAK_PATH}}/admin/realms/{{MCP_REALM}}/components?subType=anonymous' > /tmp/kc-components.json
-
-python3 - <<'EOF'
-import json, sys
-data = json.load(open('/tmp/kc-components.json'))
-matches = [c for c in data if c.get('providerId') == 'trusted-hosts' and c.get('subType') == 'anonymous']
-assert len(matches) == 1, "stop: zero or multiple components; the realm was modified by hand or the wrong realm is in use"
-open('/tmp/kc-cid.txt', 'w').write(matches[0]['id'])
-EOF
-[ $? -eq 0 ] || exit 1
-
-CID=$(cat /tmp/kc-cid.txt)
-
-# Fetch directly by ID and assert the shape before any edit. An error body (for
-# example a 401 JSON from an expired token) captured into this file must fail
-# loudly, not pass as data.
-curl -sS -H "Authorization: Bearer ***" \
-  "http://127.0.0.1:{{KEYCLOAK_PORT}}{{KEYCLOAK_PATH}}/admin/realms/{{MCP_REALM}}/components/$CID" > /tmp/kc-th-before.json
-
-python3 - <<'EOF'
-import json, sys
-raw = open('/tmp/kc-th-before.json').read()
-c = json.loads(raw)
-assert c.get('providerId') == 'trusted-hosts' and c.get('subType') == 'anonymous', \
-    "unexpected component shape (possible transient or error body): " + raw[:200]
-hosts = list(c['config'].get('trusted-hosts', []))
-print("current hosts:", hosts)
-new_ip = "{{CLIENT_SOURCE_IP}}"
-if new_ip not in hosts:
-    hosts.append(new_ip)
-c['config']['trusted-hosts'] = hosts
-c['config']['host-sending-registration-request-must-match'] = ["true"]
-c['config']['client-uris-must-match'] = ["true"]
-with open('/tmp/kc-th-update.json', 'w') as f:
-    json.dump(c, f)
-print("hosts after change:", hosts)
-EOF
-[ $? -eq 0 ] || exit 1
-
-# Push the full representation back with a single PUT; require an HTTP 2xx code.
-PUT_CODE=$(curl -sS -o /dev/null -w 'HTTP %{http_code}' -X PUT \
-  -H "Authorization: Bearer ***" \
-  -H 'Content-Type: application/json' --data @/tmp/kc-th-update.json \
-  "http://127.0.0.1:{{KEYCLOAK_PORT}}{{KEYCLOAK_PATH}}/admin/realms/{{MCP_REALM}}/components/$CID") || exit 1
-case "$PUT_CODE" in
-  HTTP\ 2*) : ;;
-  *) echo "PUT failed: $PUT_CODE"; exit 1 ;;
-esac
-
-# Verify against a SECOND direct fetch, in this same process, after the PUT.
-curl -sS -H "Authorization: Bearer ***" \
-  "http://127.0.0.1:{{KEYCLOAK_PORT}}{{KEYCLOAK_PATH}}/admin/realms/{{MCP_REALM}}/components/$CID" > /tmp/kc-th-after.json
-
-python3 - <<'EOF'
-import json, sys
-raw = open('/tmp/kc-th-after.json').read()
-c = json.loads(raw)
-if c.get('providerId') != 'trusted-hosts':
-    sys.exit("unexpected component representation: " + raw[:200])
-hosts = c['config']['trusted-hosts']
-print("stored:", hosts)
-assert "{{CLIENT_SOURCE_IP}}" in hosts, "new client address missing"
-for keep in ["localhost", "127.0.0.1"]:          # plus any pre-existing LAN IPs
-    assert keep in hosts, f"pre-existing host lost: {keep}"
-assert c['config']['host-sending-registration-request-must-match'] == ["true"]
-assert c['config']['client-uris-must-match'] == ["true"]
-print("VERIFY OK")
-EOF
-rc=$?
-
-# Clean up this step's artifacts, including the update payload, before exit.
-rm -f /tmp/kc-components.json /tmp/kc-cid.txt \
-  /tmp/kc-th-before.json /tmp/kc-th-update.json /tmp/kc-th-after.json
-[ $rc -eq 0 ]
-```
-
-The resulting stored configuration must look like the shape below (order in the
-list is not significant — Keycloak may store the appended value at any
-position):
-
-```json
-{
-  "trusted-hosts": [
-    "<pre-existing hosts...>",
-    "{{CLIENT_SOURCE_IP}}",
-    "localhost",
-    "127.0.0.1"
-  ],
-  "host-sending-registration-request-must-match": ["true"],
-  "client-uris-must-match": ["true"]
-}
-```
-
-If a fetch ever returns an unexpected or empty body (a transient condition was
-observed once in the field), re-run the entire step — a fresh mint is taken at
-its top and the shape assertion fails loudly on an error body. The verification
-must be against the *second* direct fetch, after the PUT, in the same process.
-
-## 4. Hand back to the client
-
-Confirm nothing matching the patterns remains in `/tmp` (no `.kctmp.*`,
-`.kctok.*`, `kc-components.json`, `kc-cid.txt`, or `kc-th-*` files), then tell
-the client to proceed with login and let it run DCR. Confirm success by watching 
-Nginx record a `201` for the `clients-registrations/openid-connect` POST from 
-`{{CLIENT_SOURCE_IP}}`:
-
-```bash
-sudo grep 'clients-registrations/openid-connect' \
-  /var/log/nginx/access.log | tail -n 3
-```
-
-If the client receives `"Host not trusted"` again, its observed source
-address differs from the one you added (NAT/routing change); repeat Step 1's
-log check, and add only the new address.
-
-## Individual addresses versus subnets
-
-The strict default is to allow each observed client address individually.
-This gives clear registration boundaries but requires stable addresses or
-DHCP reservations. A narrowly scoped trusted subnet may reduce
-administration on a controlled LAN, but use it only after confirming that the
-installed Keycloak provider accepts the intended CIDR syntax. Do not assume
-CIDR support, and do not disable Trusted Hosts merely to simplify
-onboarding.
-
-## Keycloak backup checkpoint
-
-After Step 4's verification, complete [KEYCLOAK_BACKUP.md](KEYCLOAK_BACKUP.md) 
-shared checkpoint procedure. Invoke the backup service through that procedure 
-and publish a new `{{BACKUP_PATH}}/keycloak/YYYYMMDDHHMMSSZ/` recovery point containing:
-
-- `keycloak-postgres.tar`, containing only the fresh dump with the trusted-host
-  policy write.
-- `keycloak.tar`, captured again even when `/opt/keycloak/` is unchanged, so
-  the configuration and database can be recovered from one checkpoint.
-- `metadata.txt` and verified `SHA256SUMS`.
-
-Record ADD_CLIENT_ON_SERVER.md as the trigger, the before/after trusted-host
-lists, resolved component UUID, matching-control values, and temporary-artifact
-cleanup result. Record whether the client's actual DCR/login verification is
-still pending. Tokens and passwords must never enter metadata or logs.
-If later client registration changes the database, take another checkpoint
-after that registration is verified; do not modify the completed checkpoint.
-
-Use KEYCLOAK_BACKUP.md's capture, verification, and publication rules. Do not create an
-`add-client-on-server-*` folder for Keycloak backups or rearchive the local
-dump history. Restore uses both archives from the newest completed shared
-checkpoint, without a runbook-based supersession policy.
+If later client registration changes the database, take another checkpoint after
+that registration is verified; do not modify a completed checkpoint.
 
 ## Troubleshooting
 
-- **`401` on the token endpoint** — wrong admin username or password file;
-  check `{{KEYCLOAK_ADMIN_USER}}` against the permanent administrator created
-  per `KEYCLOAK.md` Section 5, and that `/opt/keycloak/admin.pass` is the current
-  one. Never retry with a different realm than `master`.
-- **Zero components matching** — wrong realm, or the anonymous DCR policy was
-  deleted/renamed by hand. Inspect all sub-types (`subType=anonymous`) before
-  touching anything; restoring a provider from memory is not supported here.
-- **PUT returns `409` or the component changes between read and write** —
-  another administrator acted concurrently. Re-fetch, re-apply your one-line
-  addition to the *current* host list, and PUT again. Never overwrite with a
-  stale copy.
-- **Client still gets `insufficient_scope` / `Host not trusted` after a
-  correct write** — verify Nginx is forwarding the real client address (not
-  an intermediate NAT) via `proxy_real_ip`/access-log source column; the
-  policy matches the address Keycloak actually receives.
+- `401` on the token endpoint: wrong admin username or password file; check
+  `keycloak-admin` and `/opt/keycloak/admin.pass`. Never retry with a different
+  realm than `master`.
+- Zero components matching: wrong realm, or the anonymous DCR policy was
+  deleted/renamed by hand. Inspect before touching anything; restoring a provider
+  from memory is not supported.
+- PUT returns a conflict or the component changes concurrently: rerun the whole
+  script so it re-fetches current state and re-applies the one-address addition.
+- Client still gets `insufficient_scope` or `Host not trusted`: verify Nginx is
+  forwarding the real client address and that the access-log source column is the
+  address you added.
 
 ## Final checklist
 
-- Keycloak health on loopback returned `200`.
-- `{{CLIENT_SOURCE_IP}}` came from the Nginx DCR access log (Step 1), not a guess.
-- Exactly one anonymous `trusted-hosts` component existed in `{{MCP_REALM}}`.
-- All pre-existing trusted hosts were preserved; exactly one address was added.
+- Keycloak health on loopback returned 200.
+- `{{CLIENT_SOURCE_IP}}` came from the Nginx DCR access log or another explicit
+  observation, not a guess.
+- Exactly one anonymous `trusted-hosts` component existed in `mcp`.
+- All pre-existing trusted hosts were preserved; exactly one address was added or
+  confirmed already present.
 - Both matching controls remain `["true"]`.
-- Verification used a direct by-ID GET after the PUT and passed every assert.
-- Token, body, and JSON temp files are deleted; no secret is printed anywhere.
-- The client's next DCR attempt from the same address succeeds (`201`).
-- Stage-close backup complete: fresh dump containing the policy write
-  archived to `{{BACKUP_PATH}}`, checksums verify.
+- Verification used a direct by-ID GET after the PUT in the same process.
+- Token/body/update temp files are deleted; no secret is printed anywhere.
+- The client's next DCR attempt from the same address succeeds with HTTP 201.
+- Stage-close backup is complete and checksums verify.

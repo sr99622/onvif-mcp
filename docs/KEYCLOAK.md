@@ -7,47 +7,32 @@
 | `{{SERVER_FQDN}}` | Server Fully Qualified Domain Name e.g. camera.home.arpa |
 | `{{BACKUP_PATH}}` | Backup folder |
 
+Executable installation actions are implemented by:
+
+```bash
+scripts/KEYCLOAK/keycloak_runbook.sh
+```
+
+That script is the single source of truth for the commands that install and
+configure Keycloak for this runbook. The prose below is the agent guide: it
+states intent, required checks, boundaries, and follow-up checkpoints without
+repeating executable shell fragments that can drift from the script.
+
 ## Purpose
 
-This runbook creates a Keycloak OAuth 2.1/OpenID Connect deployment for an
-ONVIF MCP server without using the Keycloak Admin Console. It is designed for
-an agent or administrator starting with the same baseline used during the
-verified `{{SERVER_FQDN}}` deployment:
+This runbook creates a Keycloak OAuth 2.1/OpenID Connect deployment for an ONVIF
+MCP server without using the Keycloak Admin Console. It assumes:
 
 - Ubuntu Server with sudo access.
 - Nginx already serving the MCP application over HTTPS.
 - The MCP HTTP service listening on `127.0.0.1:8001`.
-- A server certificate issued by a private CA.
-- Docker and Keycloak not yet installed.
+- A server certificate issued by the private camera CA.
+- Docker and Keycloak not yet installed, or no production `/opt/keycloak`
+  deployment unless explicitly inspected.
 - A client such as Hermes Agent that supports DCR, Authorization Code flow,
   PKCE, and rotating refresh tokens.
 
-The procedure was verified with Ubuntu 26.04, Docker 29.1.3, Docker Compose
-2.40.3, Keycloak 26.7.0, PostgreSQL 17, Nginx 1.28.3, and Hermes Agent 0.20.0.
-
-Do not copy identifiers from the example deployment. Realm, user, client
-scope, mapper, and component UUIDs are installation-specific and must be
-captured from the target Keycloak instance.
-
-## Resulting architecture
-
-```text
-OAuth client
-    |
-    | HTTPS, discovery, DCR, Authorization Code + PKCE
-    v
-Nginx on {{SERVER_FQDN}}:443
-    |-- /auth/ --------------------------------> Keycloak 127.0.0.1:8080
-    |                                               |
-    |                                               v
-    |                                           PostgreSQL
-    |
-    |-- /.well-known/oauth-protected-resource/mcp -> MCP 127.0.0.1:8001
-    |
-    `-- /mcp -------------------------------------> MCP 127.0.0.1:8001
-```
-
-The finished access token must contain claims equivalent to:
+The resulting access token must contain claims equivalent to:
 
 ```json
 {
@@ -60,1215 +45,193 @@ The finished access token must contain claims equivalent to:
 
 ## Security rules
 
-- Never paste passwords, `.env` contents, JWTs, refresh tokens, DCR
-  registration access tokens, or Hermes token files into logs or chat.
-- Never use `curl -k`. Install and trust the issuing CA instead.
+- Never paste passwords, `.env` contents, JWTs, refresh tokens, DCR registration
+  access tokens, browser cookies, or Hermes token files into logs or chat.
+- Never use `curl -k` for deployment verification. Install and trust the issuing
+  CA instead.
 - Keep Keycloak and PostgreSQL bound to loopback or their private Compose
   network. Do not publish PostgreSQL.
-- Generate secrets with a restrictive umask.
-- Use a permanent Keycloak administrator and remove the bootstrap account and
-  bootstrap environment variables after verifying it.
+- Generate secrets with a restrictive umask and store them as root-owned files.
+- Use a permanent Keycloak administrator and remove bootstrap credentials after
+  verifying the permanent account.
 - Treat DCR response files as secrets even when the client is disposable.
-- Back up Nginx configuration outside `sites-enabled`.
+- Back up Nginx configuration outside included nginx directories.
 - Resolve and verify exact object IDs before deleting anything.
 
-## 1. Set deployment values
+## 1. Preflight
 
-Set these for the target installation. Re-export them after opening a new SSH
-session.
+Confirm identity and baseline state before applying the script:
 
-```bash
-export MCP_REALM="mcp"
-export MCP_SCOPE="mcp:tools"
-export MCP_LOGIN_USER="mcp-user"
-export KEYCLOAK_ADMIN_USER="keycloak-admin"
-export MCP_RESOURCE_URL="https://{{SERVER_FQDN}}/mcp"
-export KEYCLOAK_PUBLIC_URL="https://{{SERVER_FQDN}}/auth"
-export MCP_ISSUER="${KEYCLOAK_PUBLIC_URL}/realms/${MCP_REALM}"
-```
-
-Confirm identity and DNS before making changes:
-
-```bash
-hostname --fqdn
-cat /etc/os-release
-getent ahostsv4 "{{SERVER_FQDN}}"
-hostname -I
-```
-
-The public hostname must resolve to the target server. A short local hostname
-is acceptable as long as `{{SERVER_FQDN}}` resolves correctly and is covered by
-the HTTPS certificate.
-
-Inventory the current services and ports:
-
-```bash
-docker --version 2>/dev/null || echo "Docker not installed"
-docker compose version 2>/dev/null || echo "Docker Compose not installed"
-nginx -v 2>&1 || echo "Nginx not installed"
-systemctl is-active docker nginx
-sudo ss -ltnp | grep -E ':(80|443|8001|8080)\b' || true
-```
-
-Expected baseline:
-
+- `{{SERVER_FQDN}}` resolves to this server.
 - Nginx owns ports 80 and 443.
 - The MCP service owns `127.0.0.1:8001`.
-- Port 8080 is available.
+- Port 8080 is available for loopback Keycloak.
+- `/opt/keycloak` is absent or intentionally being resumed.
+- `{{BACKUP_PATH}}` is a reachable mounted backup target for later checkpoints.
 
-Stop if 8080 is already occupied by an unrelated process.
+## 2. Install and configure Keycloak (AGENT-run)
 
-## 2. Install Docker and Compose
-
-```bash
-sudo apt update
-sudo apt install -y docker.io docker-compose-v2
-
-sudo systemctl is-active docker
-sudo docker version --format 'Server: {{.Server.Version}}'
-sudo docker compose version
-```
-
-## 3. Create the Keycloak deployment
-
-First ensure the target does not contain an existing deployment:
+Run with resolved values:
 
 ```bash
-sudo ls -la /opt/keycloak 2>/dev/null || echo "/opt/keycloak does not exist yet"
+cd {{REPO_PATH}}/onvif-mcp
+scripts/KEYCLOAK/keycloak_runbook.sh apply \
+  --server-fqdn {{SERVER_FQDN}} \
+  --backup-path {{BACKUP_PATH}} \
+  --repo-path {{REPO_PATH}}
 ```
 
-Do not overwrite an existing directory without inspecting and backing it up.
-
-Create the deployment directory, PostgreSQL secret, and permanent admin secret:
+For this deployment, the resolved command is:
 
 ```bash
-sudo install -d -m 750 -o root -g root /opt/keycloak
-sudo sh -c 'umask 077; printf "POSTGRES_PASSWORD=%s\n" "$(openssl rand -hex 32)" > /opt/keycloak/.env'
-sudo sh -c 'umask 077; printf "%s" "$(openssl rand -hex 32)" > /opt/keycloak/admin.pass'
-sudo stat -c '%A %U %G %n' /opt/keycloak /opt/keycloak/.env /opt/keycloak/admin.pass
+cd /home/stephen/onvif-mcp
+scripts/KEYCLOAK/keycloak_runbook.sh apply \
+  --server-fqdn gmktec.home.arpa \
+  --backup-path /mnt/camera-backup \
+  --repo-path /home/stephen
 ```
 
-Expected modes are `drwxr-x---` for the directory and `-rw-------` for both
-`.env` and `admin.pass`. The permanent admin password is stored in
-`/opt/keycloak/admin.pass` (root:root, 0600). It is recoverable at any time
-via `sudo cat /opt/keycloak/admin.pass`.
-
-Create `/opt/keycloak/compose.yaml`. Replace `{{SERVER_FQDN}}` in this file with
-the actual hostname; do not leave the placeholder in place.
-
-```yaml
-services:
-  postgres:
-    image: postgres:17-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: keycloak
-      POSTGRES_USER: keycloak
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    volumes:
-      - keycloak_postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U keycloak -d keycloak"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 20s
-
-  keycloak:
-    image: quay.io/keycloak/keycloak:26.7.0
-    restart: unless-stopped
-    command: start
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
-      KC_DB_USERNAME: keycloak
-      KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
-      KC_HTTP_ENABLED: "true"
-      KC_HTTP_RELATIVE_PATH: /auth
-      KC_HOSTNAME: https://{{SERVER_FQDN}}/auth
-      KC_PROXY_HEADERS: xforwarded
-      KC_HEALTH_ENABLED: "true"
-    ports:
-      - "127.0.0.1:8080:8080"
-
-volumes:
-  keycloak_postgres_data:
-```
-
-Protect and validate it. Do not run the non-quiet expanded configuration in a
-shared log because it resolves the database password.
-
-```bash
-sudo chmod 640 /opt/keycloak/compose.yaml
-sudo docker compose --project-directory /opt/keycloak config --quiet
-```
-
-## 4. Create a temporary bootstrap administrator
-
-Generate temporary bootstrap credentials without displaying them:
-
-```bash
-sudo sh -c 'umask 077; printf "KC_BOOTSTRAP_ADMIN_USERNAME=admin\nKC_BOOTSTRAP_ADMIN_PASSWORD=%s\n" "$(openssl rand -hex 32)" >> /opt/keycloak/.env'
-```
-
-Temporarily add these two keys under the Keycloak service's `environment:`
-section:
-
-```yaml
-      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME}
-      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD}
-```
-
-Validate, pull, and start:
-
-```bash
-sudo docker compose --project-directory /opt/keycloak config --quiet
-sudo docker compose --project-directory /opt/keycloak pull
-sudo docker compose --project-directory /opt/keycloak up -d
-sudo docker compose --project-directory /opt/keycloak ps
-```
-
-Wait for readiness:
-
-```bash
-curl --fail --retry 12 --retry-all-errors --retry-delay 5 \
-  -sS -o /dev/null -w 'HTTP %{http_code}\n' \
-  http://127.0.0.1:8080/auth/realms/master/.well-known/openid-configuration
-```
-
-Expected result: `HTTP 200`.
-
-Authenticate `kcadm.sh`. Expanding the secret inside the container avoids
-printing it or placing its value in the host command line:
-
-```bash
-sudo docker compose --project-directory /opt/keycloak exec keycloak \
-  sh -c '/opt/keycloak/bin/kcadm.sh config credentials \
-    --config /tmp/kcadm.config \
-    --server http://127.0.0.1:8080/auth \
-    --realm master \
-    --user "$KC_BOOTSTRAP_ADMIN_USERNAME" \
-    --password "$KC_BOOTSTRAP_ADMIN_PASSWORD"'
-```
-
-**Container exec flags — why every command here uses `exec -i`, not `-t` or `-T`.**
-TTY allocation in `docker exec` is *opt-in*: a pseudo-TTY is only created if you
-pass `-t/--tty`. For a non-interactive read piped from the host
-(`sudo cat secret | ... sh -c 'IFS= read -r v; kcadm.sh ...'`) you do not want a
-TTY, so the correct flag is simply none — keep STDIN open with `-i` and let it
-feed the inner `read`. That is why all container commands in this document use
-`exec -i`; for these scripted reads no TTY flag is needed at all.
-
-Do not reach for `-T`/`--no-tty` to "make it explicit." On this deployment's
-Docker build (Ubuntu `docker.io`) that shorthand has been removed entirely and
-hard-fails before running anything:
-
-```bash
-$ docker exec --help | grep -i tty          # only the opt-in -t/--tty is listed
-  -t, --tty      Allocate a pseudo-TTY
-$ docker exec -T keycloak-keycloak-1 true
-unknown shorthand flag: 'T' in -T           # exit 125 — command never runs
-```
-
-`exec -i` is portable across Docker builds and behaves identically for these
-reads (verified: `printf 'hello\n' | ... exec -i keycloak sh -c 'IFS= read -r v;
-echo $v'` prints `hello`). If you ever need an *interactive* terminal inside the
-container (hand-tuning `psql`, etc.), pass `-t -i` explicitly rather than relying
-on any default. The host-side Admin REST token pattern in STREAM_AUTH.md is the
-other supported path for container-internal secret reads.
-
-## 5. Create and verify the permanent administrator
-
-Create the user in Keycloak's database using the bootstrap credentials:
-
-```bash
-sudo docker compose --project-directory /opt/keycloak exec keycloak \
-  /opt/keycloak/bin/kcadm.sh create users \
-  --config /tmp/kcadm.config \
-  -r master \
-  -s username="${KEYCLOAK_ADMIN_USER}" \
-  -s enabled=true
-```
-
-Set the password from the root-owned secret file (generated in Section 3):
-
-```bash
-sudo cat /opt/keycloak/admin.pass |
-  sudo docker compose --project-directory /opt/keycloak exec -i keycloak \
-    sh -c 'IFS= read -r new_password
-      /opt/keycloak/bin/kcadm.sh set-password \
-        --config /tmp/kcadm.config \
-        -r master \
-        --username keycloak-admin \
-        --new-password "$new_password"'
-```
-
-If a different administrator username was selected, replace
-`keycloak-admin` in the inner command because exported host variables are not
-automatically available inside the container.
-
-Grant the realm-level `admin` role in `master`. This is the full server
-administrator role, not the delegated `realm-management/realm-admin` client
-role. Please note that `--uusername` is not a typo, that is the actual command:
-
-```bash
-sudo docker compose --project-directory /opt/keycloak exec keycloak \
-  /opt/keycloak/bin/kcadm.sh add-roles \
-  --config /tmp/kcadm.config \
-  -r master \
-  --uusername "${KEYCLOAK_ADMIN_USER}" \
-  --rolename admin
-```
-
-Verify a separate login using a new CLI configuration file, reading the password
-from the root-owned secret:
-
-```bash
-sudo cat /opt/keycloak/admin.pass |
-  sudo docker compose --project-directory /opt/keycloak exec -i keycloak \
-    sh -c 'IFS= read -r admin_password
-      /opt/keycloak/bin/kcadm.sh config credentials \
-        --config /tmp/kcadm-permanent.config \
-        --server http://127.0.0.1:8080/auth \
-        --realm master \
-        --user keycloak-admin \
-        --password "$admin_password"'
-```
-
-Verify its administrative access:
-
-```bash
-sudo docker compose --project-directory /opt/keycloak exec keycloak \
-  /opt/keycloak/bin/kcadm.sh get realms \
-  --config /tmp/kcadm-permanent.config \
-  --fields realm,enabled
-```
-
-Resolve the bootstrap account ID before deletion:
-
-```bash
-sudo docker compose --project-directory /opt/keycloak exec keycloak \
-  /opt/keycloak/bin/kcadm.sh get users \
-  --config /tmp/kcadm-permanent.config \
-  -r master -q exact=true -q username=admin \
-  --fields id,username
-```
-
-Delete only the returned bootstrap user ID:
-
-```bash
-sudo docker compose --project-directory /opt/keycloak exec keycloak \
-  /opt/keycloak/bin/kcadm.sh delete users/BOOTSTRAP_USER_UUID \
-  --config /tmp/kcadm-permanent.config \
-  -r master
-```
-
-Remove both `KC_BOOTSTRAP_ADMIN_*` lines from `/opt/keycloak/.env` and the
-Keycloak service environment:
-
-```bash
-sudo sed -i \
-  '/^KC_BOOTSTRAP_ADMIN_USERNAME=/d; /^KC_BOOTSTRAP_ADMIN_PASSWORD=/d' \
-  /opt/keycloak/.env
-
-sudo sed -i \
-  '/^[[:space:]]*KC_BOOTSTRAP_ADMIN_USERNAME:/d; /^[[:space:]]*KC_BOOTSTRAP_ADMIN_PASSWORD:/d' \
-  /opt/keycloak/compose.yaml
-
-sudo docker compose --project-directory /opt/keycloak config --quiet
-sudo sh -c '
-  if grep -q "^KC_BOOTSTRAP_ADMIN_" /opt/keycloak/.env ||
-     grep -q "KC_BOOTSTRAP_ADMIN_" /opt/keycloak/compose.yaml; then
-    echo "ERROR: bootstrap entries remain"
-    exit 1
-  else
-    echo "Bootstrap entries removed"
-  fi
-'
-```
-
-Recreate Keycloak so those variables leave the container environment:
-
-```bash
-sudo docker compose --project-directory /opt/keycloak up -d --force-recreate keycloak
-sudo docker compose --project-directory /opt/keycloak ps
-```
-
-Wait for `HTTP 200` again, then recreate the CLI configuration, reading the password from `/opt/keycloak/admin.pass`. Container recreation deletes files under `/tmp`, so this command must re-establish it:
-
-```bash
-sudo cat /opt/keycloak/admin.pass |
-  sudo docker compose --project-directory /opt/keycloak exec -i keycloak \
-    sh -c 'IFS= read -r admin_password
-      /opt/keycloak/bin/kcadm.sh config credentials \
-        --config /tmp/kcadm.config \
-        --server http://127.0.0.1:8080/auth \
-        --realm master \
-        --user keycloak-admin \
-        --password "$admin_password"'
-```
-
-## 6. Create the MCP realm and login user
-
-```bash
-sudo docker compose --project-directory /opt/keycloak exec keycloak \
-  /opt/keycloak/bin/kcadm.sh create realms \
-  --config /tmp/kcadm.config \
-  -s realm="${MCP_REALM}" \
-  -s enabled=true
-```
-
-Configure sessions and tokens. Keycloak expresses these durations in seconds:
-
-```bash
-sudo docker compose --project-directory /opt/keycloak exec keycloak \
-  /opt/keycloak/bin/kcadm.sh update "realms/${MCP_REALM}" \
-  --config /tmp/kcadm.config \
-  -s ssoSessionIdleTimeout=28800 \
-  -s ssoSessionMaxLifespan=604800 \
-  -s clientSessionIdleTimeout=0 \
-  -s clientSessionMaxLifespan=0 \
-  -s accessTokenLifespan=300 \
-  -s revokeRefreshToken=true \
-  -s refreshTokenMaxReuse=0
-```
-
-This produces an 8-hour idle session, 7-day maximum session, inherited client
-session limits, five-minute access tokens, and single-use rotating refresh
-tokens.
-
-Create the login user:
-
-```bash
-sudo docker compose --project-directory /opt/keycloak exec keycloak \
-  /opt/keycloak/bin/kcadm.sh create users \
-  --config /tmp/kcadm.config \
-  -r "${MCP_REALM}" \
-  -s username="${MCP_LOGIN_USER}" \
-  -s email="mcp-user@example.com" \
-  -s firstName="Sample" \
-  -s lastName="User" \
-  -s emailVerified=true \
-  -s enabled=true
-```
-
-Generate the login user password and store it in a root-owned secret file:
-
-```bash
-sudo sh -c 'umask 077; printf "%s" "$(openssl rand -hex 32)" > /opt/keycloak/mcp-user.pass'
-sudo stat -c '%A %U %G %n' /opt/keycloak/mcp-user.pass
-```
-
-Expected mode is `-rw-------`. The password is recoverable via `sudo cat /opt/keycloak/mcp-user.pass`.
-
-Set its password from the root-owned secret file:
-
-```bash
-sudo cat /opt/keycloak/mcp-user.pass |
-  sudo docker compose --project-directory /opt/keycloak exec -i keycloak \
-    sh -c 'IFS= read -r user_password
-      /opt/keycloak/bin/kcadm.sh set-password \
-        --config /tmp/kcadm.config \
-        -r ${MCP_REALM} \
-        --username ${MCP_LOGIN_USER} \
-        --new-password "$user_password"'
-```
-
-The secret file `/opt/keycloak/mcp-user.pass` (root:root, 0600) was created in Section 1 and contains the login user password. It is recoverable via `sudo cat /opt/keycloak/mcp-user.pass`.
-
-## 7. Create the MCP client scope and audience mapper
-
-Create the optional OpenID Connect client scope:
-
-```bash
-sudo docker compose --project-directory /opt/keycloak exec keycloak \
-  /opt/keycloak/bin/kcadm.sh create client-scopes \
-  --config /tmp/kcadm.config \
-  -r "${MCP_REALM}" \
-  -s "name=${MCP_SCOPE}" \
-  -s protocol=openid-connect \
-  -s 'attributes={"display.on.consent.screen":"true","include.in.token.scope":"true","include.in.openid.provider.metadata":"true"}'
-```
-
-Capture the client-scope UUID from `Created new client-scope with id ...`:
-
-```bash
-export MCP_SCOPE_UUID="UUID_RETURNED_BY_KEYCLOAK"
-```
-
-Add the exact audience mapper:
-
-```bash
-sudo docker compose --project-directory /opt/keycloak exec keycloak \
-  /opt/keycloak/bin/kcadm.sh create \
-  "client-scopes/${MCP_SCOPE_UUID}/protocol-mappers/models" \
-  --config /tmp/kcadm.config \
-  -r "${MCP_REALM}" \
-  -s name=mcp-server-audience \
-  -s protocol=openid-connect \
-  -s protocolMapper=oidc-audience-mapper \
-  -s consentRequired=false \
-  -s "config={\"included.custom.audience\":\"${MCP_RESOURCE_URL}\",\"access.token.claim\":\"true\",\"id.token.claim\":\"false\",\"introspection.token.claim\":\"true\"}"
-```
-
-Verify both objects directly:
-
-```bash
-sudo docker compose --project-directory /opt/keycloak exec keycloak \
-  /opt/keycloak/bin/kcadm.sh get "client-scopes/${MCP_SCOPE_UUID}" \
-  --config /tmp/kcadm.config -r "${MCP_REALM}"
-
-sudo docker compose --project-directory /opt/keycloak exec keycloak \
-  /opt/keycloak/bin/kcadm.sh get \
-  "client-scopes/${MCP_SCOPE_UUID}/protocol-mappers/models" \
-  --config /tmp/kcadm.config -r "${MCP_REALM}"
-```
-
-Confirm all three scope attributes are `true` and the audience is exactly
-`MCP_RESOURCE_URL`. `include.in.token.scope` is essential: without it, the
-audience mapper can run while the token's `scope` claim remains empty, causing
-the MCP server to return `403 Forbidden`.
-
-## 8. Configure anonymous Dynamic Client Registration
-
-Keycloak 26.7 exposes only provider metadata at
-`client-registration-policy/providers`. Configured policies are realm
-components. The older `client-registration-policy/anonymous` Admin REST path
-returns 404 and must not be used.
-
-List the installed policy providers and their exact configuration schemas:
-
-```bash
-sudo docker compose --project-directory /opt/keycloak exec keycloak \
-  /opt/keycloak/bin/kcadm.sh get client-registration-policy/providers \
-  --config /tmp/kcadm.config -r "${MCP_REALM}"
-```
-
-List configured policies and distinguish anonymous from authenticated entries
-using `subType`:
-
-```bash
-sudo docker compose --project-directory /opt/keycloak exec keycloak \
-  /opt/keycloak/bin/kcadm.sh get components \
-  --config /tmp/kcadm.config \
-  -r "${MCP_REALM}" \
-  -q type=org.keycloak.services.clientregistration.policy.ClientRegistrationPolicy \
-  --fields id,name,providerId,subType,config
-```
-
-Capture the UUIDs whose `subType` is `anonymous` for:
-
-- Allowed Client Scopes (`providerId: allowed-client-templates`)
-- Trusted Hosts (`providerId: trusted-hosts`)
-- Max Clients Limit (`providerId: max-clients`)
-
-Also confirm that anonymous Consent Required (`consent-required`) and Full
-Scope Disabled (`scope`) components exist. These are presence-based policies
-and need no configuration update.
-
-```bash
-export ALLOWED_SCOPES_POLICY_UUID="TARGET_UUID"
-export TRUSTED_HOSTS_POLICY_UUID="TARGET_UUID"
-export MAX_CLIENTS_POLICY_UUID="TARGET_UUID"
-```
-
-Configure the allowed scope and permit automatically assigned realm-default
-scopes:
-
-```bash
-sudo docker compose --project-directory /opt/keycloak exec keycloak \
-  /opt/keycloak/bin/kcadm.sh update \
-  "components/${ALLOWED_SCOPES_POLICY_UUID}" \
-  --config /tmp/kcadm.config \
-  -r "${MCP_REALM}" \
-  -s "config={\"allowed-client-scopes\":[\"${MCP_SCOPE}\"],\"allow-default-scopes\":[\"true\"]}"
-```
-
-Choose trusted hosts based on the identities Keycloak actually sees. Two of
-them are not obvious from the host alone:
-
-- Docker Compose port publishing rewrites loopback clients: a request to
-  `http://127.0.0.1:8080` arrives at Keycloak as the Compose bridge gateway
-  IP, never as `127.0.0.1`. Read it from the network (network name = Compose
-  project name + `_default`; the project name defaults to the base name of
-  `--project-directory`, hence `keycloak` here):
-
-```bash
-export COMPOSE_GATEWAY_IP="$(sudo docker network inspect keycloak_default \
-  --format '{{range .IPAM.Config}}{{.Gateway}}{{end}}')"
-```
-
-  `localhost`/`127.0.0.1` alone therefore does not cover same-host DCR tests
-  via the published port.
-
-- A client running on the Keycloak host and connecting through the public
-  HTTPS vhost (`https://{{SERVER_FQDN}}/...`) arrives at Keycloak as the
-  server's own LAN IP, because nginx sets `X-Real-IP $remote_addr` for
-  connections from the host itself:
-
-```bash
-export SERVER_LAN_IP="$(hostname -I | awk '{print $1}')"
-```
-
-Verify the identities before trusting entries: enable temporary `DEBUG`
-logging on `org.keycloak.services.clientregistration` and read the
-`KC-SERVICES0101: Failed to verify remote host : <ip>` lines, or watch the
-container log during a deliberately failing DCR attempt (`docker compose
---project-directory /opt/keycloak logs --tail=20 keycloak`).
-
-Set trusted hosts to `localhost`, `127.0.0.1`, and both observed IPs:
-
-```bash
-sudo docker compose --project-directory /opt/keycloak exec keycloak \
-  /opt/keycloak/bin/kcadm.sh update \
-  "components/${TRUSTED_HOSTS_POLICY_UUID}" \
-  --config /tmp/kcadm.config \
-  -r "${MCP_REALM}" \
-  -s "config={\"trusted-hosts\":[\"localhost\",\"127.0.0.1\",\"${COMPOSE_GATEWAY_IP}\",\"${SERVER_LAN_IP}\"],\"host-sending-registration-request-must-match\":[\"true\"],\"client-uris-must-match\":[\"true\"]}"
-```
-
-Limit anonymous registrations:
-
-```bash
-sudo docker compose --project-directory /opt/keycloak exec keycloak \
-  /opt/keycloak/bin/kcadm.sh update \
-  "components/${MAX_CLIENTS_POLICY_UUID}" \
-  --config /tmp/kcadm.config \
-  -r "${MCP_REALM}" \
-  -s 'config={"max-clients":["20"]}'
-```
-
-Collection views can collapse component configuration to `{}`. Verify each
-updated component directly:
-
-```bash
-for component_id in \
-  "$ALLOWED_SCOPES_POLICY_UUID" \
-  "$TRUSTED_HOSTS_POLICY_UUID" \
-  "$MAX_CLIENTS_POLICY_UUID"
-do
-  sudo docker compose --project-directory /opt/keycloak exec keycloak \
-    /opt/keycloak/bin/kcadm.sh get "components/${component_id}" \
-    --config /tmp/kcadm.config -r "${MCP_REALM}"
-done
-```
-
-Expected DCR policy state:
-
-- Allowed scope: `mcp:tools`
-- Allow default scopes: `true`
-- Trusted source host plus `localhost` and `127.0.0.1`
-- Both trusted-host matching controls: `true`
-- Consent Required present
-- Full Scope Disabled present
-- Max Clients Limit: `20`
-
-## 9. Configure Nginx
-
-Identify the active HTTPS virtual host rather than assuming its filename or
-directory. The vhost may live in `sites-enabled/` *or* in `conf.d/`; on some
-deployments `sites-enabled/` holds only a port-80 redirect while the real
-HTTPS server block is under `conf.d/`. Both includes are commonly active, so
-search both:
-
-```bash
-sudo ls -l /etc/nginx/sites-enabled
-sudo ls -l /etc/nginx/conf.d
-sudo nginx -T 2>/dev/null | \
-  grep -nE 'server_name|listen .*443|ssl_certificate|location (=? )?/mcp'
-```
-
-The `nginx -T` output prints each included file before its content; read the
-preceding `# configuration file:` markers to map the HTTPS `server` block
-back to its actual file. Inspect that file, then create a backup outside any
-included directory (e.g. `/etc/nginx/backups/`):
-
-```bash
-export NGINX_SITE="<path found above, e.g. /etc/nginx/conf.d/{{SERVER_FQDN}}.conf>"
-sudo install -d -m 750 -o root -g root /etc/nginx/backups
-sudo cp "$NGINX_SITE" "/etc/nginx/backups/$(basename "$NGINX_SITE").pre-keycloak"
-sudo chmod 640 "/etc/nginx/backups/$(basename "$NGINX_SITE").pre-keycloak"
-```
-
-Add these locations inside the HTTPS `server` block:
-
-```nginx
-location = /auth {
-    return 301 /auth/;
-}
-
-location /auth/ {
-    proxy_pass http://127.0.0.1:8080/auth/;
-    proxy_http_version 1.1;
-
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-Host $host;
-    proxy_set_header X-Forwarded-Port $server_port;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-}
-
-location = /.well-known/oauth-protected-resource/mcp {
-    proxy_pass http://127.0.0.1:8001;
-    proxy_http_version 1.1;
-
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-Host $host;
-    proxy_set_header X-Forwarded-Port $server_port;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-}
-```
-
-Retain the existing `/mcp` proxy to `127.0.0.1:8001`. If a trailing-slash
-redirect exists, ensure it uses HTTPS, for example:
-
-```nginx
-location = /mcp/ {
-    return 301 https://$host/mcp;
-}
-```
-
-Validate before reload:
-
-```bash
-sudo nginx -t
-sudo systemctl reload nginx
-sudo systemctl is-active nginx
-```
-
-## 10. Trust the private CA
-
-Locate the CA certificate and inspect the server certificate issuer:
-
-```bash
-sudo find /etc/nginx/tls -maxdepth 1 -type f -printf '%f\n' | sort
-sudo openssl x509 -in "/etc/nginx/tls/{{SERVER_FQDN}}.crt.pem" \
-  -noout -subject -issuer
-```
-
-Verify the root before installing it:
-
-```bash
-export PRIVATE_CA_FILE="/etc/nginx/tls/camera-system-root-ca.crt.pem"
-sudo openssl x509 -in "$PRIVATE_CA_FILE" \
-  -noout -subject -issuer -ext basicConstraints
-```
-
-It must show `CA:TRUE`. Install it:
-
-```bash
-sudo install -m 644 "$PRIVATE_CA_FILE" \
-  /usr/local/share/ca-certificates/camera-system-root-ca.crt
-sudo update-ca-certificates
-```
-
-Verify public HTTPS without `-k`:
-
-```bash
-curl -sS -o /dev/null \
-  -w 'auth: HTTP %{http_code} redirect=%{redirect_url}\n' \
-  "${KEYCLOAK_PUBLIC_URL}/"
-
-curl -sS -o /dev/null \
-  -w 'discovery: HTTP %{http_code}\n' \
-  "${MCP_ISSUER}/.well-known/openid-configuration"
-```
-
-Discovery must return 200. Verify exact metadata:
-
-```bash
-curl -sS "${MCP_ISSUER}/.well-known/openid-configuration" |
-python3 -c '
-import json, sys
-d = json.load(sys.stdin)
-print("issuer:", d.get("issuer"))
-print("registration_endpoint:", d.get("registration_endpoint"))
-print("code_challenge_methods_supported:", d.get("code_challenge_methods_supported"))
-print("mcp:tools published:", "mcp:tools" in d.get("scopes_supported", []))
-'
-```
-
-Confirm the issuer is exact, a registration endpoint is present, `S256` is
-supported, and `mcp:tools` is published.
-
-## 11. Enable OAuth in the MCP systemd service
-
-Inspect only drop-in paths so an existing unit's potentially sensitive
-environment is not printed:
-
-```bash
-systemctl show onvif-mcp-http.service \
-  --property=FragmentPath --property=DropInPaths
-
-sudo find /etc/systemd/system/onvif-mcp-http.service.d \
-  -maxdepth 1 -type f -printf '%f\n' 2>/dev/null || true
-```
-
-Do not overwrite an existing OAuth drop-in without reviewing it. Create
-`/etc/systemd/system/onvif-mcp-http.service.d/oauth.conf` with target values:
-
-```ini
-[Service]
-Environment=MCP_OAUTH_ENABLED=true
-Environment=MCP_OAUTH_ISSUER=https://{{SERVER_FQDN}}/auth/realms/mcp
-Environment=MCP_RESOURCE_URL=https://{{SERVER_FQDN}}/mcp
-Environment=MCP_OAUTH_JWKS_URL=http://127.0.0.1:8080/auth/realms/mcp/protocol/openid-connect/certs
-```
-
-The internal JWKS URL deliberately uses loopback HTTP because Keycloak is on
-the same host and 8080 is bound only to `127.0.0.1`.
-
-Validate and restart:
-
-```bash
-sudo systemd-analyze verify onvif-mcp-http.service
-sudo systemctl daemon-reload
-sudo systemctl restart onvif-mcp-http.service
-sudo systemctl is-active onvif-mcp-http.service
-```
-
-Verify unauthenticated rejection:
-
-```bash
-curl -sS -D - -o /dev/null "${MCP_RESOURCE_URL}"
-```
-
-Expected status is 401 with a `WWW-Authenticate` header whose
-`resource_metadata` is:
-
-```text
-https://{{SERVER_FQDN}}/.well-known/oauth-protected-resource/mcp
-```
-
-Verify protected-resource metadata:
-
-```bash
-curl -sS \
-  "https://{{SERVER_FQDN}}/.well-known/oauth-protected-resource/mcp" |
-python3 -m json.tool
-```
-
-Expected values:
-
-```json
-{
-  "resource": "https://{{SERVER_FQDN}}/mcp",
-  "authorization_servers": [
-    "https://{{SERVER_FQDN}}/auth/realms/mcp"
-  ],
-  "scopes_supported": [
-    "mcp:tools"
-  ],
-  "bearer_methods_supported": [
-    "header"
-  ]
-}
-```
-
-## 12. Test DCR without exposing registration credentials
-
-Run this test from a host allowed by the Trusted Hosts policy. A test executed
-on the Keycloak server itself originates from loopback, which is allowed in
-the configuration above.
-
-Request only `mcp:tools`. Explicitly requesting `openid mcp:tools` causes the
-Allowed Client Scopes policy to return `insufficient_scope` unless `openid`
-is also explicitly whitelisted. Realm-default scopes are allowed
-automatically and should not be included in this test request.
-
-```bash
-umask 077
-
-curl -sS \
-  -o /tmp/keycloak-dcr-test.json \
-  -w 'HTTP %{http_code}\n' \
-  -H 'Content-Type: application/json' \
-  -d "{
-    \"client_name\": \"temporary-dcr-verification\",
-    \"application_type\": \"native\",
-    \"redirect_uris\": [\"http://127.0.0.1:8765/callback\"],
-    \"grant_types\": [\"authorization_code\", \"refresh_token\"],
-    \"response_types\": [\"code\"],
-    \"token_endpoint_auth_method\": \"none\",
-    \"scope\": \"${MCP_SCOPE}\"
-  }" \
-  "${MCP_ISSUER}/clients-registrations/openid-connect"
-
-python3 -c '
-import json
-d=json.load(open("/tmp/keycloak-dcr-test.json"))
-print("client_id:", d.get("client_id"))
-print("scope:", d.get("scope"))
-print("error:", d.get("error"))
-print("error_description:", d.get("error_description"))
-'
-```
-
-Expected status is 201. Never print the complete response; it contains a
-registration access token. Capture the printed test client ID, resolve it
-through the Admin API, and verify its name before deletion:
-
-```bash
-export DCR_TEST_CLIENT_ID="CLIENT_ID_FROM_RESPONSE"
-
-sudo docker compose --project-directory /opt/keycloak exec keycloak \
-  /opt/keycloak/bin/kcadm.sh get clients \
-  --config /tmp/kcadm.config \
-  -r "${MCP_REALM}" \
-  -q "clientId=${DCR_TEST_CLIENT_ID}" \
-  --fields id,clientId,name
-```
-
-Delete only the UUID whose name is `temporary-dcr-verification`, then remove
-the credential-bearing response:
-
-```bash
-sudo docker compose --project-directory /opt/keycloak exec keycloak \
-  /opt/keycloak/bin/kcadm.sh delete "clients/${DCR_TEST_CLIENT_ID}" \
-  --config /tmp/kcadm.config -r "${MCP_REALM}"
-
-rm -f /tmp/keycloak-dcr-test.json
-test ! -e /tmp/keycloak-dcr-test.json && echo "DCR test artifacts removed"
-```
-
-If Keycloak returns an internal UUID different from `clientId`, use the exact
-returned internal `id` in the delete path.
-
-
-## 13. Verify the Hermes login end-to-end
-
-This section verifies the real OAuth client (Hermes Agent) against the
-finished deployment, including the browser authorization step of
-`hermes mcp login`, which can be completed headlessly and therefore verified
-autonomously. The procedure was verified with Hermes Agent v0.21.0; the
-concurrent-flow behavior in 13.2 has been observed repeatedly on that version.
-
-### 13.1 Add the server entry directly to the Hermes config
-
-`hermes mcp add` cannot be driven non-interactively: the URL+OAuth path is
-fully prompt-driven (TTY-bound). Write the entry directly into
-`~/.hermes/config.yaml` under `mcp_servers:` instead — the same shape the CLI
-would save. There will be http version of this setting already existing in the
-configuration file, modify it:
-
-```yaml
-  camera:
-    url: https://{{SERVER_FQDN}}/mcp
-    auth: oauth
-    ssl_verify: /etc/ssl/certs/camera-system-root-ca.pem
-    connect_timeout: 600
-    enabled: true
-```
-
-`ssl_verify` is mandatory for the private CA — not optional. The MCP client
-stack verifies against its own bundled trust store (certifi), not the system
-capath, even after Section 10 correctly installs the CA into
-`/usr/local/share/ca-certificates`. Verified empirically: default verification
-fails with `self-signed certificate in certificate chain`; pointing
-`ssl_verify` at the installed CA file succeeds. Never save an entry without
-the CA path and an explicit enable — saving it before setting `ssl_verify`
-can leave the entry disabled.
-
-### 13.2 Prevent concurrent login flows
+The script performs these executable stages:
+
+1. Installs Docker/Compose prerequisites and starts Docker.
+2. Creates `/opt/keycloak`, root-owned generated secrets, and the Compose file
+   for PostgreSQL 17 and Keycloak 26.7.0.
+3. Starts Keycloak with a temporary bootstrap administrator.
+4. Creates and verifies the permanent `keycloak-admin` user, grants the master
+   realm `admin` role, deletes the bootstrap user, removes bootstrap environment
+   variables, and recreates the container so bootstrap secrets leave the runtime
+   environment.
+5. Creates the `mcp` realm, session/token settings, the sample `mcp-user`, and a
+   root-owned `mcp-user.pass` file.
+6. Creates the `mcp:tools` client scope and audience mapper for
+   `https://{{SERVER_FQDN}}/mcp`.
+7. Configures anonymous Dynamic Client Registration policies for allowed scopes,
+   trusted hosts, and a max client count.
+8. Adds `/auth/` and protected-resource metadata proxy routes to the active HTTPS
+   nginx vhost and reloads nginx after validation.
+9. Installs the private camera CA into the system trust store and verifies public
+   Keycloak discovery without `curl -k`.
+10. Enables OAuth on `onvif-mcp-http.service` with a systemd drop-in and verifies
+    unauthenticated MCP requests return `401` with protected-resource metadata.
+11. Performs a safe DCR test that prints only non-secret fields, deletes the
+    temporary client by verified internal ID, and removes the DCR response file.
+12. Installs the Keycloak PostgreSQL one-shot backup service, runs it, verifies
+    a readable dump catalog, and performs an isolated restore test into a throwaway
+    database.
+13. Writes the Hermes MCP server entry with `auth: oauth`, explicit private-CA
+    `ssl_verify`, `auto_reload_on_config_change: false`, and `enabled: false`.
+
+The script intentionally does not print generated secret values. It writes
+passwords only to root-owned files under `/opt/keycloak`.
+
+## 3. Configure and verify Hermes login
+
+After the script finishes, the Hermes MCP entry is present but disabled so no
+background process starts a competing OAuth flow. Complete the real OAuth login
+with the procedure in this section, then enable the entry only after testing.
 
 No other Hermes process may have this server loaded while `hermes mcp login`
-runs. With the entry present in an agent session's config, that session's MCP
-machinery (config-change auto-reload / background discovery) launches a second
-concurrent OAuth flow inside the login process. Symptoms: two authorization
-URLs printed for the same DCR client, then `OAuth callback port 27890 is
-already in use`, and no browser step can ever land a token.
+runs. With the entry present in an active session, background discovery can
+launch a second concurrent OAuth flow and cause `OAuth callback port 27890 is
+already in use`.
 
-Mitigations (any one suffices; this deployment uses the first two):
+Use an isolated Hermes home for login, copy the resulting token files back, and
+never display their contents. The browser step can be completed headlessly using
+`scripts/kc-headless-login-driver.py`; it reads `/opt/keycloak/mcp-user.pass` via
+`sudo cat` and never prints credentials or token values.
 
-- set `mcp.auto_reload_on_config_change: false` under `mcp:` in config.yaml,
-  and keep the entry `enabled: false` until its token files exist;
-- run the login under an isolated home: `HERMES_HOME=<dir> hermes mcp login camera`
-  (copy the `mcp_servers:` block into `<dir>/config.yaml`), then copy
-  `<dir>/mcp-tokens/camera.{json,client.json,meta.json}` back to
-  `~/.hermes/mcp-tokens/`;
-- or guarantee no concurrent session has the server loaded at all.
+Expected post-login checks:
 
-### 13.3 Complete the browser step headlessly
+- token files exist at `~/.hermes/mcp-tokens/camera.{json,client.json,meta.json}`
+  with mode `0600`;
+- `hermes mcp test camera` succeeds and lists the expected tools;
+- the config entry is enabled only after the test passes;
+- any failed/orphan DCR clients are removed only after matching client IDs and
+  verifying the internal Keycloak UUID/name.
 
-The browser step can be completed headlessly against the live login.
-`hermes mcp login camera` force-marks itself interactive, so its loopback
-callback listener binds on port 27890 even without a TTY — *provided* no
-display variables are set (`env -u DISPLAY -u WAYLAND_DISPLAY ...`), which is
-also what prevents Hermes from auto-opening a competing browser tab. Then drive
-the Keycloak side with the verified driver script
-[`scripts/kc-headless-login-driver.py`](../scripts/kc-headless-login-driver.py) (it reads
-the login user password from `/opt/keycloak/mcp-user.pass` via `sudo cat`; it
-never prints credentials or token values):
+After the real OAuth client completes DCR and login, create another database
+backup/checkpoint so the active client registration is included.
+
+## 4. Status checks (AGENT-run)
 
 ```bash
-# terminal A (isolated home, no display vars; a single flow is expected):
-cd <dir> && env -u DISPLAY -u WAYLAND_DISPLAY HERMES_HOME=<dir> \
-  hermes mcp login camera
-
-# terminal B: read the printed auth URL, confirm exactly ONE flow and that a
-# listener owns 127.0.0.1:27890 (ss -ltnp | grep 27890), then:
-python3 scripts/kc-headless-login-driver.py "<printed-auth-url>"
+cd {{REPO_PATH}}/onvif-mcp
+scripts/KEYCLOAK/keycloak_runbook.sh status \
+  --server-fqdn {{SERVER_FQDN}} \
+  --repo-path {{REPO_PATH}}
 ```
 
-The script walks login form → consent screen through the HTTPS vhost (cookies;
-Keycloak's relative action URLs resolved against the page URL) and delivers the
-final `?code=&state=` redirect into the running Hermes listener — it must not
-follow that redirect itself, which binds the loopback callback port. Expected
-output: `callback delivered: 127.0.0.1:27890/callback | params: ['state', ... 'code']`,
-then in terminal A `✓ Authenticated — N tool(s) available`.
-
-### 13.4 Post-verification checklist for the login
-
-The ambiguous part of this runbook, verified point by point:
-
-- token files exist at `~/.hermes/mcp-tokens/camera.{json,client.json,meta.json}`,
-  all mode `-rw-------`; **never display their contents**;
-- `hermes mcp test camera` reconnects using saved state and lists the expected
-  tools;
-- enable the entry (`enabled: true`) only after the test passes;
-- each login attempt registers a fresh public DCR client ("Hermes Agent");
-  failed attempts orphan them. Periodically list clients in the realm by name,
-  match against the active `client_id` stored in `camera.client.json`, and
-  delete only confirmed-orphan internal IDs (kcadm consumes stdin on exec —
-  redirect `</dev/null` for batch deletes);
-- take another manual backup after the real client registration exists so it
-  is included in an archive (Section 15's note), and verify the new archive
-  with `pg_restore --list`.
-
-## 14. Configure manual PostgreSQL backups
-
-Create the protected backup directory:
+For this deployment:
 
 ```bash
-sudo install -d -m 700 -o root -g root /var/backups/keycloak-postgres
+cd /home/stephen/onvif-mcp
+scripts/KEYCLOAK/keycloak_runbook.sh status \
+  --server-fqdn gmktec.home.arpa \
+  --repo-path /home/stephen
 ```
 
-Install the repository's generic backup script; do not recover it from a
-backup archive:
-
-```bash
-sudo install -o root -g root -m 750 \
-  "{{REPO_PATH}}/onvif-mcp/scripts/backup-keycloak-postgres" \
-  /usr/local/sbin/backup-keycloak-postgres
-sudo bash -n /usr/local/sbin/backup-keycloak-postgres
-```
-
-The script creates local, full database dumps with UTC timestamps and prunes
-old local dumps. It does not copy anything to the backup share. Complete §15b
-to create an off-host recovery point.
-
-Create `/etc/systemd/system/keycloak-postgres-backup.service`:
-
-```ini
-[Unit]
-Description=Back up the Keycloak PostgreSQL database
-Requires=docker.service
-After=docker.service
-
-[Service]
-Type=oneshot
-User=root
-Group=root
-UMask=0077
-Nice=10
-IOSchedulingClass=idle
-ExecStart=/usr/local/sbin/backup-keycloak-postgres
-```
-
-Validate and run it manually:
-
-```bash
-sudo chmod 644 /etc/systemd/system/keycloak-postgres-backup.service
-sudo systemctl daemon-reload
-sudo systemd-analyze verify keycloak-postgres-backup.service
-sudo systemctl start keycloak-postgres-backup.service
-sudo systemctl status keycloak-postgres-backup.service --no-pager
-```
-
-A successful one-shot service becomes `inactive (dead)` and reports
-`Deactivated successfully` or `status=0/SUCCESS`. No timer is installed.
-
-Verify mode and archive catalog:
-
-```bash
-sudo find /var/backups/keycloak-postgres \
-  -maxdepth 1 -type f -name 'keycloak-*.dump' \
-  -printf '%M %u %g %s bytes %f\n'
-
-backup_file="$(sudo find /var/backups/keycloak-postgres \
-  -maxdepth 1 -type f -name 'keycloak-*.dump' \
-  -printf '%f\n' | sort | tail -n 1)"
-
-sudo sh -c \
-  "docker compose --project-directory /opt/keycloak exec -i postgres \
-   pg_restore --list \
-   < '/var/backups/keycloak-postgres/${backup_file}' \
-   >/dev/null"
-```
-
-The file must be non-empty and mode `-rw-------`.
-
-## 15. Perform an isolated restore test
-
-Choose a unique database name and confirm it is absent:
-
-```bash
-restore_db="keycloak_restore_test_YYYYMMDD"
-
-sudo docker compose --project-directory /opt/keycloak exec -i postgres \
-  psql --username=keycloak --dbname=postgres \
-  --tuples-only --no-align \
-  --command="SELECT datname FROM pg_database WHERE datname = '${restore_db}';"
-```
-
-Stop if the command prints a database name. Create and restore only the test
-database:
-
-```bash
-echo "restore target: ${restore_db}"
-sudo docker compose --project-directory /opt/keycloak exec -i postgres \
-  createdb --username=keycloak "${restore_db}"
-
-backup_file="$(sudo find /var/backups/keycloak-postgres \
-  -maxdepth 1 -type f -name 'keycloak-*.dump' \
-  -printf '%f\n' | sort | tail -n 1)"
-
-sudo sh -c \
-  "docker compose --project-directory /opt/keycloak exec -i postgres \
-   pg_restore --username=keycloak --dbname='${restore_db}' --exit-on-error \
-   < '/var/backups/keycloak-postgres/${backup_file}'"
-```
-
-Validate important row counts:
-
-```bash
-sudo docker compose --project-directory /opt/keycloak exec -i postgres \
-  psql --username=keycloak --dbname="${restore_db}" \
-  --tuples-only --no-align \
-  --command="SELECT 'realms=' || count(*) FROM realm
-             UNION ALL
-             SELECT 'users=' || count(*) FROM user_entity
-             UNION ALL
-             SELECT 'clients=' || count(*) FROM client;"
-```
-
-All must be nonzero. Remove only the verified test target, using an explicit
-guard:
-
-```bash
-if [[ "$restore_db" != keycloak_restore_test_* ]] ||
-   [ "$restore_db" = "keycloak" ]; then
-  echo "Refusing unsafe database target: $restore_db"
-  exit 1
-else
-  echo "dropping restore-test database: $restore_db"
-  sudo docker compose --project-directory /opt/keycloak exec -i postgres \
-    dropdb --username=keycloak "$restore_db"
-fi
-```
-
-After the real OAuth client completes DCR and login, create another manual
-backup so the active client registration is included.
-
-## 15b. Keycloak backup checkpoint
-
-After §15's isolated restore test and successful real-client DCR/login,
-complete [KEYCLOAK_BACKUP.md](KEYCLOAK_BACKUP.md). The new checkpoint must
-contain the verified realm, users, clients, policies, signing keys, and the
-matching `/opt/keycloak/` configuration. Record KEYCLOAK.md as the trigger.
-Backup and restore mechanics are defined in that shared document.
-
-### Installation-stage host configuration backup
-
-After nginx validation, create a complete nginx checkpoint per
-[NGINX_BACKUP.md](NGINX_BACKUP.md), under
-`{{BACKUP_PATH}}/nginx/YYYYMMDDHHMMSSZ/`. Record its path in the Keycloak
-checkpoint metadata. The nginx checkpoint records the compatible Keycloak
-checkpoint; prepare both paths during capture and publish only after each
-checkpoint's checks pass.
-
-Keep `final-etc-systemd-system.tar`, pre/post state notes, and verified
-`SHA256SUMS` separately in `{{BACKUP_PATH}}/keycloak-{{DATETIME_STAMP}}` for
-non-nginx host units. Exclude `nginx.service` and `nginx.service.d` from that
-archive: the nginx checkpoint owns those overrides, including their absence.
-Do not store nginx archives, the Keycloak pair, or the backup script in this
-host-unit folder. Reinstall the backup script and unit using §14.
-
-## 16. Final verification checklist
-
-Run or confirm all of the following:
-
-```bash
-sudo docker compose --project-directory /opt/keycloak ps
-sudo systemctl is-active nginx onvif-mcp-http.service
-
-curl -sS -o /dev/null -w 'Keycloak discovery: %{http_code}\n' \
-  "${MCP_ISSUER}/.well-known/openid-configuration"
-
-curl -sS -D - -o /dev/null "${MCP_RESOURCE_URL}"
-
-curl -sS \
-  "https://{{SERVER_FQDN}}/.well-known/oauth-protected-resource/mcp" |
-python3 -m json.tool
-```
-
-Required outcomes:
+Required outcomes before declaring the installation ready:
 
 - PostgreSQL is healthy and Keycloak is running.
 - Nginx and the MCP service are active.
 - Public Keycloak discovery returns 200 with the exact issuer.
 - `S256` appears in `code_challenge_methods_supported`.
 - `mcp:tools` appears in `scopes_supported`.
-- An unauthenticated MCP request returns 401.
-- Protected-resource metadata contains the exact issuer and resource URL.
+- An unauthenticated MCP request returns 401 with protected-resource metadata.
 - Anonymous DCR succeeds for `mcp:tools` from an allowed host.
 - Hermes completes browser authorization and reconnects using saved state.
 - The MCP client discovers the expected tools.
-- A post-login database backup exists, its catalog is readable, and an
-  isolated restore test has succeeded.
-- Shared checkpoint complete per §15b: timestamped directory published under
-  `{{BACKUP_PATH}}/keycloak/`, both archives verified, and host configuration
-  backup referenced in metadata.
+- A post-login database backup exists, its catalog is readable, and an isolated
+  restore test has succeeded.
 
+## 5. Shared checkpoints
 
-# Addendum
-
-## 1. Routine operations
-
-Deployment status:
+After nginx validation, create a complete nginx checkpoint per
+[NGINX_BACKUP.md](NGINX_BACKUP.md):
 
 ```bash
-sudo docker compose --project-directory /opt/keycloak ps
-sudo systemctl status onvif-mcp-http.service --no-pager
+cd {{REPO_PATH}}/onvif-mcp
+scripts/NGINX_BACKUP/nginx_backup_runbook.sh create-checkpoint \
+  --server-fqdn {{SERVER_FQDN}} \
+  --backup-path {{BACKUP_PATH}} \
+  --trigger KEYCLOAK.md
 ```
 
-Restart Keycloak:
+After the isolated restore test and successful real-client DCR/login, create a
+Keycloak checkpoint per [KEYCLOAK_BACKUP.md](KEYCLOAK_BACKUP.md):
 
 ```bash
-sudo docker compose --project-directory /opt/keycloak up -d keycloak
+cd {{REPO_PATH}}/onvif-mcp
+scripts/KEYCLOAK_BACKUP/keycloak_backup_runbook.sh create-checkpoint \
+  --backup-path {{BACKUP_PATH}} \
+  --trigger KEYCLOAK.md
 ```
 
-After container recreation, authenticate `kcadm.sh` again because
-`/tmp/kcadm.config` is ephemeral.
+If creating coordinated nginx and Keycloak checkpoints, prepare both target paths
+and pass the compatible checkpoint path to the other script before publication.
+Publish only after each checkpoint's own checks pass. Do not mutate a completed
+checkpoint to add links.
 
-Logs:
+Host-unit configuration outside nginx is separate. Reinstall the backup script
+and unit from this runbook's script rather than storing them in nginx or
+Keycloak checkpoints.
+
+## Routine operations
+
+Status:
 
 ```bash
-sudo docker compose --project-directory /opt/keycloak logs --tail=200 keycloak
-sudo journalctl -u onvif-mcp-http.service --since "30 minutes ago" --no-pager
+cd {{REPO_PATH}}/onvif-mcp
+scripts/KEYCLOAK/keycloak_runbook.sh status \
+  --server-fqdn {{SERVER_FQDN}} \
+  --repo-path {{REPO_PATH}}
 ```
 
-Manual backup:
+Manual local database backup:
 
 ```bash
 sudo systemctl start keycloak-postgres-backup.service
-sudo systemctl status keycloak-postgres-backup.service --no-pager
+sudo systemctl show keycloak-postgres-backup.service -p Result -p ExecMainStatus
 ```
 
 Hermes verification:
@@ -1279,26 +242,25 @@ hermes mcp test camera
 
 Review DCR clients periodically and remove obsolete registrations only after
 matching their client IDs to the active ID stored by the OAuth client. Never
-display the associated token file.
+display associated token files.
 
-## 2. Known pitfalls
+## Known pitfalls
 
-- `client-registration-policy/anonymous` returns 404 on Keycloak 26.7. Use
-  realm components and select policies with `subType: anonymous`.
-- Component UUIDs change on every realm installation. Never reuse example
-  UUIDs.
-- Component collection output can show `config: {}` even when configuration
-  is stored. Retrieve each component by ID to verify it.
+- `client-registration-policy/anonymous` returns 404 on Keycloak 26.7. Use realm
+  components and select policies with `subType: anonymous`.
+- Component UUIDs change on every realm installation. Never reuse example UUIDs.
+- Collection component output can show `config: {}` even when configuration is
+  stored. Retrieve each component by ID when diagnosing.
 - An explicit DCR request for `openid mcp:tools` can fail with
   `insufficient_scope`. Request `mcp:tools`; allow realm-default scopes through
   `allow-default-scopes`.
 - Omitting `include.in.token.scope=true` produces tokens whose audience may be
   correct but whose `scope` claim is empty.
 - A redirect from `/mcp/` to `http://...` downgrades HTTPS and must be fixed.
-- Saving a Hermes entry before setting `ssl_verify` can leave it disabled.
-  Add the CA path and explicitly enable it before login.
+- Saving a Hermes entry before setting `ssl_verify` can leave it disabled. Add
+  the CA path and explicitly enable it only after login/test succeeds.
 - Never diagnose private-CA failures with `curl -k`; install the CA correctly.
 - A Compose container recreation clears `/tmp/kcadm.config`; it does not erase
   PostgreSQL data stored in the named volume.
-- Same-host backups do not protect against disk or host loss. Copy important
-  archives to a separately protected system.
+- Same-host backups do not protect against disk or host loss. Publish recovery
+  checkpoints to a separately protected backup target.

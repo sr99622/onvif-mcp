@@ -1,14 +1,13 @@
 # Add a human user by email invitation
 
-Use this in place of README Step 8's ADD_USER.md after completing
-KEYCLOAK_EMAIL.md. Do not execute the old password creation, handoff, or
-password-file verification steps for this account.
+Use this after completing KEYCLOAK_EMAIL.md. Do not execute the older password
+creation, handoff, or password-file verification steps for this account.
 
-The administrator creates an enabled account without a password. Keycloak
-emails a link for email verification and password creation. The recipient
-sets their own normal password; the administrator does not know or retain it.
-The invitation expires after 24 hours. This expiry applies to the link, not
-the password; existing realm password policy still applies.
+The administrator creates an enabled account without a password. Keycloak emails
+a link for email verification and password creation. The recipient sets their own
+normal password; the administrator does not know or retain it. The invitation
+expires after 24 hours. This expiry applies to the link, not the password;
+existing realm password policy still applies.
 
 ## Inputs
 
@@ -20,192 +19,207 @@ the password; existing realm password policy still applies.
 | `{{SERVER_FQDN}}` | Camera server hostname |
 | `{{BACKUP_PATH}}` | Existing backup folder |
 
-No PASSWORD input is accepted. Do not invent an email address, create a
-temporary password, mark email verified manually, or run headless login
-drivers that would require knowing the recipient's password.
+No PASSWORD input is accepted. Do not invent an email address, create a temporary
+password, mark email verified manually, or run headless login drivers that would
+require knowing the recipient's password.
 
-Defaults: realm `mcp`, Compose directory `/opt/keycloak`, existing CLI config
-`/tmp/kcadm.config`. Validate against the installation. Use JSON serialization
-for names and email, with properly shell-quoted variable assignments.
+Defaults: realm `mcp`, Compose directory `/opt/keycloak`, administrator
+`keycloak-admin` in `master`.
 
-## 1. Establish the CLI session and verify prerequisites
+## Executable source of truth
 
-Use the preflight and authentication instructions in KEYCLOAK_EMAIL.md §2.
-Run the commands below in the same Bash session:
+Executable actions for this runbook are implemented by:
 
 ```bash
-set -euo pipefail
-set +x
-export MCP_REALM='mcp'
-export NEW_LOGIN_USER='{{NEW_LOGIN_USER}}'
-export FIRST_NAME='{{FIRST_NAME}}'
-export LAST_NAME='{{LAST_NAME}}'
-export USER_EMAIL='{{USER_EMAIL}}'
-
-kc() {
-  sudo docker compose --project-directory /opt/keycloak exec -T keycloak \
-    /opt/keycloak/bin/kcadm.sh "$@" --config /tmp/kcadm.config
-}
-
-kc get realms --fields realm,enabled
-kc get authentication/required-actions -r "$MCP_REALM" \
-  --fields alias,enabled,defaultAction
-kc get "realms/$MCP_REALM" --fields registrationAllowed,passwordPolicy
+scripts/ADD_USER_EMAIL/add_user_email_runbook.sh
 ```
 
-Require VERIFY_EMAIL and UPDATE_PASSWORD to be enabled. If disabled, stop
-and resolve that configuration before creating the account. Do not turn on
-self-registration. Preserve the existing password policy and required actions.
-Run KEYCLOAK_EMAIL.md §3's safe SMTP readback if needed.
+That script is the single source of truth for commands that authenticate to
+Keycloak, verify prerequisites, create the invited user, send or resend the email
+action link, check onboarding status, write a non-secret local report, and create
+Keycloak checkpoints. The prose below states intent, boundaries, and expected
+verification output without duplicating shell fragments that can drift from the
+script.
 
-Check for an exact username and email collision:
+## 1. Create the account and send the invitation (AGENT-run)
+
+Run with resolved values:
 
 ```bash
-kc get users -r "$MCP_REALM" -q exact=true -q "username=$NEW_LOGIN_USER" \
-  --fields id,username,email
-kc get users -r "$MCP_REALM" -q exact=true -q "email=$USER_EMAIL" \
-  --fields id,username,email
+cd {{REPO_PATH}}/onvif-mcp
+scripts/ADD_USER_EMAIL/add_user_email_runbook.sh apply \
+  --new-login-user {{NEW_LOGIN_USER}} \
+  --first-name {{FIRST_NAME}} \
+  --last-name {{LAST_NAME}} \
+  --user-email {{USER_EMAIL}} \
+  --server-fqdn {{SERVER_FQDN}} \
+  --backup-path {{BACKUP_PATH}} \
+  --repo-path {{REPO_PATH}}
 ```
 
-Both must return `[]`. Otherwise stop account creation; do not overwrite an
-existing person. To resume a failed invitation for the same account, use §5.
-Record a baseline of existing user IDs and enabled states, using pagination
-if needed, so the final comparison can show that they remain intact.
-
-## 2. Create the account without credentials
+For this deployment, the resolved command is:
 
 ```bash
-python3 - <<'PY' |
-import json
-import os
-import sys
-fields = {'username': 'NEW_LOGIN_USER', 'firstName': 'FIRST_NAME',
-          'lastName': 'LAST_NAME', 'email': 'USER_EMAIL'}
-user = {key: os.environ[value] for key, value in fields.items()}
-if any(not value.strip() for value in user.values()):
-    raise SystemExit('Every identity field must be nonempty.')
-user.update(enabled=True, emailVerified=False,
-            requiredActions=['VERIFY_EMAIL', 'UPDATE_PASSWORD'])
-json.dump(user, sys.stdout)
-PY
-  kc create users -r "$MCP_REALM" -f -
+cd /home/stephen/onvif-mcp
+scripts/ADD_USER_EMAIL/add_user_email_runbook.sh apply \
+  --new-login-user stephen \
+  --first-name Stephen \
+  --last-name Rhodes \
+  --user-email sr99622@gmail.com \
+  --server-fqdn gmktec.home.arpa \
+  --backup-path /mnt/camera-backup/ \
+  --repo-path /home/stephen
 ```
 
-Resolve the new ID live and require exactly one username match:
+The script performs these executable stages:
+
+1. Verifies Keycloak local discovery, authenticates as the existing administrator
+   without printing `/opt/keycloak/admin.pass`, and checks public discovery for
+   `https://{{SERVER_FQDN}}/auth/realms/mcp` without `curl -k`.
+2. Verifies realm `mcp` has self-registration disabled and required actions
+   `VERIFY_EMAIL` and `UPDATE_PASSWORD` enabled.
+3. Checks for exact username and email collisions. Account creation stops if
+   either already exists; use `resend` only after confirming the existing account
+   is the intended pending invite.
+4. Records a baseline of existing user IDs and enabled states.
+5. Creates the account with the supplied username, name, and email; enabled=true,
+   emailVerified=false, and required actions `VERIFY_EMAIL` and `UPDATE_PASSWORD`.
+6. Resolves the new user ID live and verifies the identity fields, enabled state,
+   unverified email state, required actions, and an empty credentials list before
+   sending email.
+7. Sends a real 24-hour action email with no redirect URI or client ID.
+8. Verifies existing users from the baseline were not changed.
+9. Writes a non-secret local report at
+   `scripts/ADD_USER_EMAIL/last-invitation-status.txt`.
+10. Creates a Keycloak checkpoint through KEYCLOAK_BACKUP.md's script.
+11. Reads the new user's status back and reports onboarding as pending until the
+    recipient completes verification and password setup.
+
+Successful API completion means Keycloak/Gmail accepted the message for sending;
+it does not prove inbox delivery. Do not claim completed onboarding until the
+recipient confirms receipt and completes setup.
+
+## 2. Status checks (AGENT-run)
 
 ```bash
-NEW_USER_UUID="$(kc get users -r "$MCP_REALM" \
-  -q exact=true -q "username=$NEW_LOGIN_USER" --fields id,username |
-  python3 -c 'import json,os,sys
-users=json.load(sys.stdin)
-assert len(users)==1 and users[0]["username"]==os.environ["NEW_LOGIN_USER"], "Expected one exact user"
-print(users[0]["id"])')"
-export NEW_USER_UUID
-
-kc get "users/$NEW_USER_UUID" -r "$MCP_REALM" \
-  --fields id,username,email,firstName,lastName,enabled,emailVerified,requiredActions
-kc get "users/$NEW_USER_UUID/credentials" -r "$MCP_REALM" --fields type
+cd {{REPO_PATH}}/onvif-mcp
+scripts/ADD_USER_EMAIL/add_user_email_runbook.sh status \
+  --new-login-user {{NEW_LOGIN_USER}} \
+  --user-email {{USER_EMAIL}} \
+  --server-fqdn {{SERVER_FQDN}}
 ```
 
-Before sending, require the identity fields to match the supplied recipient,
-enabled=true, emailVerified=false, and both requested required actions to be
-present. Credential list should be empty for this newly created local user.
-No extra camera roles are needed in the documented deployment. Do not alter
-existing clients, scopes, roles, trusted hosts, or users.
-
-## 3. Send the invitation
-
-The user must have explicitly identified the recipient to invite. This step
-sends a real email to that account's recorded address.
+For this deployment:
 
 ```bash
-printf '%s\n' '["VERIFY_EMAIL","UPDATE_PASSWORD"]' |
-  kc update "users/$NEW_USER_UUID/execute-actions-email" \
-    -r "$MCP_REALM" -q lifespan=86400 -n -f -
+cd /home/stephen/onvif-mcp
+scripts/ADD_USER_EMAIL/add_user_email_runbook.sh status \
+  --new-login-user stephen \
+  --user-email sr99622@gmail.com \
+  --server-fqdn gmktec.home.arpa
 ```
 
-`-n` prevents a GET/merge against this action endpoint. Require exit status 0
-(the underlying successful HTTP response is 204). Do not claim inbox delivery
-until the recipient confirms it. If the send fails, the new account remains
-created; do not rerun creation or set a fallback password. Repair delivery
-and use §5 for a deliberate retry.
+Pending onboarding state is expected immediately after invitation:
 
-No redirect_uri or client_id is supplied. After finishing the action, the
-recipient can open `https://{{SERVER_FQDN}}/cameras/` to sign in. Do not add
-an arbitrary redirect URI or weaken existing client redirect restrictions.
+- enabled=true;
+- emailVerified=false;
+- requiredActions includes `VERIFY_EMAIL` and `UPDATE_PASSWORD`;
+- credential-types is `(none)`;
+- onboarding reports `pending`.
 
-## 4. Recipient completes setup; verify without their password
+After the recipient completes setup, required completed state is:
 
-Tell the recipient to open the invitation on a device that can reach the
-camera hostname and trusts the private CA. They complete email verification
-and choose a password directly in Keycloak. A private browser window avoids
-conflicts with another person's existing Keycloak session.
+- enabled=true;
+- emailVerified=true;
+- credential-types includes `password`;
+- `VERIFY_EMAIL` and `UPDATE_PASSWORD` are absent from requiredActions;
+- onboarding reports `complete`.
+
+Any additional required actions must be completed, not silently removed.
+
+## 3. Recipient completes setup
+
+Tell the recipient to open the invitation on a device that can reach the camera
+hostname and trusts the private CA. They complete email verification and choose a
+password directly in Keycloak. A private browser window avoids conflicts with
+another person's existing Keycloak session.
 
 Do not ask for their password or action link, forward the link into logs, or
 complete their actions as an administrator. Do not diagnose this account by
 setting emailVerified=true: an unverified state is expected before onboarding.
 
-After the recipient reports completion:
+After setup, the recipient can open:
 
-```bash
-kc get "users/$NEW_USER_UUID" -r "$MCP_REALM" \
-  --fields id,username,email,enabled,emailVerified,requiredActions
-kc get "users/$NEW_USER_UUID/credentials" -r "$MCP_REALM" --fields type
+```text
+https://{{SERVER_FQDN}}/cameras/
 ```
 
-Require enabled=true, emailVerified=true, a credential with type `password`
-(lowercase), and VERIFY_EMAIL/UPDATE_PASSWORD absent from requiredActions.
-Any additional required actions must be completed, not silently removed.
-The recipient verifies camera login in their browser; the administrator
-records the result without handling credentials. Check existing users
-against the baseline.
+For this deployment:
 
-If MCP access is required, follow ADD_CLIENT_ON_SERVER.md for a new client IP
-and CLIENT.md for client setup. The recipient completes their browser OAuth
-login themselves, then runs the normal Hermes MCP verification. IP enrollment
-is not required for camera web access alone.
+```text
+https://gmktec.home.arpa/cameras/
+```
 
-If the recipient has not finished, report `invitation sent; onboarding pending`
-and checkpoint that state. Do not claim success or create a password for them.
+If MCP access is required, follow ADD_CLIENT_ON_SERVER.md for a new client IP and
+CLIENT.md for client setup. The recipient completes their browser OAuth login
+themselves, then runs the normal Hermes MCP verification. IP enrollment is not
+required for camera web access alone.
 
-## 5. Resume or resend
+## 4. Resume or resend
 
-Resolve the username live as in §2, and read back username, email, enabled,
-emailVerified, requiredActions, and credential types. Match these to the
-original intended recipient. Do not change an existing account's address to
-make it match a new request.
+Use resend only for the same intended pending user and email, such as an expired
+or failed invitation:
 
-For an expired or failed invitation where onboarding is still pending,
-repeat only §3. If a credential exists and the required actions have cleared,
-onboarding is complete; do not resend a password action as a retry. A later
-password reset is a separate administrator-authorized operation.
+```bash
+cd {{REPO_PATH}}/onvif-mcp
+scripts/ADD_USER_EMAIL/add_user_email_runbook.sh resend \
+  --new-login-user {{NEW_LOGIN_USER}} \
+  --user-email {{USER_EMAIL}} \
+  --server-fqdn {{SERVER_FQDN}} \
+  --backup-path {{BACKUP_PATH}} \
+  --repo-path {{REPO_PATH}}
+```
 
-Do not assume sending another email revokes all prior links. If a link was
-sent to the wrong person, disable the affected newly created account and
-resolve that incident before issuing another invitation. Do not re-enable
-that account while a misdelivered link may remain usable.
+For this deployment:
 
-## 6. Backup checkpoint
+```bash
+cd /home/stephen/onvif-mcp
+scripts/ADD_USER_EMAIL/add_user_email_runbook.sh resend \
+  --new-login-user stephen \
+  --user-email sr99622@gmail.com \
+  --server-fqdn gmktec.home.arpa \
+  --backup-path /mnt/camera-backup/ \
+  --repo-path /home/stephen
+```
 
-Follow the repository's KEYCLOAK_BACKUP.md after creation/invitation and again
-after password setup is confirmed, using new immutable checkpoints. Record
-the new user ID, invitation acceptance by SMTP, delivery confirmation if
-available, pending/completed onboarding, credential type, and existing-user
-comparison. Never record passwords, invitation tokens, or email bodies.
+The script requires exactly one matching username/email, no credentials,
+emailVerified=false, and both pending required actions before resending. If a
+credential exists and required actions have cleared, onboarding is complete; do
+not resend a password action as a retry. A later password reset is a separate
+authorized operation.
+
+Do not assume sending another email revokes all prior links. If a link was sent
+to the wrong person, disable the affected newly created account and resolve that
+incident before issuing another invitation. Do not re-enable that account while a
+misdelivered link may remain usable.
+
+## 5. Backup checkpoints
+
+The script creates a Keycloak checkpoint after creation/invitation. Run another
+checkpoint after password setup is confirmed, using KEYCLOAK_BACKUP.md's script,
+to capture completed onboarding state. Record delivery confirmation and
+completed/pending onboarding status without recording passwords, invitation
+tokens, or email bodies.
 
 The new human account has no `/opt/keycloak/<username>.pass` file. That is
 intentional. The PostgreSQL backup recovers its Keycloak password hash after
-setup. Existing admin and older account secret files remain untouched, and
-the Gmail app password remains a service secret. Interpret the shared backup
-runbook's references to user *.pass files as files that actually exist, not
-as a requirement to create a plaintext copy for invited accounts.
+setup. Existing admin and older account secret files remain untouched, and the
+Gmail app password remains a service secret.
 
-An SMTP success alone is not completed onboarding. Keep the status clear
-when handing the system back to the administrator.
+An SMTP success alone is not completed onboarding. Keep the status clear when
+handing the system back to the administrator.
 
 ## References
 
 - Keycloak Admin REST API (execute-actions-email):
   https://www.keycloak.org/docs-api/latest/rest-api/index.html
-- Keycloak Admin CLI:
-  https://www.keycloak.org/docs/latest/server_admin/#admin-cli
