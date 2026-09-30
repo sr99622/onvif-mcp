@@ -70,7 +70,7 @@ Be mindful of model context size when running the configurations shown below. St
 
 3. ### Set up Private Camera Subnet
 
-    Attach the cameras to the second ethernet adapter. The value for `{{PRVT_CAMERA_NET_EN_NAME}}` can be found using the `nmcli dev show` command from a terminal.     The DHCP server is set up first and should be given ample opportunity to assign addresses to cameras before querying the camera MCP server tool get_cameras to discover cameras on the network. A couple of minutes should be long enough.
+    Attach the cameras to the second ethernet adapter. The value for `{{PRVT_NET_EN_NAME}}` can be found using the `nmcli dev show` command from a terminal.     The DHCP server is set up first and should be given ample opportunity to assign addresses to cameras before querying the camera MCP server tool get_cameras to discover cameras on the network. A couple of minutes should be long enough.
 
     The MCP_HTTP.md runbook sets up the camera MCP server to communicate with the cameras, and is used by later steps to gather camera information for system configuration. The user must reload the MCP using the command `/reload-mcp` or restart hermes to incorporate the camera MCP server into the current session.
 
@@ -78,7 +78,7 @@ Be mindful of model context size when running the configurations shown below. St
 
     | Name | Description |
     |------|-------------|
-    | `{{PRVT_CAMERA_NET_EN_NAME}}` | Ethernet adapter hosting the private camera network |
+    | `{{PRVT_NET_EN_NAME}}` | Ethernet adapter hosting the private camera network |
     | `{{SERVER_FQDN}}` | Fully Qualified Domain Name of the Server |
     | `{{CAMERA_USERNAME}}`    | Camera Username |
     | `{{REPO_PATH}}`   | Full Pathname of Repository Location |

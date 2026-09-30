@@ -369,7 +369,7 @@ PY
   sudo nginx -t
   sudo systemctl reload nginx
   sudo systemctl is-active nginx >/dev/null
-  grep -F 'STREAM_SERVER_URL=https://'$server_fqdn /etc/onvif-mcp-http.env >/dev/null || true
+  sudo grep -F 'STREAM_SERVER_URL=https://'$server_fqdn /etc/onvif-mcp-http.env >/dev/null || true
 }
 
 verify_unauth() {

@@ -2,13 +2,13 @@
 
 ## Purpose
 
-Configure an isolated IPv4 camera network on `{{PRVT_CAMERA_NET_EN_NAME}}`.
+Configure an isolated IPv4 camera network on `{{PRVT_NET_EN_NAME}}`.
 
 Target state:
 
 - Server address: `10.2.2.1/24`
 - DHCP pool: `10.2.2.100` through `10.2.2.200`
-- DHCP interface: `{{PRVT_CAMERA_NET_EN_NAME}}`
+- DHCP interface: `{{PRVT_NET_EN_NAME}}`
 - Kea DHCPv4 listens on UDP 67 for that interface
 - IPv4 and IPv6 forwarding are disabled
 - No routing is added between this subnet and the server's LAN interface
@@ -19,7 +19,7 @@ The server's other interface and existing LAN/Internet configuration must not be
 
 | Value | Description |
 |---|---|
-| `{{PRVT_CAMERA_NET_EN_NAME}}` | Ethernet adapter hosting the private camera subnet |
+| `{{PRVT_NET_EN_NAME}}` | Ethernet adapter hosting the private camera subnet |
 | `{{REPO_PATH}}` | Parent directory containing this repository |
 
 Stop and ask the user if any required value is missing.
@@ -44,13 +44,13 @@ Run from the repository directory:
 
 ```bash
 cd {{REPO_PATH}}/onvif-mcp
-scripts/DHCP/dhcp_runbook.sh apply --interface {{PRVT_CAMERA_NET_EN_NAME}}
+scripts/DHCP/dhcp_runbook.sh apply --interface {{PRVT_NET_EN_NAME}}
 ```
 
 The script performs the full DHCP runbook:
 
 - Installs missing Debian/Ubuntu packages when `apt-get` is available.
-- Creates or updates the NetworkManager `isolated` profile on `{{PRVT_CAMERA_NET_EN_NAME}}`.
+- Creates or updates the NetworkManager `isolated` profile on `{{PRVT_NET_EN_NAME}}`.
 - Assigns `10.2.2.1/24` to the private camera interface.
 - Removes gateway, DNS, and static route settings from the private interface profile.
 - Deactivates any other active NetworkManager profile on that interface.
@@ -67,15 +67,15 @@ Run:
 
 ```bash
 cd {{REPO_PATH}}/onvif-mcp
-scripts/DHCP/dhcp_runbook.sh status --interface {{PRVT_CAMERA_NET_EN_NAME}}
+scripts/DHCP/dhcp_runbook.sh status --interface {{PRVT_NET_EN_NAME}}
 ```
 
 Acceptance checks:
 
-- `{{PRVT_CAMERA_NET_EN_NAME}}` is connected to the `isolated` NetworkManager profile.
-- `{{PRVT_CAMERA_NET_EN_NAME}}` has `10.2.2.1/24`.
-- The route table for `{{PRVT_CAMERA_NET_EN_NAME}}` contains the directly connected `10.2.2.0/24` route only.
-- There is no default route through `{{PRVT_CAMERA_NET_EN_NAME}}`.
+- `{{PRVT_NET_EN_NAME}}` is connected to the `isolated` NetworkManager profile.
+- `{{PRVT_NET_EN_NAME}}` has `10.2.2.1/24`.
+- The route table for `{{PRVT_NET_EN_NAME}}` contains the directly connected `10.2.2.0/24` route only.
+- There is no default route through `{{PRVT_NET_EN_NAME}}`.
 - `net.ipv4.ip_forward = 0`.
 - `net.ipv6.conf.all.forwarding = 0`.
 - Kea configuration validation exits successfully.

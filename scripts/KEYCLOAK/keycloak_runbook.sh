@@ -439,7 +439,7 @@ headless_hermes_login() {
   local real_home="${HOME}/.hermes" isolated_home login_log auth_url login_pid token_dir
   isolated_home="${hermes_home%/}-login"
   login_log="$(mktemp)"
-  trap 'rm -f "$login_log"' RETURN
+  trap "rm -f '$login_log'" RETURN
 
   rm -rf "$isolated_home"
   configure_hermes >/dev/null
