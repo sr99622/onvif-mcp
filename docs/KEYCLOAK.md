@@ -119,26 +119,45 @@ The script performs these executable stages:
     a readable dump catalog, and performs an isolated restore test into a throwaway
     database.
 13. Writes the Hermes MCP server entry with `auth: oauth`, explicit private-CA
-    `ssl_verify`, `auto_reload_on_config_change: false`, and `enabled: false`.
+    `ssl_verify`, and `auto_reload_on_config_change: false`.
+14. Runs the real Hermes OAuth login non-interactively in an isolated Hermes
+    home, drives the Keycloak login and consent pages with
+    `scripts/kc-headless-login-driver.py`, copies only the resulting token files
+    into the active Hermes profile, enables the `camera` MCP entry, and verifies
+    it with `hermes mcp test camera`.
 
 The script intentionally does not print generated secret values. It writes
 passwords only to root-owned files under `/opt/keycloak`.
 
 ## 3. Configure and verify Hermes login
 
-After the script finishes, the Hermes MCP entry is present but disabled so no
-background process starts a competing OAuth flow. Complete the real OAuth login
-with the procedure in this section, then enable the entry only after testing.
+The `apply` command performs this step automatically. Do not run a manual browser
+login unless the scripted `login-hermes` subcommand fails and asks for diagnosis.
+The MCP entry must be enabled only after token files exist and
+`hermes mcp test camera` succeeds.
 
 No other Hermes process may have this server loaded while `hermes mcp login`
 runs. With the entry present in an active session, background discovery can
 launch a second concurrent OAuth flow and cause `OAuth callback port 27890 is
 already in use`.
 
-Use an isolated Hermes home for login, copy the resulting token files back, and
-never display their contents. The browser step can be completed headlessly using
-`scripts/kc-headless-login-driver.py`; it reads `/opt/keycloak/mcp-user.pass` via
-`sudo cat` and never prints credentials or token values.
+The scripted login uses an isolated Hermes home for login, copies the resulting
+token files back, and never displays their contents. It captures the
+authorization URL emitted by `hermes mcp login`, runs
+`scripts/kc-headless-login-driver.py` against that URL, waits for the callback to
+complete, and then verifies the active profile. The driver reads
+`/opt/keycloak/mcp-user.pass` via `sudo cat` and never prints credentials or
+token values.
+
+If you need to rerun only the Hermes OAuth login step, use the subcommand below;
+it is non-interactive and must not be replaced with a manual browser flow:
+
+```bash
+cd {{REPO_PATH}}/onvif-mcp
+scripts/KEYCLOAK/keycloak_runbook.sh login-hermes \
+  --server-fqdn {{SERVER_FQDN}} \
+  --repo-path {{REPO_PATH}}
+```
 
 Expected post-login checks:
 
@@ -149,8 +168,8 @@ Expected post-login checks:
 - any failed/orphan DCR clients are removed only after matching client IDs and
   verifying the internal Keycloak UUID/name.
 
-After the real OAuth client completes DCR and login, create another database
-backup/checkpoint so the active client registration is included.
+The `apply` command runs the Keycloak database backup after the real OAuth client
+completes DCR and login so the active client registration is included.
 
 ## 4. Status checks (AGENT-run)
 

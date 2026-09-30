@@ -6,6 +6,7 @@ usage() {
 Usage:
   keycloak_runbook.sh apply --server-fqdn HOST --backup-path PATH [--repo-path PATH] [--admin-user USER] [--realm REALM] [--scope SCOPE] [--login-user USER]
   keycloak_runbook.sh configure-hermes --server-fqdn HOST [--repo-path PATH] [--hermes-home PATH] [--mcp-name NAME]
+  keycloak_runbook.sh login-hermes --server-fqdn HOST [--repo-path PATH] [--hermes-home PATH] [--mcp-name NAME]
   keycloak_runbook.sh status --server-fqdn HOST [--repo-path PATH] [--realm REALM]
 
 Implements docs/KEYCLOAK.md executable install/configuration steps. Site-specific values are arguments.
@@ -401,7 +402,91 @@ else:
 p.write_text(s)
 PY
   echo "configure-hermes-ok config=$hermes_home/config.yaml entry=$mcp_name enabled=false"
-  echo "Run the OAuth login in an isolated home as described in docs/KEYCLOAK.md §13, then enable the entry after hermes mcp test passes."
+  echo "Run: scripts/KEYCLOAK/keycloak_runbook.sh login-hermes --server-fqdn $server_fqdn --repo-path $repo_path --hermes-home $hermes_home --mcp-name $mcp_name"
+}
+
+set_hermes_entry_enabled() {
+  local target_home="$1" enabled_value="$2"
+  python3 - "$target_home/config.yaml" "$mcp_name" "$enabled_value" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1]); name = sys.argv[2]; enabled = sys.argv[3]
+lines = p.read_text().splitlines(True)
+out = []
+i = 0
+changed = False
+while i < len(lines):
+    out.append(lines[i])
+    if lines[i].startswith('  ' + name + ':'):
+        i += 1
+        while i < len(lines) and (lines[i].startswith('    ') or lines[i].strip() == ''):
+            if lines[i].lstrip().startswith('enabled:'):
+                out.append('    enabled: ' + enabled + '\n')
+                changed = True
+            else:
+                out.append(lines[i])
+            i += 1
+        if not changed:
+            out.append('    enabled: ' + enabled + '\n')
+        continue
+    i += 1
+p.write_text(''.join(out))
+PY
+}
+
+headless_hermes_login() {
+  require_arg --server-fqdn "$server_fqdn"; require_arg --repo-path "$repo_path"
+  local real_home="${HOME}/.hermes" isolated_home login_log auth_url login_pid token_dir
+  isolated_home="${hermes_home%/}-login"
+  login_log="$(mktemp)"
+  trap 'rm -f "$login_log"' RETURN
+
+  rm -rf "$isolated_home"
+  configure_hermes >/dev/null
+  hermes_home="$isolated_home" configure_hermes >/dev/null
+  ln -s "$real_home/tools" "$isolated_home/tools"
+  set_hermes_entry_enabled "$isolated_home" true
+
+  BROWSER=/bin/false HERMES_HOME="$isolated_home" hermes mcp login "$mcp_name" >"$login_log" 2>&1 &
+  login_pid=$!
+
+  for _ in $(seq 1 600); do
+    if ! kill -0 "$login_pid" 2>/dev/null; then
+      wait "$login_pid" || { sed -n '1,200p' "$login_log" >&2; exit 1; }
+      break
+    fi
+    auth_url="$(python3 - "$login_log" <<'PY'
+import re, sys
+text = open(sys.argv[1], encoding='utf-8', errors='replace').read()
+m = re.search(r'https://[^\s]+/auth/realms/[^\s]+/protocol/openid-connect/auth\?[^\s]+', text)
+print(m.group(0) if m else '')
+PY
+)"
+    if [[ -n "$auth_url" ]]; then
+      python3 "$(project_dir)/scripts/kc-headless-login-driver.py" "$auth_url"
+      wait "$login_pid" || { sed -n '1,240p' "$login_log" >&2; exit 1; }
+      break
+    fi
+    sleep 1
+  done
+  if kill -0 "$login_pid" 2>/dev/null; then
+    kill "$login_pid" 2>/dev/null || true
+    sed -n '1,240p' "$login_log" >&2
+    echo "Timed out waiting for Hermes OAuth authorization URL" >&2
+    exit 1
+  fi
+
+  token_dir="$isolated_home/mcp-tokens"
+  test -s "$token_dir/$mcp_name.json"
+  test -s "$token_dir/$mcp_name.client.json"
+  test -s "$token_dir/$mcp_name.meta.json"
+  install -d -m 700 "$real_home/mcp-tokens"
+  install -m 600 "$token_dir/$mcp_name.json" "$real_home/mcp-tokens/$mcp_name.json"
+  install -m 600 "$token_dir/$mcp_name.client.json" "$real_home/mcp-tokens/$mcp_name.client.json"
+  install -m 600 "$token_dir/$mcp_name.meta.json" "$real_home/mcp-tokens/$mcp_name.meta.json"
+  set_hermes_entry_enabled "$real_home" true
+  HERMES_HOME="$real_home" hermes mcp test "$mcp_name"
+  echo "login-hermes-ok entry=$mcp_name tokens=$real_home/mcp-tokens"
 }
 
 apply() {
@@ -416,9 +501,10 @@ apply() {
   trust_ca_and_verify_public
   configure_mcp_oauth
   test_dcr
+  configure_hermes
+  headless_hermes_login
   install_backup_service
   restore_test
-  configure_hermes
   echo "apply-ok keycloak $(issuer)"
 }
 
@@ -437,6 +523,7 @@ status() {
 case "$cmd" in
   apply) apply ;;
   configure-hermes) configure_hermes ;;
+  login-hermes) headless_hermes_login ;;
   status) status ;;
   *) echo "Unknown command: $cmd" >&2; usage >&2; exit 64 ;;
 esac
