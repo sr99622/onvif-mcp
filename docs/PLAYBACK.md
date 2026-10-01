@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document gives agent instructions for displaying MediaMTX recordings from the camera system in Chrome through the Hermes browser/CDP controller.
+This document gives agent instructions for displaying MediaMTX recordings from the camera system in an authenticated browser session — the Hermes embedded preview pane by default, or external Chrome via the Hermes browser/CDP controller when the user explicitly asks for their own browser.
 
 The server exposes MediaMTX playback through Nginx at:
 
@@ -51,32 +51,32 @@ URL-encode the whole path when using it as a query parameter:
 4B0013BPAABE264%2FMediaProfile000
 ```
 
-## Browser/CDP display procedure
+## Browser display procedure
 
-Use the Hermes browser controller (`browser_exec`) to drive Chrome. Do not use curl cookies from the shell for browser playback, and do not print session cookies.
+Use Hermes browser tools to drive an authenticated session. Do not use curl cookies from the shell for browser playback, and do not print session cookies. Trust tool return codes: a successful `open`/navigation call is assumed to have worked — verify with at most one read or page-state check, not repeated probing. Two display paths exist; pick based on how the user asked:
 
-1. Open the authenticated origin or a target playback URL in Chrome:
+- **Path A — embedded preview pane** (default): the pane beside the chat, driven by `desktop_preview` (open/read/close) and `drive_preview` (elements/click/type/press/reload). Use it unless the user explicitly asks for their own browser.
+- **Path B — external Chrome via CDP** (`browser_exec`): ONLY when the user explicitly requests their own browser — never auto-substitute it. Work in ONE tab: navigate the existing tab with `goto_url` (never pile up new tabs), and confirm state with `js(...)`.
 
-```python
-new_tab('https://{{SERVER_FQDN}}/playback/list?path=4B0013BPAABE264%2FMediaProfile000')
-wait_for_load()
-print(page_info())
+### A. Embedded preview pane (default)
+
+1. Open a target playback URL in the pane:
+
+```text
+desktop_preview action=open label='playback' url='https://{{SERVER_FQDN}}/playback/list?path=4B0013BPAABE264%2FMediaProfile000'
 ```
 
-2. If Chrome lands on the Keycloak/oauth2 login flow, complete login using the browser-vault workflow. Never type or ask for passwords, one-time codes, or cookies in chat.
+Wait ~5 s, then `action=read`. Read returns `{kind, url, title, text}`; for the list endpoint `text` is the JSON itself.
 
-3. Once Chrome has an authenticated session, query the list endpoint from the browser context so the request carries the browser session cookie:
+2. If the pane lands on the Keycloak login page (title/text shows "Sign in"), complete login with the browser-vault workflow: call `browser_vault_list` first. If an item exists for the origin, type the identifier into the username field using `drive_preview` elements + type and submit; the password is filled ONLY by `browser_vault_fill` (the user is prompted in their UI) — never typed or discussed in chat. If nothing is saved, call `browser_vault_save_login`. Then re-read; the pane should now be on the target URL.
 
-```python
-from urllib.parse import quote
-path = '4B0013BPAABE264/MediaProfile000'
-url = 'https://{{SERVER_FQDN}}/playback/list?path=' + quote(path, safe='')
-new_tab(url)
-wait_for_load()
-print(js('(() => document.body.innerText)()'))
+3. Once authenticated, re-open the list URL in the same tab (`action=open` with the same URL) so the request carries the session cookie:
+
+```text
+desktop_preview action=open url='https://{{SERVER_FQDN}}/playback/list?path=4B0013BPAABE264%2FMediaProfile000'
 ```
 
-The response is JSON. Each item has:
+The read returns JSON. Each item has:
 
 ```json
 {
@@ -101,10 +101,46 @@ video_url = (
     '&duration=' + str(duration) +
     '&format=mp4'
 )
-print(video_url)
 ```
 
-5. Display the recording in Chrome by creating a simple HTML video player in a data URL:
+5. Display by opening the URL **directly** in the pane: top-level navigation carries the session cookie and the browser renders the MP4 with native controls — no wrapper page needed.
+
+```text
+desktop_preview action=open label='{path} — {start} — {duration}s' url={video_url}
+```
+
+Note `read` returns empty `text` for a video page; that is normal, not an error. If you want a labeled header instead, write a player HTML file to the scratch directory and open its path via `desktop_preview` (`action=open url=file:///…`) — but some browsers do not send cookies from file:/data: pages to cross-origin `<video>` sources, so verify playback before relying on that variant.
+
+6. Diagnostics: if nothing renders, check `read`'s title/text for "500" or "Sign in". A 500 (auth-token timeout) can appear even though the open call reported success — a single `drive_preview action=reload` usually clears it. If auth is lost entirely, re-open the list URL and repeat step 2. If reads fail outright ("no page is loaded / bridge timed out") on a current app build, fall back to path B or `get_snapshot`; do not loop identical reads.
+
+### B. External Chrome via CDP (`browser_exec`)
+
+1. Open the authenticated origin or a target playback URL in Chrome:
+
+```python
+new_tab('https://{{SERVER_FQDN}}/playback/list?path=4B0013BPAABE264%2FMediaProfile000')
+wait_for_load()
+print(page_info())
+```
+
+From here on, work in that ONE tab: navigate it with `goto_url` — never pile up new tabs.
+
+2. If Chrome lands on the Keycloak/oauth2 login flow, complete login using the browser-vault workflow (identifier via `fill_input`; password only via `browser_vault_fill`; `browser_vault_save_login` if nothing is saved). Never type or ask for passwords, one-time codes, or cookies in chat.
+
+3. Once Chrome has an authenticated session, navigate the same tab to the list URL so the request carries the browser session cookie:
+
+```python
+from urllib.parse import quote
+path = '4B0013BPAABE264/MediaProfile000'
+url = 'https://{{SERVER_FQDN}}/playback/list?path=' + quote(path, safe='')
+goto_url(url)
+wait_for_load()
+print(js('(() => document.body.innerText)()'))
+```
+
+The response is JSON with the same shape as path A. Ignore the returned loopback `url`; construct a public authenticated URL under `/playback/get` with `format=mp4`.
+
+4. Display the recording in Chrome by navigating the same tab to a simple HTML video player in a data URL:
 
 ```python
 from urllib.parse import quote
@@ -124,12 +160,12 @@ html = f'''<!doctype html>
   <video controls autoplay src="{video_url}" type="video/mp4"></video>
 </body>
 </html>'''
-new_tab('data:text/html;charset=utf-8,' + quote(html))
+goto_url('data:text/html;charset=utf-8,' + quote(html))
 wait_for_load()
 print(page_info())
 ```
 
-6. If playback does not render, check the browser DOM and network-facing state from the page:
+5. If playback does not render, check the browser DOM and network-facing state from the page:
 
 ```python
 print(js('(() => ({title: document.title, text: document.body.innerText, videos: [...document.querySelectorAll("video")].map(v => ({readyState: v.readyState, networkState: v.networkState, error: v.error && v.error.message, currentTime: v.currentTime, duration: v.duration}))}))()'))
@@ -236,7 +272,7 @@ The public URL for the example clip is:
 https://{{SERVER_FQDN}}/playback-cache/amcrest_2026-09-27_0900_10min.mp4
 ```
 
-This URL remains protected by oauth2-proxy, like `/playback/`, `/webrtc/`, and `/snapshot/`.
+This URL remains protected by oauth2-proxy, like `/playback/`, `/webrtc/`, and `/snapshot/`. It is a normal authenticated URL, so it can be shown in the embedded preview pane directly (path A, step 5) as well as in external Chrome.
 
 ### 4. Verify byte-range support
 
