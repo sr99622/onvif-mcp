@@ -1,11 +1,31 @@
+const SIDEBAR_STORAGE_KEY = "camera-switchboard:sidebar-collapsed";
+const app = document.querySelector(".app");
 const list = document.querySelector("#camera-list");
 const player = document.querySelector("#player");
 const cameraName = document.querySelector("#camera-name");
 const cameraAddress = document.querySelector("#camera-address");
 const status = document.querySelector("#status");
+const sidebarToggle = document.querySelector("#sidebar-toggle");
 
 let cameras = [];
 let selectedIndex = -1;
+
+function setSidebarCollapsed(collapsed) {
+  app.classList.toggle("sidebar-collapsed", collapsed);
+  sidebarToggle.setAttribute("aria-expanded", String(!collapsed));
+  sidebarToggle.title = collapsed ? "Show controls" : "Collapse controls";
+  sidebarToggle.querySelector(".visually-hidden").textContent =
+    collapsed ? "Show controls" : "Collapse controls";
+  localStorage.setItem(SIDEBAR_STORAGE_KEY, JSON.stringify(collapsed));
+}
+
+function initializeSidebarToggle() {
+  const collapsed = localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true";
+  setSidebarCollapsed(collapsed);
+  sidebarToggle.addEventListener("click", () => {
+    setSidebarCollapsed(!app.classList.contains("sidebar-collapsed"));
+  });
+}
 
 function selectCamera(index) {
   if (!cameras.length) return;
@@ -53,4 +73,5 @@ async function initialize() {
   }
 }
 
+initializeSidebarToggle();
 initialize();

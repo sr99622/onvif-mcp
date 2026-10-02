@@ -1,10 +1,30 @@
 const STORAGE_KEY = "camera-multiview:selected-cameras";
+const SIDEBAR_STORAGE_KEY = "camera-multiview:sidebar-collapsed";
+const app = document.querySelector(".app");
 const controls = [...document.querySelectorAll(".camera-control")];
 const tiles = [...document.querySelectorAll(".camera-tile")];
 const status = document.querySelector("#status");
+const sidebarToggle = document.querySelector("#sidebar-toggle");
 
 let cameras = [];
 let selections = [];
+
+function setSidebarCollapsed(collapsed) {
+  app.classList.toggle("sidebar-collapsed", collapsed);
+  sidebarToggle.setAttribute("aria-expanded", String(!collapsed));
+  sidebarToggle.title = collapsed ? "Show controls" : "Collapse controls";
+  sidebarToggle.querySelector(".visually-hidden").textContent =
+    collapsed ? "Show controls" : "Collapse controls";
+  localStorage.setItem(SIDEBAR_STORAGE_KEY, JSON.stringify(collapsed));
+}
+
+function initializeSidebarToggle() {
+  const collapsed = localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true";
+  setSidebarCollapsed(collapsed);
+  sidebarToggle.addEventListener("click", () => {
+    setSidebarCollapsed(!app.classList.contains("sidebar-collapsed"));
+  });
+}
 
 function saveSelections() {
   const hostnames = selections.map((index) => cameras[index]?.hostname ?? null);
@@ -40,6 +60,27 @@ function selectCamera(slot, cameraIndex) {
   }
 
   saveSelections();
+}
+
+function openSingleView(slot) {
+  const camera = cameras[selections[slot]];
+  if (!camera) return;
+
+  localStorage.setItem("camera-switchboard:last-camera", camera.hostname);
+  window.location.href = "/cameras/?v=11";
+}
+
+function initializeTileLabels() {
+  tiles.forEach((tile, slot) => {
+    const label = tile.querySelector("h2");
+    label.addEventListener("click", () => openSingleView(slot));
+    label.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openSingleView(slot);
+      }
+    });
+  });
 }
 
 function populateControl(control, slot) {
@@ -85,4 +126,6 @@ async function initialize() {
   }
 }
 
+initializeSidebarToggle();
+initializeTileLabels();
 initialize();

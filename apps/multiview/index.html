@@ -4,11 +4,23 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Four-Camera View</title>
-  <link rel="stylesheet" href="/multiview/styles.css?v=2">
+  <link rel="stylesheet" href="/multiview/styles.css?v=11">
 </head>
 <body>
   <main class="app">
-    <aside class="sidebar">
+    <button
+      id="sidebar-toggle"
+      class="sidebar-toggle"
+      type="button"
+      aria-controls="sidebar"
+      aria-expanded="true"
+      title="Collapse controls"
+    >
+      <span aria-hidden="true">‹</span>
+      <span class="visually-hidden">Collapse controls</span>
+    </button>
+
+    <aside id="sidebar" class="sidebar">
       <header>
         <p class="eyebrow">LIVE MONITORING</p>
         <h1>Four-Camera View</h1>
@@ -38,28 +50,28 @@
         </article>
       </section>
 
-      <a class="switchboard-link" href="/cameras/">Single View</a>
+      <a class="switchboard-link" href="/cameras/?v=11">Single View</a>
     </aside>
 
     <section id="camera-grid" class="camera-grid" aria-label="Camera streams">
       <article class="camera-tile" data-slot="0">
-        <h2>Camera 1</h2>
+        <h2 role="button" tabindex="0" title="Open Camera 1 in single view">Camera 1</h2>
         <iframe title="Camera 1 live stream" allow="autoplay; fullscreen" referrerpolicy="no-referrer"></iframe>
       </article>
       <article class="camera-tile" data-slot="1">
-        <h2>Camera 2</h2>
+        <h2 role="button" tabindex="0" title="Open Camera 2 in single view">Camera 2</h2>
         <iframe title="Camera 2 live stream" allow="autoplay; fullscreen" referrerpolicy="no-referrer"></iframe>
       </article>
       <article class="camera-tile" data-slot="2">
-        <h2>Camera 3</h2>
+        <h2 role="button" tabindex="0" title="Open Camera 3 in single view">Camera 3</h2>
         <iframe title="Camera 3 live stream" allow="autoplay; fullscreen" referrerpolicy="no-referrer"></iframe>
       </article>
       <article class="camera-tile" data-slot="3">
-        <h2>Camera 4</h2>
+        <h2 role="button" tabindex="0" title="Open Camera 4 in single view">Camera 4</h2>
         <iframe title="Camera 4 live stream" allow="autoplay; fullscreen" referrerpolicy="no-referrer"></iframe>
       </article>
     </section>
   </main>
-  <script src="/multiview/app.js?v=2"></script>
+  <script src="/multiview/app.js?v=11"></script>
 </body>
 </html>

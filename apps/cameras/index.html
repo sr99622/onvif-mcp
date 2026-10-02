@@ -4,11 +4,23 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Camera Switchboard</title>
-  <link rel="stylesheet" href="/cameras/styles.css?v=2">
+  <link rel="stylesheet" href="/cameras/styles.css?v=10">
 </head>
 <body>
   <main class="app">
-    <aside class="sidebar">
+    <button
+      id="sidebar-toggle"
+      class="sidebar-toggle"
+      type="button"
+      aria-controls="sidebar"
+      aria-expanded="true"
+      title="Collapse controls"
+    >
+      <span aria-hidden="true">‹</span>
+      <span class="visually-hidden">Collapse controls</span>
+    </button>
+
+    <aside id="sidebar" class="sidebar">
       <header>
         <p class="eyebrow">LIVE VIEW</p>
         <h1>Camera Switchboard</h1>
@@ -18,7 +30,7 @@
       <nav id="camera-list" class="camera-list" aria-label="Cameras"></nav>
 
       <div class="controls">
-        <a class="multiview-link" href="/multiview/">Multi View</a>
+        <a class="multiview-link" href="/multiview/?v=11">Multi View</a>
       </div>
     </aside>
 
@@ -38,6 +50,6 @@
       ></iframe>
     </section>
   </main>
-  <script src="/cameras/app.js?v=2"></script>
+  <script src="/cameras/app.js?v=10"></script>
 </body>
 </html>

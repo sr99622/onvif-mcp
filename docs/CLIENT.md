@@ -277,7 +277,7 @@ https://{{SERVER_FQDN}}/cameras
 
 A login dialog box will appear asking for your credentials. Enter your username and password, and you should be able to observe the camera streams.
 
-### Configure the MCP server in Hermes
+## Configure the MCP server in Hermes
 
 Edit `~/.hermes/config.yaml` and add the following towards the end of the file above the comments and replace the {{...}} fields with your local values:
 
@@ -376,3 +376,27 @@ If the client is using MCP services, you can optimize performance with the follo
 ```
 When using camera MCP server tools, it is not necessary to verify that any of the commands have completed successfully beyond checking the return code from the tool call. The camera communications library is very reliable and will pretty much always work properly. If something has gone wrong, the user will ask explicitly for you to check. This may go against your training to always verify things, but it is important that we optimize the system to be as responsive as possible, and post tool call checking slows things down considerably. If the tool call returns a success message, assume that the call succeeded and do not re-query the cameras or take a snapshot without being explicitly asked by the user. One important exception here is the appearance of the 500 error message in the browser when viewing a camera stream. The tool call will return success, but the server may show 500 due to auth token timeout. You should check for the 500 message in the title of the browser when asked to view a camera stream, and if it appears, all you need to do is refresh the browser.
 ```
+## Configure Hermes Desktop
+
+The Hermes desktop application is a convenient way to integrate the camera streams into your desktop. The enmbedded browser within the desktop app can be controlled directly by prompt. To configure this feature, you need to remove the desktop_ui from the agent.disabled_toolsets. The command is kind of backwards in that you specify a list of tools to disable, on which desktop_ui is absent. Make note to read through the list and remove any toolsets that you may have previously enabled.
+
+```
+hermes config set agent.disabled_toolsets '["a2a","bot_room","clarify","code_execution","computer_use","connections","context_engine","cronjob","delegation","discord","discord_admin","feishu_doc","feishu_drive","homeassistant","image_gen","kanban","memory","project","search","session_search","setup","spotify","stt","todo","tts","video_gen","web","x_search","yuanbao"]'
+```
+
+After making this change, a reboot is recommended and open Hermes desktop to a new chat session before attempting to control the preview pane from the prompt.
+
+From the Hermes desktop, you can prompt in a similar way as using the Chrome browser, just change the reference to preview pane.
+
+Get a list of cameras
+
+```
+get cameras
+```
+
+You can show the live stream from a camera in the embedded browser
+
+```
+show the {{CAMERA}} main stream in the preview pane
+```
+
