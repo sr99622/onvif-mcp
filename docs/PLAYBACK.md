@@ -195,6 +195,18 @@ curl -sS 'http://127.0.0.1:9996/list?path=4B0013BPAABE264%2FMediaProfile000'
 
 This shell loopback check bypasses browser authentication and is only for server-side diagnostics. Browser display must use the public `/playback/` URL.
 
+## ffmpeg availability
+
+ffmpeg may not be on the server's PATH even though a working build ships with the Hermes installation:
+
+```bash
+ls ~/.hermes/tools/ | grep '^ffmpeg'   # e.g. ffmpeg-9.0.1-linux-x64
+FF=$(ls -d ~/.hermes/tools/ffmpeg-*/bin/ffmpeg)   # unquoted glob expansion — do NOT quote the pattern
+"$FF" -version   # verify before use
+```
+
+Prefer this hermes-bundled binary in the remux steps below over installing a system package or downloading a static build — it is present on every machine running Hermes and needs no dependencies.
+
 ## Seekable static MP4 workflow
 
 MediaMTX `/playback/get` dynamically generates the response. Chrome can play that response, but it is not a normal seekable file because MediaMTX sends it without byte-range support:
@@ -225,11 +237,13 @@ mkdir -p "$work"
 src="$work/amcrest_2026-09-27_0900_10min_source.mp4"
 out="$work/amcrest_2026-09-27_0900_10min_static.mp4"
 
+FF=$(ls -d $HOME/.hermes/tools/ffmpeg-*/bin/ffmpeg)   # hermes-bundled build; see "ffmpeg availability"
+
 curl -L --fail --silent --show-error \
   'http://127.0.0.1:9996/get?path=AMC014641NE6L35AT8%2FMediaProfile000&start=2026-09-27T09%3A00%3A00-04%3A00&duration=600&format=mp4' \
   -o "$src"
 
-ffmpeg -y -hide_banner -loglevel error \
+"$FF" -y -hide_banner -loglevel error \
   -i "$src" \
   -map 0 \
   -c copy \
