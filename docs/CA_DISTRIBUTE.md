@@ -29,6 +29,7 @@ the script with resolved site values.
 |---|---|
 | `{{SERVER_FQDN}}` | Canonical DNS name used by clients and the TLS certificate |
 | `{{SERVER_IP}}` | Server IP address hosting the distribution endpoint |
+| `{{ALLOWED_SUBNETS}}` | **Optional** comma separated list of allowed subnets, e.g. `10.1.1.0/24,192.168.68.0/22` |
 
 ## Final layout
 
@@ -67,8 +68,9 @@ no interactive user-run steps.
 3. Keep `/ca/` available over HTTP for bootstrap, but redirect all other HTTP
    paths to HTTPS.
 4. Disable directory browsing.
-5. Restrict `/ca/` to the documented client LANs: `10.1.1.0/24` and
-   `192.168.68.0/22`. Do not allow the isolated camera network `10.2.2.0/24`.
+5. If `{{ALLOWED_SUBNETS}}` is set, restrict `/ca/` to only those comma-separated
+   client subnets. If `{{ALLOWED_SUBNETS}}` is omitted or empty, leave `/ca/`
+   reachable from any subnet.
 
 ## 1. Publish the public CA certificate (AGENT-run)
 
@@ -78,8 +80,11 @@ Run the script with resolved values:
 cd {{REPO_PATH}}/onvif-mcp
 scripts/CA_DISTRIBUTE/ca_distribute_runbook.sh apply \
   --server-fqdn {{SERVER_FQDN}} \
-  --server-ip {{SERVER_IP}}
+  --server-ip {{SERVER_IP}} \
+  --allowed-subnets {{ALLOWED_SUBNETS}}
 ```
+
+Omit the `--allowed-subnets` line when `{{ALLOWED_SUBNETS}}` is empty.
 
 The `apply` command performs the full workflow:
 

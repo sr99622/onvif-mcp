@@ -4,23 +4,29 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  ca_distribute_runbook.sh apply --server-fqdn HOST --server-ip IP
+  ca_distribute_runbook.sh apply --server-fqdn HOST --server-ip IP [--allowed-subnets CIDR[,CIDR...]]
   ca_distribute_runbook.sh verify --server-fqdn HOST --server-ip IP
   ca_distribute_runbook.sh status --server-fqdn HOST --server-ip IP
   ca_distribute_runbook.sh test --server-fqdn HOST --server-ip IP
 
 Implements docs/CA_DISTRIBUTE.md. Only the public CA certificate is distributed.
+If --allowed-subnets is omitted or empty, /ca/ is reachable from any subnet.
 USAGE
 }
 
 cmd="${1:-}"; [[ -n "$cmd" ]] || { usage; exit 64; }
 [[ "$cmd" == "-h" || "$cmd" == "--help" ]] && { usage; exit 0; }
 shift || true
-server_fqdn=""; server_ip=""
+server_fqdn=""; server_ip=""; allowed_subnets=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --server-fqdn) server_fqdn="${2:?missing --server-fqdn value}"; shift 2 ;;
     --server-ip) server_ip="${2:?missing --server-ip value}"; shift 2 ;;
+    --allowed-subnets)
+      [[ $# -ge 2 ]] || { echo "missing --allowed-subnets value" >&2; exit 64; }
+      allowed_subnets="$2"
+      shift 2
+      ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; usage >&2; exit 64 ;;
   esac
@@ -30,6 +36,31 @@ require_arg() { local name="$1" value="$2"; [[ -n "$value" ]] || { echo "Missing
 require_all() { require_arg --server-fqdn "$server_fqdn"; require_arg --server-ip "$server_ip"; }
 dist_dir=/srv/camera-pki/public
 source_ca=/etc/nginx/tls/camera-system-root-ca.crt.pem
+
+trim() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "$value"
+}
+
+nginx_ca_access_directives() {
+  local subnet trimmed
+  local -a subnets
+  [[ -n "$(trim "$allowed_subnets")" ]] || return 0
+
+  IFS=',' read -r -a subnets <<< "$allowed_subnets"
+  for subnet in "${subnets[@]}"; do
+    trimmed="$(trim "$subnet")"
+    if [[ ! "$trimmed" =~ ^[0-9A-Fa-f:.]+/[0-9]{1,3}$ ]]; then
+      echo "Invalid --allowed-subnets entry: $subnet" >&2
+      echo "Expected comma-separated IPv4/IPv6 CIDR subnets, for example: 10.1.1.0/24,192.168.68.0/22" >&2
+      exit 64
+    fi
+    printf '        allow %s;\n' "$trimmed"
+  done
+  printf '        deny all;\n'
+}
 
 install_packages() {
   missing=()
@@ -105,6 +136,7 @@ EOF
 
 configure_nginx_http_ca_endpoint() {
   local today; today="$(date +%F)"
+  local ca_access_directives; ca_access_directives="$(nginx_ca_access_directives)"
   sudo test -f /etc/nginx/sites-available/camera
   sudo cp --update=none /etc/nginx/sites-available/camera "/etc/nginx/sites-available/camera.backup-ca-dist-$today" || true
   sudo tee /etc/nginx/sites-available/camera >/dev/null <<EOF
@@ -115,9 +147,7 @@ server {
     location /ca/ {
         alias /srv/camera-pki/public/;
         autoindex off;
-        allow 10.1.1.0/24;
-        allow 192.168.68.0/22;
-        deny all;
+$ca_access_directives
     }
 
     location / { return 301 https://$server_fqdn\$request_uri; }
