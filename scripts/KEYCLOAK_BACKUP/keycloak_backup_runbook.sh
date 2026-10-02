@@ -46,7 +46,7 @@ preflight() {
   while IFS= read -r -d '' f; do
     sudo test "$(sudo stat -c '%a %U %G' "$f")" = '600 root root'
   done < <(sudo find /opt/keycloak -maxdepth 1 -type f -name '*.pass' -print0)
-  sudo test -x /usr/local/sbin/backup-keycloak-postgres
+  sudo test -x /usr/local/sbin/backup-keycloak-postgres.sh
   sudo systemd-analyze verify /etc/systemd/system/keycloak-postgres-backup.service >/dev/null
 }
 

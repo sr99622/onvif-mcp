@@ -325,8 +325,8 @@ PY
 
 install_backup_service() {
   sudo install -d -m 700 -o root -g root /var/backups/keycloak-postgres
-  sudo install -o root -g root -m 750 "$(project_dir)/scripts/backup-keycloak-postgres" /usr/local/sbin/backup-keycloak-postgres
-  sudo bash -n /usr/local/sbin/backup-keycloak-postgres
+  sudo install -o root -g root -m 750 "$(project_dir)/scripts/backup-keycloak-postgres.sh" /usr/local/sbin/backup-keycloak-postgres.sh
+  sudo bash -n /usr/local/sbin/backup-keycloak-postgres.sh
   sudo tee /etc/systemd/system/keycloak-postgres-backup.service >/dev/null <<'EOF'
 [Unit]
 Description=Back up the Keycloak PostgreSQL database
@@ -340,7 +340,7 @@ Group=root
 UMask=0077
 Nice=10
 IOSchedulingClass=idle
-ExecStart=/usr/local/sbin/backup-keycloak-postgres
+ExecStart=/usr/local/sbin/backup-keycloak-postgres.sh
 EOF
   sudo chmod 644 /etc/systemd/system/keycloak-postgres-backup.service
   sudo systemctl daemon-reload

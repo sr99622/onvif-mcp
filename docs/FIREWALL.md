@@ -8,7 +8,7 @@ The important non-obvious rule is the ONVIF discovery reply range. Opening UDP 3
 
 | Symbol | Example value | Meaning |
 |---|---:|---|
-| `{{CAMERA_IFACE}}` | `enp171s0` | Isolated camera network interface |
+| `{{PRVT_NET_EN_NAME}}` | `enp171s0` | Isolated camera network interface |
 | `{{CAMERA_SUBNET}}` | `10.2.2.0/24` | Isolated camera subnet |
 | `{{EPHEMERAL_UDP_RANGE}}` | `32768:60999` | Linux UDP destination ports used for discovery replies |
 
@@ -22,7 +22,7 @@ Before applying this elsewhere, verify the interface names, subnets, and ephemer
 | 80 | TCP | any | Nginx HTTP redirect/app entry point |
 | 443 | TCP | any | Nginx HTTPS camera apps, MCP, and auth |
 | 53 | TCP/UDP | any | DNS service for camera/LAN names |
-| 67 | UDP | `{{CAMERA_IFACE}}` only | Kea DHCP on isolated camera network |
+| 67 | UDP | `{{PRVT_NET_EN_NAME}}` only | Kea DHCP on isolated camera network |
 | 8189 | UDP | any, or restrict to trusted client networks | MediaMTX WebRTC ICE/DTLS/SRTP media |
 | 3702 | UDP | any, or restrict to trusted camera networks | ONVIF WS-Discovery probe traffic |
 | `{{EPHEMERAL_UDP_RANGE}}` | UDP | trusted camera subnets only | ONVIF/libonvif discovery replies from cameras |
@@ -60,7 +60,7 @@ Confirm:
 Use this when building the camera server firewall from scratch. It resets existing UFW user rules.
 
 ```bash
-CAMERA_IFACE="{{CAMERA_IFACE}}"
+PRVT_NET_EN_NAME="{{PRVT_NET_EN_NAME}}"
 CAMERA_SUBNET="{{CAMERA_SUBNET}}"
 EPHEMERAL_UDP_RANGE="$(tr '\t ' ':' < /proc/sys/net/ipv4/ip_local_port_range)"
 
@@ -74,11 +74,11 @@ sudo ufw allow 80/tcp comment 'nginx HTTP redirect/app access'
 sudo ufw allow 443/tcp comment 'nginx HTTPS camera apps/MCP/auth'
 sudo ufw allow 53/tcp comment 'DNS service for camera/LAN names'
 sudo ufw allow 53/udp comment 'DNS service for camera/LAN names'
-sudo ufw allow in on "$CAMERA_IFACE" to any port 67 proto udp comment 'Kea DHCP on isolated camera network'
+sudo ufw allow in on "$PRVT_NET_EN_NAME" to any port 67 proto udp comment 'Kea DHCP on isolated camera network'
 sudo ufw allow 8189/udp comment 'MediaMTX WebRTC ICE/media'
 sudo ufw allow 3702/udp comment 'ONVIF WS-Discovery/libonvif'
 
-sudo ufw allow in on "$CAMERA_IFACE" from "$CAMERA_SUBNET" proto udp to any port "$EPHEMERAL_UDP_RANGE" comment 'ONVIF/libonvif UDP discovery replies from isolated cameras'
+sudo ufw allow in on "$PRVT_NET_EN_NAME" from "$CAMERA_SUBNET" proto udp to any port "$EPHEMERAL_UDP_RANGE" comment 'ONVIF/libonvif UDP discovery replies from isolated cameras'
 
 sudo ufw --force enable
 sudo ufw status numbered
@@ -87,15 +87,15 @@ sudo ufw status numbered
 ## Expected rules on this host
 
 ```text
-OpenSSH                     ALLOW IN    Anywhere
-80/tcp                      ALLOW IN    Anywhere
-443/tcp                     ALLOW IN    Anywhere
-53/tcp                      ALLOW IN    Anywhere
-53/udp                      ALLOW IN    Anywhere
-67/udp on {{CAMERA_IFACE}}  ALLOW IN    Anywhere
-8189/udp                    ALLOW IN    Anywhere
-3702/udp                    ALLOW IN    Anywhere
-32768:60999/udp on {{CAMERA_IFACE}} ALLOW IN  {{CAMERA_SUBNET}}
+OpenSSH                         ALLOW IN    Anywhere
+80/tcp                          ALLOW IN    Anywhere
+443/tcp                         ALLOW IN    Anywhere
+53/tcp                          ALLOW IN    Anywhere
+53/udp                          ALLOW IN    Anywhere
+67/udp on {{PRVT_NET_EN_NAME}}  ALLOW IN    Anywhere
+8189/udp                        ALLOW IN    Anywhere
+3702/udp                        ALLOW IN    Anywhere
+32768:60999/udp on {{PRVT_NET_EN_NAME}} ALLOW IN {{CAMERA_SUBNET}}
 ```
 
 IPv6 companion rules for SSH, HTTP, HTTPS, DNS, DHCP, 8189, and 3702 are acceptable when UFW creates them automatically. The IPv4 ephemeral UDP reply rules are the critical libonvif discovery fix for the camera subnets above.
