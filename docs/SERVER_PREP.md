@@ -123,12 +123,10 @@ vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold", "CursorHo
 
 Fix .lock and .toml file icons
 
-Edit the icons.lua config file
-```
+The stock install of LazyVim lacks icons for these file extensions. To fix, edit the icons.lua config file
 
 ```
 nvim ~/.config/nvim/lua/plugins/icons.lua
-```
 ```
 
 Insert the following text into the file.

@@ -44,6 +44,10 @@ write_env_file() {
   tmp="$HOME/.onvif-mcp-http.env.$$"
   umask 077
   {
+    if [[ -f /etc/onvif-mcp-http.env ]]; then
+      # Preserve existing keys (e.g. SERVER_FQDN) written by earlier runbooks.
+      cat /etc/onvif-mcp-http.env
+    fi
     printf 'MCP_HTTP_HOST=127.0.0.1\n'
     printf 'MCP_HTTP_PORT=8001\n'
     printf 'SNAPSHOT_PROXY_HOST=127.0.0.1\n'

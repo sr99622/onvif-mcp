@@ -9,7 +9,7 @@ import logging
 from pathlib import Path
 import uvicorn
 from importlib.metadata import version as get_installed_version
-#from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.cors import CORSMiddleware
 #from starlette.requests import Request
 #from starlette.responses import StreamingResponse
 #from starlette.types import ASGIApp, Receive, Scope, Send
@@ -181,7 +181,6 @@ class PrivateNetworkAccessMiddleware:
 
 def main():
     app = mcp.streamable_http_app()
-    app.add_route("/events", event_stream, methods=["GET"])
     app.add_middleware(PrivateNetworkAccessMiddleware)
     app.add_middleware(
         CORSMiddleware,
