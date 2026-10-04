@@ -67,20 +67,31 @@ write_routes() {
   sudo install -d -o root -g root -m 0755 /etc/onvif-mcp
   tmp="$HOME/.snapshot_routes.json.$$"
   python3 - "$server_fqdn" > "$tmp" <<'PY'
-import json, sys, urllib.request
+import json, os, sys, urllib.request
 server=sys.argv[1]
+# OAuth bearer token from the Hermes MCP token file (never printed).
+token_path = os.path.expanduser('~/.hermes/mcp-tokens/camera.json')
+bearer = ''
+if os.path.exists(token_path):
+    with open(token_path) as f:
+        bearer = json.load(f).get('access_token', '')
+def hdrs(sid=None):
+    h = {'Content-Type':'application/json','Accept':'text/event-stream, application/json'}
+    if sid: h['mcp-session-id'] = sid
+    if bearer: h['Authorization'] = f'Bearer {bearer}'
+    return h
 def mcp_call(name, args=None):
-    url=f'http://{server}/mcp'
+    url=f'https://{server}/mcp'
     init={"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"snapshot-runbook","version":"1"}}}
-    req=urllib.request.Request(url, data=json.dumps(init).encode(), headers={'Content-Type':'application/json','Accept':'text/event-stream, application/json'}, method='POST')
+    req=urllib.request.Request(url, data=json.dumps(init).encode(), headers=hdrs(), method='POST')
     with urllib.request.urlopen(req, timeout=60) as r:
         sid=r.headers.get('mcp-session-id'); r.read()
     try:
         note={"jsonrpc":"2.0","method":"notifications/initialized"}
-        urllib.request.urlopen(urllib.request.Request(url, data=json.dumps(note).encode(), headers={'Content-Type':'application/json','Accept':'text/event-stream, application/json','mcp-session-id':sid}, method='POST'), timeout=30).read()
+        urllib.request.urlopen(urllib.request.Request(url, data=json.dumps(note).encode(), headers=hdrs(sid), method='POST'), timeout=30).read()
     except Exception: pass
     payload={"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":name,"arguments":args or {}}}
-    with urllib.request.urlopen(urllib.request.Request(url, data=json.dumps(payload).encode(), headers={'Content-Type':'application/json','Accept':'text/event-stream, application/json','mcp-session-id':sid}, method='POST'), timeout=180) as r:
+    with urllib.request.urlopen(urllib.request.Request(url, data=json.dumps(payload).encode(), headers=hdrs(sid), method='POST'), timeout=180) as r:
         body=r.read().decode()
     data='\n'.join(line[5:].strip() for line in body.splitlines() if line.startswith('data:'))
     return json.loads(data)['result']['content'][0]['text']

@@ -8,6 +8,36 @@ The first part of the document describes useful but not critical steps, the [**E
 
 **NOTE**: The document assumes that all commands are run from the $HOME directory.
 
+## Short Version
+
+```
+
+sudo apt install git curl tar xz-utils build-essential ripgrep wl-clipboard xclip xsel openssh-server -y
+sudo systemctl enable --now ssh
+git clone https://github.com/sr99622/onvif-mcp
+sudo env USER="$USER" onvif-mcp/scripts/enable-nopasswd.sh
+git config --global core.editor "nvim"
+git config --global user.email "sr99622@gmail.com"
+git config --global user.name "Stephen Rhodes"
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source .bashrc
+uv
+wget -P ~/.local/share/fonts https://github.com/ryanoasis/nerd-fonts/releases/download/v3.0.2/JetBrainsMono.zip && cd ~/.local/share/fonts && unzip JetBrainsMono.zip && rm JetBrainsMono.zip
+cd
+fc-cache -f -v 
+exit
+curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.tar.gz
+sudo rm -rf /opt/nvim-linux-x86_64
+sudo tar -C /opt -xzf nvim-linux-x86_64.tar.gz
+vi .bashrc
+source .bashrc
+git clone https://github.com/LazyVim/starter ~/.config/nvim
+rm -rf ~/.config/nvim.git
+nvim
+nvim .config/nvim/init.lua
+nvim ~/.config/nvim/lua/plugins/icons.lua
+```
+
 ## Install git
 
 We will need git for next steps, so install and configure.
@@ -237,12 +267,4 @@ sudo env USER="$USER" onvif-mcp/scripts/enable-nopasswd.sh
 curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
 ```
 
-Once the installation is complete run 
-
-```
-hermes setup tools
-``` 
-
-and enable browser automation.
- 
 Reboot the machine to verify that settings are correct and survive reboot.

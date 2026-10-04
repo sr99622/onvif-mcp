@@ -84,6 +84,8 @@ Acceptance checks:
 
 ## 3. Camera-Side Acceptance
 
+**Important** It may take a few minutes for all cameras to absorb DHCP settings and become responsive on the network. Wait before checking for cameras so that they have time to initialize.
+
 A client attached to the isolated camera network should:
 
 - Receive an address between `10.2.2.100` and `10.2.2.200`.
