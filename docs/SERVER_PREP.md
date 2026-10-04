@@ -121,6 +121,32 @@ vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold", "CursorHo
 })
 ```
 
+Fix .lock and .toml file icons
+
+Edit the icons.lua config file
+```
+
+```
+nvim ~/.config/nvim/lua/plugins/icons.lua
+```
+```
+
+Insert the following text into the file.
+
+```
+return {
+  {
+    "nvim-mini/mini.icons",
+    opts = {
+      extension = {
+        toml = { glyph = "", hl = "MiniIconsGrey" },
+        lock = { glyph = "", hl = "MiniIconsBlue" },
+      },
+    },
+  },
+}
+```
+
 ## Install tmux
 
 tmux lets you split the screen into different prompts. This makes it super easy to run multiple prompts from the remote terminal.

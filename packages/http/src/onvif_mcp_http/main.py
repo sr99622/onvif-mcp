@@ -9,14 +9,14 @@ import logging
 from pathlib import Path
 import uvicorn
 from importlib.metadata import version as get_installed_version
-from starlette.middleware.cors import CORSMiddleware
-from starlette.requests import Request
-from starlette.responses import StreamingResponse
-from starlette.types import ASGIApp, Receive, Scope, Send
+#from starlette.middleware.cors import CORSMiddleware
+#from starlette.requests import Request
+#from starlette.responses import StreamingResponse
+#from starlette.types import ASGIApp, Receive, Scope, Send
 from pydantic import AnyHttpUrl, BaseModel
 from mcp.server.fastmcp import FastMCP, Context
 from mcp.server.auth.settings import AuthSettings
-from mcp.server.elicitation import AcceptedElicitation, DeclinedElicitation, CancelledElicitation
+#from mcp.server.elicitation import AcceptedElicitation, DeclinedElicitation, CancelledElicitation
 from mcp.server.transport_security import TransportSecuritySettings
 from onvif_mcp_http.auth import JWTVerifier
 from onvif_mcp_core.camera_queries import get_adapters as get_adapters_query
@@ -30,7 +30,6 @@ from onvif_mcp_core.tools import (
     register_video_configuration_tools,
 )
 
-
 LOG_FILE = Path(__file__).parent / "camera_events.log"
 
 logging.basicConfig(
@@ -41,53 +40,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-# --- Event listener integration ---
-# Bridges the standalone motion_watcher.py prototype (packages/sse) into
-# this server, generalized to "event listener" since future work will
-# subscribe to event topics beyond just motion. All cameras share ONE
-# EventServer (ONVIF push events are just an HTTP POST to whatever URL a
-# camera was told during Subscribe - nothing about the protocol requires
-# a separate listener per camera), created on first use by whichever
-# camera adds its first subscribed event. Each camera gets its own
-# SubscriptionManager, since subscriptions (and their resubscribe
-# timers) are inherently per-camera.
-
-EVENT_SERVER_PORT = int(os.environ.get("EVENT_SERVER_PORT", "8856"))
-SNAPSHOT_DIR = Path(__file__).parent / "snapshots"
-OPENCLAW_HOOK_URL = os.environ.get("OPENCLAW_HOOK_URL", "http://127.0.0.1:18789/hooks/camera-motion")
-OPENCLAW_HOOK_TOKEN = os.environ.get("OPENCLAW_HOOK_TOKEN", "")
-# Home-relative subdirectory OpenClaw uses as its own workspace folder for
-# camera snapshots/descriptions. Motion-event snapshots are now written
-# directly here by _on_event_listener_event (see CAMERA_EVENTS_DIR below)
-# instead of camera.py's own SNAPSHOT_DIR, so there is exactly one capture
-# per event, taken at alarm time, and OpenClaw's `read` tool loads those
-# same bytes rather than re-querying the camera itself several seconds
-# later once its own reasoning gets around to a download step. OpenClaw's
-# own tools already resolve "~" against this same machine's home
-# directory (confirmed via trajectory review), so using "~" in both the
-# path we write to and the path we tell OpenClaw to read needs no
-# $WORKSPACE_DIR substitution or other coordination.
-OPENCLAW_SNAPSHOT_SUBDIR = "onvif-events"
-CAMERA_EVENTS_DIR = Path(os.path.expanduser(f"~/{OPENCLAW_SNAPSHOT_SUBDIR}"))
-
-# The one shared EventServer instance, or None until the first camera
-# adds a subscribed event. Created by _ensure_camera_subscription_entry.
-_event_server = None
-
-# Per-camera state, keyed by IP address: {"camera": Camera, "subscription_manager": SubscriptionManager}.
-# Populated lazily, the first time a given camera's subscriptions are
-# touched. The Camera object here is queried once and then reused
-# across resyncs (its subscription_references list is what actually
-# tracks live ONVIF subscriptions) - it is NOT refreshed automatically,
-# so if a camera's IP/credentials/xaddr genuinely change, its entry here
-# would need to be rebuilt (not handled yet - a later concern).
-_camera_subscriptions: dict[str, dict] = {}
-
-# In-memory store, keyed by camera IP address, for the set of event
-# topics the user wants that camera marked for observation on. Kept
-# deliberately separate from _event_server/_camera_subscriptions above:
-# those track live ONVIF subscription state (built lazily, in memory
-# only), while this needs to hold user preferences for potentially many
 MCP_OAUTH_ENABLED = os.environ.get("MCP_OAUTH_ENABLED", "").lower() in {
     "1",
     "true",
@@ -168,26 +120,6 @@ class TripTypeResponse(BaseModel):
     value: str
 
 @mcp.tool()
-async def example_elicit_tool(context: Context) -> str:
-    """
-    Example tool that asks the user a question via MCP elicitation, to
-    test whether a given client (e.g. llama.cpp's web UI) implements the
-    client side of the elicitation flow - Claude Desktop returned
-    "Method not found" when this was tried there.
-    """
-    result = await context.elicit(
-        message="What type of trip are you planning? Options: business, leisure, family, adventure",
-        schema=TripTypeResponse,
-    )
-    if isinstance(result, AcceptedElicitation):
-        return result.data.value
-    elif isinstance(result, DeclinedElicitation):
-        return "DECLINED"
-    elif isinstance(result, CancelledElicitation):
-        return "CANCELLED"
-    return "INVALID RESPONSE"
-
-@mcp.tool()
 async def get_camera_mcp_version() -> str:
     """
     Get the version of the camera application, along with the version of the
@@ -221,9 +153,6 @@ async def get_camera_mcp_version() -> str:
         "libonvif_version": libonvif_version,
     }, indent=4)
 
-
-
-
 class PrivateNetworkAccessMiddleware:
     """
     Adds the Access-Control-Allow-Private-Network header some Chromium
@@ -249,31 +178,6 @@ class PrivateNetworkAccessMiddleware:
             await send(message)
 
         await self.app(scope, receive, send_wrapper)
-
-
-async def event_stream(request: Request) -> StreamingResponse:
-    """
-    ** PLEASE DO NOT USE THIS TOOL IT IS FOR REFERENCE ONLY **
-
-    Plain Server-Sent Events endpoint, independent of the MCP protocol -
-    just a raw text/event-stream that emits one tick every 5 seconds.
-    Built to test/observe the SSE mechanism itself directly (e.g. via
-    curl -N http://127.0.0.1:8000/events, or a browser EventSource),
-    separate from anything MCP-specific like tool calls or sessions.
-    """
-
-    async def generator():
-        count = 0
-        try:
-            while True:
-                await asyncio.sleep(5)
-                count += 1
-                yield f"data: tick {count} at {datetime.now().isoformat()}\n\n"
-        except asyncio.CancelledError:
-            pass
-
-    return StreamingResponse(generator(), media_type="text/event-stream")
-
 
 def main():
     app = mcp.streamable_http_app()
