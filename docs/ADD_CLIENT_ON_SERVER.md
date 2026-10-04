@@ -83,16 +83,6 @@ scripts/ADD_CLIENT_ON_SERVER/add_client_on_server_runbook.sh apply \
   --repo-path {{REPO_PATH}}
 ```
 
-For this deployment, the resolved command is:
-
-```bash
-cd /home/stephen/onvif-mcp
-scripts/ADD_CLIENT_ON_SERVER/add_client_on_server_runbook.sh apply \
-  --client-source-ip 10.1.1.4 \
-  --backup-path /mnt/camera-backup/ \
-  --repo-path /home/stephen
-```
-
 The script performs these executable stages:
 
 1. Validates `{{CLIENT_SOURCE_IP}}` as an IP address.
@@ -119,14 +109,6 @@ The script performs these executable stages:
 cd {{REPO_PATH}}/onvif-mcp
 scripts/ADD_CLIENT_ON_SERVER/add_client_on_server_runbook.sh status \
   --client-source-ip {{CLIENT_SOURCE_IP}}
-```
-
-For this deployment:
-
-```bash
-cd /home/stephen/onvif-mcp
-scripts/ADD_CLIENT_ON_SERVER/add_client_on_server_runbook.sh status \
-  --client-source-ip 10.1.1.4
 ```
 
 Required outcomes before handing back to the client:

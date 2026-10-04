@@ -14,27 +14,82 @@ Secrets are generated into root-owned files and are never printed.
 USAGE
 }
 
-cmd="${1:-}"; [[ -n "$cmd" ]] || { usage; exit 64; }
-[[ "$cmd" == "-h" || "$cmd" == "--help" ]] && { usage; exit 0; }
+cmd="${1:-}"
+[[ -n "$cmd" ]] || {
+  usage
+  exit 64
+}
+[[ "$cmd" == "-h" || "$cmd" == "--help" ]] && {
+  usage
+  exit 0
+}
 shift || true
-server_fqdn=""; backup_path=""; repo_path="/home/stephen"; admin_user="keycloak-admin"; realm="mcp"; scope="mcp:tools"; login_user="mcp-user"; hermes_home="$HOME/.hermes"; mcp_name="camera"
+server_fqdn=""
+backup_path=""
+repo_path="$HOME"
+admin_user="keycloak-admin"
+realm="mcp"
+scope="mcp:tools"
+login_user="mcp-user"
+hermes_home="$HOME/.hermes"
+mcp_name="camera"
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --server-fqdn) server_fqdn="${2:?missing --server-fqdn value}"; shift 2 ;;
-    --backup-path) backup_path="${2:?missing --backup-path value}"; shift 2 ;;
-    --repo-path) repo_path="${2:?missing --repo-path value}"; shift 2 ;;
-    --admin-user) admin_user="${2:?missing --admin-user value}"; shift 2 ;;
-    --realm) realm="${2:?missing --realm value}"; shift 2 ;;
-    --scope) scope="${2:?missing --scope value}"; shift 2 ;;
-    --login-user) login_user="${2:?missing --login-user value}"; shift 2 ;;
-    --hermes-home) hermes_home="${2:?missing --hermes-home value}"; shift 2 ;;
-    --mcp-name) mcp_name="${2:?missing --mcp-name value}"; shift 2 ;;
-    -h|--help) usage; exit 0 ;;
-    *) echo "Unknown argument: $1" >&2; usage >&2; exit 64 ;;
+  --server-fqdn)
+    server_fqdn="${2:?missing --server-fqdn value}"
+    shift 2
+    ;;
+  --backup-path)
+    backup_path="${2:?missing --backup-path value}"
+    shift 2
+    ;;
+  --repo-path)
+    repo_path="${2:?missing --repo-path value}"
+    shift 2
+    ;;
+  --admin-user)
+    admin_user="${2:?missing --admin-user value}"
+    shift 2
+    ;;
+  --realm)
+    realm="${2:?missing --realm value}"
+    shift 2
+    ;;
+  --scope)
+    scope="${2:?missing --scope value}"
+    shift 2
+    ;;
+  --login-user)
+    login_user="${2:?missing --login-user value}"
+    shift 2
+    ;;
+  --hermes-home)
+    hermes_home="${2:?missing --hermes-home value}"
+    shift 2
+    ;;
+  --mcp-name)
+    mcp_name="${2:?missing --mcp-name value}"
+    shift 2
+    ;;
+  -h | --help)
+    usage
+    exit 0
+    ;;
+  *)
+    echo "Unknown argument: $1" >&2
+    usage >&2
+    exit 64
+    ;;
   esac
 done
 
-require_arg() { local name="$1" value="$2"; [[ -n "$value" ]] || { echo "Missing required argument: $name" >&2; exit 64; }; }
+require_arg() {
+  local name="$1" value="$2"
+  [[ -n "$value" ]] || {
+    echo "Missing required argument: $name" >&2
+    exit 64
+  }
+}
 project_dir() { printf '%s/onvif-mcp' "${repo_path%/}"; }
 public_url() { printf 'https://%s/auth' "$server_fqdn"; }
 issuer() { printf 'https://%s/auth/realms/%s' "$server_fqdn" "$realm"; }
@@ -48,7 +103,10 @@ wait_keycloak() {
   local url="http://127.0.0.1:8080/auth/realms/master/.well-known/openid-configuration" code=""
   for _ in $(seq 1 60); do
     code="$(curl -sS -o /dev/null -w '%{http_code}' "$url" || true)"
-    [[ "$code" == "200" ]] && { echo "keycloak-ready HTTP 200"; return 0; }
+    [[ "$code" == "200" ]] && {
+      echo "keycloak-ready HTTP 200"
+      return 0
+    }
     sleep 3
   done
   echo "Keycloak did not become ready; last HTTP $code" >&2
@@ -189,7 +247,10 @@ configure_realm() {
   allowed_id="$(python3 -c 'import json,sys; d=json.loads(sys.argv[1]); print(next((x["id"] for x in d if x.get("subType")=="anonymous" and x.get("providerId")=="allowed-client-templates"), ""))' "$policies_json")"
   trusted_id="$(python3 -c 'import json,sys; d=json.loads(sys.argv[1]); print(next((x["id"] for x in d if x.get("subType")=="anonymous" and x.get("providerId")=="trusted-hosts"), ""))' "$policies_json")"
   max_id="$(python3 -c 'import json,sys; d=json.loads(sys.argv[1]); print(next((x["id"] for x in d if x.get("subType")=="anonymous" and x.get("providerId")=="max-clients"), ""))' "$policies_json")"
-  [[ -n "$allowed_id" && -n "$trusted_id" && -n "$max_id" ]] || { echo "Required anonymous DCR policy IDs not found" >&2; exit 1; }
+  [[ -n "$allowed_id" && -n "$trusted_id" && -n "$max_id" ]] || {
+    echo "Required anonymous DCR policy IDs not found" >&2
+    exit 1
+  }
   if ! kc_exec update "components/$allowed_id" --config /tmp/kcadm.config -r "$realm" -s "config={\"allowed-client-scopes\":[\"$scope\"],\"allow-default-scopes\":[\"true\"]}"; then
     echo "kcadm rejected allowed-client-scopes; applying equivalent component_config rows directly" >&2
     sudo docker compose --project-directory /opt/keycloak exec -i postgres psql --username=keycloak --dbname=keycloak --set=ON_ERROR_STOP=1 --command="DELETE FROM component_config WHERE component_id='$allowed_id' AND name IN ('allowed-client-scopes','allow-default-scopes'); INSERT INTO component_config (id, component_id, name, value) VALUES (md5(random()::text || clock_timestamp()::text), '$allowed_id', 'allowed-client-scopes', '$scope'), (md5(random()::text || clock_timestamp()::text), '$allowed_id', 'allow-default-scopes', 'true');"
@@ -207,8 +268,9 @@ configure_nginx() {
   local site=""
   local effective
   effective="$(mktemp "${TMPDIR:-/tmp}/nginx-effective.XXXXXX")"
-  sudo nginx -T > "$effective" 2>/dev/null
-  site="$(python3 - "$server_fqdn" "$effective" <<'PY'
+  sudo nginx -T >"$effective" 2>/dev/null
+  site="$(
+    python3 - "$server_fqdn" "$effective" <<'PY'
 import re, sys
 fqdn=sys.argv[1]
 path=sys.argv[2]
@@ -219,7 +281,7 @@ for line in open(path):
     if f'server_name {fqdn}' in line and cur and '/conf.d/' in cur:
         print(cur); break
 PY
-)"
+  )"
   rm -f "$effective"
   [[ -n "$site" ]] || site="/etc/nginx/conf.d/$server_fqdn.conf"
   sudo test -s "$site"
@@ -317,7 +379,10 @@ print(d.get('client_id') or '', file=open('/tmp/keycloak-dcr-client-id','w'))
 PY
   dcr_client_id="$(cat /tmp/keycloak-dcr-client-id)"
   internal_id="$(kc_exec get clients --config /tmp/kcadm.config -r "$realm" -q "clientId=$dcr_client_id" --fields id,clientId,name | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d[0]["id"] if d and d[0].get("name")=="temporary-dcr-verification" else "")')"
-  [[ -n "$internal_id" ]] || { echo "temporary DCR client not found by safe name check" >&2; exit 1; }
+  [[ -n "$internal_id" ]] || {
+    echo "temporary DCR client not found by safe name check" >&2
+    exit 1
+  }
   kc_exec delete "clients/$internal_id" --config /tmp/kcadm.config -r "$realm"
   rm -f /tmp/keycloak-dcr-test.json /tmp/keycloak-dcr-client-id
   test ! -e /tmp/keycloak-dcr-test.json
@@ -367,7 +432,8 @@ restore_test() {
 }
 
 configure_hermes() {
-  require_arg --server-fqdn "$server_fqdn"; require_arg --repo-path "$repo_path"
+  require_arg --server-fqdn "$server_fqdn"
+  require_arg --repo-path "$repo_path"
   mkdir -p "$hermes_home"
   python3 - "$hermes_home/config.yaml" "$mcp_name" "$(resource_url)" <<'PY'
 from pathlib import Path
@@ -435,7 +501,8 @@ PY
 }
 
 headless_hermes_login() {
-  require_arg --server-fqdn "$server_fqdn"; require_arg --repo-path "$repo_path"
+  require_arg --server-fqdn "$server_fqdn"
+  require_arg --repo-path "$repo_path"
   local real_home="${HOME}/.hermes" isolated_home login_log auth_url login_pid token_dir
   isolated_home="${hermes_home%/}-login"
   login_log="$(mktemp)"
@@ -452,19 +519,26 @@ headless_hermes_login() {
 
   for _ in $(seq 1 600); do
     if ! kill -0 "$login_pid" 2>/dev/null; then
-      wait "$login_pid" || { sed -n '1,200p' "$login_log" >&2; exit 1; }
+      wait "$login_pid" || {
+        sed -n '1,200p' "$login_log" >&2
+        exit 1
+      }
       break
     fi
-    auth_url="$(python3 - "$login_log" <<'PY'
+    auth_url="$(
+      python3 - "$login_log" <<'PY'
 import re, sys
 text = open(sys.argv[1], encoding='utf-8', errors='replace').read()
 m = re.search(r'https://[^\s]+/auth/realms/[^\s]+/protocol/openid-connect/auth\?[^\s]+', text)
 print(m.group(0) if m else '')
 PY
-)"
+    )"
     if [[ -n "$auth_url" ]]; then
       python3 "$(project_dir)/scripts/kc-headless-login-driver.py" "$auth_url"
-      wait "$login_pid" || { sed -n '1,240p' "$login_log" >&2; exit 1; }
+      wait "$login_pid" || {
+        sed -n '1,240p' "$login_log" >&2
+        exit 1
+      }
       break
     fi
     sleep 1
@@ -490,7 +564,9 @@ PY
 }
 
 apply() {
-  require_arg --server-fqdn "$server_fqdn"; require_arg --backup-path "$backup_path"; require_arg --repo-path "$repo_path"
+  require_arg --server-fqdn "$server_fqdn"
+  require_arg --backup-path "$backup_path"
+  require_arg --repo-path "$repo_path"
   hostname --fqdn
   getent ahostsv4 "$server_fqdn"
   install_packages
@@ -521,9 +597,13 @@ status() {
 }
 
 case "$cmd" in
-  apply) apply ;;
-  configure-hermes) configure_hermes ;;
-  login-hermes) headless_hermes_login ;;
-  status) status ;;
-  *) echo "Unknown command: $cmd" >&2; usage >&2; exit 64 ;;
+apply) apply ;;
+configure-hermes) configure_hermes ;;
+login-hermes) headless_hermes_login ;;
+status) status ;;
+*)
+  echo "Unknown command: $cmd" >&2
+  usage >&2
+  exit 64
+  ;;
 esac

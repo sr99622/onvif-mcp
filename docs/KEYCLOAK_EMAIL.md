@@ -41,8 +41,8 @@ not the Gmail account's main password. Do not paste either password into Hermes.
 Resolved command for this deployment:
 
 ```bash
-cd /home/stephen/onvif-mcp
-sudo /home/stephen/onvif-mcp/scripts/KEYCLOAK_EMAIL/keycloak_email_runbook.sh user-store-password
+cd $HOME/onvif-mcp
+sudo $HOME/onvif-mcp/scripts/KEYCLOAK_EMAIL/keycloak_email_runbook.sh user-store-password
 ```
 
 The script creates `/opt/keycloak/gmail-smtp.pass` as `0600 root:root` and never

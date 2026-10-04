@@ -96,14 +96,14 @@ password={{SMB_PASSWORD}}
 
 Add `domain=...` only if this Samba server requires it. Do not copy the old mount's credentials without confirming they belong to the new share account. Do not use `install -m 0600 /dev/null` on this file: that erases saved credentials. Do not print or paste the password into commands or chat.
 
-Create the mount point if it does not already exist, obtain stephen's local numeric IDs, and open fstab:
+Create the mount point if it does not already exist, obtain $USER local numeric IDs, and open fstab:
 
 ```bash
 if [ ! -d {{SMB_MOUNT}} ]; then
     sudo install -d -m 0700 {{SMB_MOUNT}}
 fi
-id -u stephen
-id -g stephen
+id -u $USER
+id -g $USER
 sudoedit /etc/fstab
 ```
 
@@ -153,7 +153,7 @@ Continue with section 3 to verify writing and server-side permissions.
 
 ## 3. Test with harmless files before moving any secrets
 
-On the camera host, as `stephen`, create the backup directory and a temporary empty file. Keep the printed filename for the server-side check. The trap removes the probe at shell exit.
+On the camera host, as `$USER`, create the backup directory and a temporary empty file. Keep the printed filename for the server-side check. The trap removes the probe at shell exit.
 
 ```bash
 umask 077

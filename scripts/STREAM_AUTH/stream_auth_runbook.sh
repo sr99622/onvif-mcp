@@ -12,27 +12,84 @@ Secrets are generated/read only inside root-controlled processes and are never p
 USAGE
 }
 
-cmd="${1:-}"; [[ -n "$cmd" ]] || { usage; exit 64; }
-[[ "$cmd" == "-h" || "$cmd" == "--help" ]] && { usage; exit 0; }
+cmd="${1:-}"
+[[ -n "$cmd" ]] || {
+  usage
+  exit 64
+}
+[[ "$cmd" == "-h" || "$cmd" == "--help" ]] && {
+  usage
+  exit 0
+}
 shift || true
-server_fqdn=""; server_ip=""; backup_path=""; repo_path="/home/stephen"; realm="mcp"; login_user="mcp-user"; browser_client_id="camera-web"; compose_dir="/opt/keycloak"; nginx_site=""; snapshot_path="/snapshot/4B0013BPAABE264/MediaProfile000/"; hermes_name="camera"
+server_fqdn=""
+server_ip=""
+backup_path=""
+repo_path="$HOME"
+realm="mcp"
+login_user="mcp-user"
+browser_client_id="camera-web"
+compose_dir="/opt/keycloak"
+nginx_site=""
+snapshot_path="/snapshot/4B0013BPAABE264/MediaProfile000/"
+hermes_name="camera"
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --server-fqdn) server_fqdn="${2:?missing --server-fqdn value}"; shift 2 ;;
-    --server-ip) server_ip="${2:?missing --server-ip value}"; shift 2 ;;
-    --backup-path) backup_path="${2:?missing --backup-path value}"; shift 2 ;;
-    --repo-path) repo_path="${2:?missing --repo-path value}"; shift 2 ;;
-    --realm) realm="${2:?missing --realm value}"; shift 2 ;;
-    --login-user) login_user="${2:?missing --login-user value}"; shift 2 ;;
-    --browser-client-id) browser_client_id="${2:?missing --browser-client-id value}"; shift 2 ;;
-    --snapshot-path) snapshot_path="${2:?missing --snapshot-path value}"; shift 2 ;;
-    --hermes-name) hermes_name="${2:?missing --hermes-name value}"; shift 2 ;;
-    -h|--help) usage; exit 0 ;;
-    *) echo "Unknown argument: $1" >&2; usage >&2; exit 64 ;;
+  --server-fqdn)
+    server_fqdn="${2:?missing --server-fqdn value}"
+    shift 2
+    ;;
+  --server-ip)
+    server_ip="${2:?missing --server-ip value}"
+    shift 2
+    ;;
+  --backup-path)
+    backup_path="${2:?missing --backup-path value}"
+    shift 2
+    ;;
+  --repo-path)
+    repo_path="${2:?missing --repo-path value}"
+    shift 2
+    ;;
+  --realm)
+    realm="${2:?missing --realm value}"
+    shift 2
+    ;;
+  --login-user)
+    login_user="${2:?missing --login-user value}"
+    shift 2
+    ;;
+  --browser-client-id)
+    browser_client_id="${2:?missing --browser-client-id value}"
+    shift 2
+    ;;
+  --snapshot-path)
+    snapshot_path="${2:?missing --snapshot-path value}"
+    shift 2
+    ;;
+  --hermes-name)
+    hermes_name="${2:?missing --hermes-name value}"
+    shift 2
+    ;;
+  -h | --help)
+    usage
+    exit 0
+    ;;
+  *)
+    echo "Unknown argument: $1" >&2
+    usage >&2
+    exit 64
+    ;;
   esac
 done
 
-require_arg() { local name="$1" value="$2"; [[ -n "$value" ]] || { echo "Missing required argument: $name" >&2; exit 64; }; }
+require_arg() {
+  local name="$1" value="$2"
+  [[ -n "$value" ]] || {
+    echo "Missing required argument: $name" >&2
+    exit 64
+  }
+}
 project_dir() { printf '%s/onvif-mcp' "${repo_path%/}"; }
 origin() { printf 'https://%s' "$server_fqdn"; }
 issuer() { printf 'https://%s/auth/realms/%s' "$server_fqdn" "$realm"; }
@@ -64,7 +121,9 @@ PY
 }
 
 preflight() {
-  require_arg --server-fqdn "$server_fqdn"; require_arg --server-ip "$server_ip"; resolve_nginx_site
+  require_arg --server-fqdn "$server_fqdn"
+  require_arg --server-ip "$server_ip"
+  resolve_nginx_site
   sudo docker compose --project-directory "$compose_dir" ps
   sudo systemctl is-active nginx mediamtx onvif-mcp-http.service snapshot-proxy.service >/dev/null
   if sudo ss -ltnp | grep -E '127\.0\.0\.1:4180\b' >/dev/null && ! sudo docker compose --project-directory "$compose_dir" ps oauth2-proxy 2>/dev/null | grep -q 'Up'; then
@@ -93,7 +152,8 @@ PY
 }
 
 prepare_user_and_client() {
-  local tokfile; tokfile="$(mktemp "${TMPDIR:-/tmp}/kc-token.XXXXXX")"
+  local tokfile
+  tokfile="$(mktemp "${TMPDIR:-/tmp}/kc-token.XXXXXX")"
   admin_token_to_file "$tokfile"
   sudo python3 - "$tokfile" "$server_fqdn" "$realm" "$login_user" "$browser_client_id" <<'PY'
 import json, pathlib, sys, urllib.parse, urllib.request, urllib.error
@@ -172,7 +232,8 @@ PY
 }
 
 store_oauth2_secrets() {
-  local tokfile; tokfile="$(mktemp "${TMPDIR:-/tmp}/kc-token.XXXXXX")"
+  local tokfile
+  tokfile="$(mktemp "${TMPDIR:-/tmp}/kc-token.XXXXXX")"
   admin_token_to_file "$tokfile"
   sudo python3 - "$tokfile" "$realm" "$browser_client_id" <<'PY'
 import base64, json, os, pathlib, secrets, sys, urllib.parse, urllib.request, urllib.error
@@ -377,11 +438,17 @@ verify_unauth() {
   for path in "${paths[@]}"; do
     out="$(curl -sS -o /dev/null -w "%{http_code} %{redirect_url}" "https://$server_fqdn${path}")"
     echo "$path HTTP $out"
-    [[ "$out" == 302*oauth2/start* ]] || { echo "expected login redirect for $path" >&2; exit 1; }
+    [[ "$out" == 302*oauth2/start* ]] || {
+      echo "expected login redirect for $path" >&2
+      exit 1
+    }
   done
   out="$(curl -sS -o /dev/null -w '%{http_code} %{redirect_url}' "http://$server_fqdn${snapshot_path}")"
   echo "Snapshot HTTP: $out"
-  [[ "$out" == 301*"https://$server_fqdn${snapshot_path}"* || "$out" == 302*"https://$server_fqdn${snapshot_path}"* ]] || { echo "HTTP snapshot did not redirect to HTTPS" >&2; exit 1; }
+  [[ "$out" == 301*"https://$server_fqdn${snapshot_path}"* || "$out" == 302*"https://$server_fqdn${snapshot_path}"* ]] || {
+    echo "HTTP snapshot did not redirect to HTTPS" >&2
+    exit 1
+  }
   curl -sS -o /dev/null -w 'start: HTTP %{http_code} redirect=%{redirect_url}\n' "https://$server_fqdn/oauth2/start?rd=/cameras/" | grep -E 'HTTP 302 redirect=.*/auth/realms/.*/protocol/openid-connect/auth' >/dev/null
   curl -sS -o /dev/null -w 'discovery: HTTP %{http_code}\n' "$(issuer)/.well-known/openid-configuration" | grep -F 'HTTP 200'
   curl -sS -D /tmp/stream-auth-mcp.headers -o /dev/null "$(resource_url)"
@@ -401,7 +468,10 @@ checkpoints() {
 }
 
 apply() {
-  require_arg --server-fqdn "$server_fqdn"; require_arg --server-ip "$server_ip"; require_arg --backup-path "$backup_path"; require_arg --repo-path "$repo_path"
+  require_arg --server-fqdn "$server_fqdn"
+  require_arg --server-ip "$server_ip"
+  require_arg --backup-path "$backup_path"
+  require_arg --repo-path "$repo_path"
   preflight
   prepare_user_and_client
   store_oauth2_secrets
@@ -430,7 +500,11 @@ status() {
 }
 
 case "$cmd" in
-  apply) apply ;;
-  status) status ;;
-  *) echo "Unknown command: $cmd" >&2; usage >&2; exit 64 ;;
+apply) apply ;;
+status) status ;;
+*)
+  echo "Unknown command: $cmd" >&2
+  usage >&2
+  exit 64
+  ;;
 esac

@@ -12,27 +12,79 @@ Creates or resumes a human Keycloak user invited by email. No password input is 
 USAGE
 }
 
-cmd="${1:-}"; [[ -n "$cmd" ]] || { usage; exit 64; }
-[[ "$cmd" == "-h" || "$cmd" == "--help" ]] && { usage; exit 0; }
+cmd="${1:-}"
+[[ -n "$cmd" ]] || {
+  usage
+  exit 64
+}
+[[ "$cmd" == "-h" || "$cmd" == "--help" ]] && {
+  usage
+  exit 0
+}
 shift || true
 
-new_login_user=""; first_name=""; last_name=""; user_email=""; server_fqdn=""; backup_path=""; repo_path="/home/stephen"; realm="mcp"; admin_user="keycloak-admin"
+new_login_user=""
+first_name=""
+last_name=""
+user_email=""
+server_fqdn=""
+backup_path=""
+repo_path="$HOME"
+realm="mcp"
+admin_user="keycloak-admin"
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --new-login-user) new_login_user="${2:?missing --new-login-user value}"; shift 2 ;;
-    --first-name) first_name="${2:?missing --first-name value}"; shift 2 ;;
-    --last-name) last_name="${2:?missing --last-name value}"; shift 2 ;;
-    --user-email) user_email="${2:?missing --user-email value}"; shift 2 ;;
-    --server-fqdn) server_fqdn="${2:?missing --server-fqdn value}"; shift 2 ;;
-    --backup-path) backup_path="${2:?missing --backup-path value}"; shift 2 ;;
-    --repo-path) repo_path="${2:?missing --repo-path value}"; shift 2 ;;
-    --realm) realm="${2:?missing --realm value}"; shift 2 ;;
-    -h|--help) usage; exit 0 ;;
-    *) echo "Unknown argument: $1" >&2; usage >&2; exit 64 ;;
+  --new-login-user)
+    new_login_user="${2:?missing --new-login-user value}"
+    shift 2
+    ;;
+  --first-name)
+    first_name="${2:?missing --first-name value}"
+    shift 2
+    ;;
+  --last-name)
+    last_name="${2:?missing --last-name value}"
+    shift 2
+    ;;
+  --user-email)
+    user_email="${2:?missing --user-email value}"
+    shift 2
+    ;;
+  --server-fqdn)
+    server_fqdn="${2:?missing --server-fqdn value}"
+    shift 2
+    ;;
+  --backup-path)
+    backup_path="${2:?missing --backup-path value}"
+    shift 2
+    ;;
+  --repo-path)
+    repo_path="${2:?missing --repo-path value}"
+    shift 2
+    ;;
+  --realm)
+    realm="${2:?missing --realm value}"
+    shift 2
+    ;;
+  -h | --help)
+    usage
+    exit 0
+    ;;
+  *)
+    echo "Unknown argument: $1" >&2
+    usage >&2
+    exit 64
+    ;;
   esac
 done
 
-require_arg() { local name="$1" value="$2"; [[ -n "$value" ]] || { echo "Missing required argument: $name" >&2; exit 64; }; }
+require_arg() {
+  local name="$1" value="$2"
+  [[ -n "$value" ]] || {
+    echo "Missing required argument: $name" >&2
+    exit 64
+  }
+}
 project_dir() { printf '%s/onvif-mcp' "${repo_path%/}"; }
 issuer() { printf 'https://%s/auth/realms/%s' "$server_fqdn" "$realm"; }
 backup_script() { printf '%s/scripts/KEYCLOAK_BACKUP/keycloak_backup_runbook.sh' "$(project_dir)"; }
@@ -87,8 +139,12 @@ PY
 create_checkpoint() {
   local trigger="$1"
   require_arg --backup-path "$backup_path"
-  local script; script="$(backup_script)"
-  [[ -x "$script" ]] || { echo "Missing executable backup script: $script" >&2; exit 1; }
+  local script
+  script="$(backup_script)"
+  [[ -x "$script" ]] || {
+    echo "Missing executable backup script: $script" >&2
+    exit 1
+  }
   "$script" create-checkpoint --backup-path "$backup_path" --trigger "$trigger"
 }
 
@@ -289,7 +345,7 @@ write_report() {
     echo "Realm: $realm"
     echo "Invitation lifespan seconds: 86400"
     echo "Status: invitation sent; onboarding pending until recipient confirms email and sets password"
-  } > "$report"
+  } >"$report"
   chmod 600 "$report"
   echo "report: $report"
 }
@@ -322,8 +378,12 @@ status_cmd() {
 }
 
 case "$cmd" in
-  apply) apply ;;
-  resend) resend ;;
-  status) status_cmd ;;
-  *) echo "Unknown command: $cmd" >&2; usage >&2; exit 64 ;;
+apply) apply ;;
+resend) resend ;;
+status) status_cmd ;;
+*)
+  echo "Unknown command: $cmd" >&2
+  usage >&2
+  exit 64
+  ;;
 esac

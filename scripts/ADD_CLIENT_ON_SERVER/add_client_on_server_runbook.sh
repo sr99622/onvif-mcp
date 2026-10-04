@@ -12,23 +12,61 @@ mint/resolve/fetch/update/put/verify sequence runs inside one root Python proces
 USAGE
 }
 
-cmd="${1:-}"; [[ -n "$cmd" ]] || { usage; exit 64; }
-[[ "$cmd" == "-h" || "$cmd" == "--help" ]] && { usage; exit 0; }
+cmd="${1:-}"
+[[ -n "$cmd" ]] || {
+  usage
+  exit 64
+}
+[[ "$cmd" == "-h" || "$cmd" == "--help" ]] && {
+  usage
+  exit 0
+}
 shift || true
 
-client_source_ip=""; backup_path=""; repo_path="/home/stephen"; realm="mcp"; admin_user="keycloak-admin"; keycloak_port="8080"; keycloak_path="/auth"
+client_source_ip=""
+backup_path=""
+repo_path="$HOME"
+realm="mcp"
+admin_user="keycloak-admin"
+keycloak_port="8080"
+keycloak_path="/auth"
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --client-source-ip) client_source_ip="${2:?missing --client-source-ip value}"; shift 2 ;;
-    --backup-path) backup_path="${2:?missing --backup-path value}"; shift 2 ;;
-    --repo-path) repo_path="${2:?missing --repo-path value}"; shift 2 ;;
-    --realm) realm="${2:?missing --realm value}"; shift 2 ;;
-    -h|--help) usage; exit 0 ;;
-    *) echo "Unknown argument: $1" >&2; usage >&2; exit 64 ;;
+  --client-source-ip)
+    client_source_ip="${2:?missing --client-source-ip value}"
+    shift 2
+    ;;
+  --backup-path)
+    backup_path="${2:?missing --backup-path value}"
+    shift 2
+    ;;
+  --repo-path)
+    repo_path="${2:?missing --repo-path value}"
+    shift 2
+    ;;
+  --realm)
+    realm="${2:?missing --realm value}"
+    shift 2
+    ;;
+  -h | --help)
+    usage
+    exit 0
+    ;;
+  *)
+    echo "Unknown argument: $1" >&2
+    usage >&2
+    exit 64
+    ;;
   esac
 done
 
-require_arg() { local name="$1" value="$2"; [[ -n "$value" ]] || { echo "Missing required argument: $name" >&2; exit 64; }; }
+require_arg() {
+  local name="$1" value="$2"
+  [[ -n "$value" ]] || {
+    echo "Missing required argument: $name" >&2
+    exit 64
+  }
+}
 project_dir() { printf '%s/onvif-mcp' "${repo_path%/}"; }
 backup_script() { printf '%s/scripts/KEYCLOAK_BACKUP/keycloak_backup_runbook.sh' "$(project_dir)"; }
 artifact_dir() { printf '%s/scripts/ADD_CLIENT_ON_SERVER' "$(project_dir)"; }
@@ -57,8 +95,12 @@ preflight() {
 create_checkpoint() {
   local trigger="$1"
   require_arg --backup-path "$backup_path"
-  local script; script="$(backup_script)"
-  [[ -x "$script" ]] || { echo "Missing executable backup script: $script" >&2; exit 1; }
+  local script
+  script="$(backup_script)"
+  [[ -x "$script" ]] || {
+    echo "Missing executable backup script: $script" >&2
+    exit 1
+  }
   "$script" create-checkpoint --backup-path "$backup_path" --trigger "$trigger"
 }
 
@@ -236,7 +278,11 @@ status_cmd() {
 }
 
 case "$cmd" in
-  apply) apply ;;
-  status) status_cmd ;;
-  *) echo "Unknown command: $cmd" >&2; usage >&2; exit 64 ;;
+apply) apply ;;
+status) status_cmd ;;
+*)
+  echo "Unknown command: $cmd" >&2
+  usage >&2
+  exit 64
+  ;;
 esac

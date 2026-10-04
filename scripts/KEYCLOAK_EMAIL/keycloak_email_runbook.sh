@@ -13,24 +13,64 @@ The user-store-password subcommand is intentionally user-run in an interactive t
 USAGE
 }
 
-cmd="${1:-}"; [[ -n "$cmd" ]] || { usage; exit 64; }
-[[ "$cmd" == "-h" || "$cmd" == "--help" ]] && { usage; exit 0; }
+cmd="${1:-}"
+[[ -n "$cmd" ]] || {
+  usage
+  exit 64
+}
+[[ "$cmd" == "-h" || "$cmd" == "--help" ]] && {
+  usage
+  exit 0
+}
 shift || true
 
-gmail_address=""; server_fqdn=""; backup_path=""; repo_path="/home/stephen"; realm="mcp"; admin_user="keycloak-admin"
+gmail_address=""
+server_fqdn=""
+backup_path=""
+repo_path="$HOME"
+realm="mcp"
+admin_user="keycloak-admin"
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --gmail-address) gmail_address="${2:?missing --gmail-address value}"; shift 2 ;;
-    --server-fqdn) server_fqdn="${2:?missing --server-fqdn value}"; shift 2 ;;
-    --backup-path) backup_path="${2:?missing --backup-path value}"; shift 2 ;;
-    --repo-path) repo_path="${2:?missing --repo-path value}"; shift 2 ;;
-    --realm) realm="${2:?missing --realm value}"; shift 2 ;;
-    -h|--help) usage; exit 0 ;;
-    *) echo "Unknown argument: $1" >&2; usage >&2; exit 64 ;;
+  --gmail-address)
+    gmail_address="${2:?missing --gmail-address value}"
+    shift 2
+    ;;
+  --server-fqdn)
+    server_fqdn="${2:?missing --server-fqdn value}"
+    shift 2
+    ;;
+  --backup-path)
+    backup_path="${2:?missing --backup-path value}"
+    shift 2
+    ;;
+  --repo-path)
+    repo_path="${2:?missing --repo-path value}"
+    shift 2
+    ;;
+  --realm)
+    realm="${2:?missing --realm value}"
+    shift 2
+    ;;
+  -h | --help)
+    usage
+    exit 0
+    ;;
+  *)
+    echo "Unknown argument: $1" >&2
+    usage >&2
+    exit 64
+    ;;
   esac
 done
 
-require_arg() { local name="$1" value="$2"; [[ -n "$value" ]] || { echo "Missing required argument: $name" >&2; exit 64; }; }
+require_arg() {
+  local name="$1" value="$2"
+  [[ -n "$value" ]] || {
+    echo "Missing required argument: $name" >&2
+    exit 64
+  }
+}
 project_dir() { printf '%s/onvif-mcp' "${repo_path%/}"; }
 issuer() { printf 'https://%s/auth/realms/%s' "$server_fqdn" "$realm"; }
 backup_script() { printf '%s/scripts/KEYCLOAK_BACKUP/keycloak_backup_runbook.sh' "$(project_dir)"; }
@@ -84,7 +124,10 @@ verify_secret_file() {
   sudo test -s /opt/keycloak/gmail-smtp.pass
   local mode_owner
   mode_owner="$(sudo stat -c '%a %U:%G' /opt/keycloak/gmail-smtp.pass)"
-  [[ "$mode_owner" == "600 root:root" ]] || { echo "Expected /opt/keycloak/gmail-smtp.pass mode/owner 600 root:root, got $mode_owner" >&2; exit 1; }
+  [[ "$mode_owner" == "600 root:root" ]] || {
+    echo "Expected /opt/keycloak/gmail-smtp.pass mode/owner 600 root:root, got $mode_owner" >&2
+    exit 1
+  }
   sudo stat -c 'smtp-password-file: %a %U:%G %n' /opt/keycloak/gmail-smtp.pass
 }
 
@@ -116,8 +159,12 @@ PY
 create_checkpoint() {
   local trigger="$1"
   require_arg --backup-path "$backup_path"
-  local script; script="$(backup_script)"
-  [[ -x "$script" ]] || { echo "Missing executable backup script: $script" >&2; exit 1; }
+  local script
+  script="$(backup_script)"
+  [[ -x "$script" ]] || {
+    echo "Missing executable backup script: $script" >&2
+    exit 1
+  }
   "$script" create-checkpoint --backup-path "$backup_path" --trigger "$trigger"
 }
 
@@ -229,8 +276,12 @@ apply() {
 }
 
 case "$cmd" in
-  user-store-password) user_store_password ;;
-  apply) apply ;;
-  status) status ;;
-  *) echo "Unknown command: $cmd" >&2; usage >&2; exit 64 ;;
+user-store-password) user_store_password ;;
+apply) apply ;;
+status) status ;;
+*)
+  echo "Unknown command: $cmd" >&2
+  usage >&2
+  exit 64
+  ;;
 esac
