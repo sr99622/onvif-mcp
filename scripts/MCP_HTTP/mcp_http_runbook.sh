@@ -16,8 +16,14 @@ USAGE
 }
 
 cmd="${1:-}"
-if [[ -z "$cmd" ]]; then usage; exit 64; fi
-if [[ "$cmd" == "-h" || "$cmd" == "--help" ]]; then usage; exit 0; fi
+if [[ -z "$cmd" ]]; then
+  usage
+  exit 64
+fi
+if [[ "$cmd" == "-h" || "$cmd" == "--help" ]]; then
+  usage
+  exit 0
+fi
 shift || true
 
 server_fqdn=""
@@ -27,18 +33,40 @@ server_user=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --server-fqdn) server_fqdn="${2:?missing --server-fqdn value}"; shift 2 ;;
-    --camera-username) camera_username="${2:?missing --camera-username value}"; shift 2 ;;
-    --repo-path) repo_path="${2:?missing --repo-path value}"; shift 2 ;;
-    --server-user) server_user="${2:?missing --server-user value}"; shift 2 ;;
-    -h|--help) usage; exit 0 ;;
-    *) echo "Unknown argument: $1" >&2; usage >&2; exit 64 ;;
+  --server-fqdn)
+    server_fqdn="${2:?missing --server-fqdn value}"
+    shift 2
+    ;;
+  --camera-username)
+    camera_username="${2:?missing --camera-username value}"
+    shift 2
+    ;;
+  --repo-path)
+    repo_path="${2:?missing --repo-path value}"
+    shift 2
+    ;;
+  --server-user)
+    server_user="${2:?missing --server-user value}"
+    shift 2
+    ;;
+  -h | --help)
+    usage
+    exit 0
+    ;;
+  *)
+    echo "Unknown argument: $1" >&2
+    usage >&2
+    exit 64
+    ;;
   esac
 done
 
 require_arg() {
   local name="$1" value="$2"
-  if [[ -z "$value" ]]; then echo "Missing required argument: $name" >&2; exit 64; fi
+  if [[ -z "$value" ]]; then
+    echo "Missing required argument: $name" >&2
+    exit 64
+  fi
 }
 
 project_dir() {
@@ -90,7 +118,8 @@ write_env_file() {
     printf 'CAMERA_USERNAME=%s\n' "$camera_username"
     printf 'CAMERA_PASSWORD=%s\n' "$camera_password"
     printf 'STREAM_SERVER_URL=http://%s\n' "$server_fqdn"
-  } > "$env_file"
+    printf 'SERVER_FQDN=%s\n' "$server_fqdn"
+  } >"$env_file"
   sudo install -o root -g root -m 0600 "$env_file" /etc/onvif-mcp-http.env
   shred -u "$env_file"
   sudo test -s /etc/onvif-mcp-http.env
@@ -263,32 +292,32 @@ print_status() {
 }
 
 case "$cmd" in
-  apply)
-    require_arg --server-fqdn "$server_fqdn"
-    require_arg --camera-username "$camera_username"
-    require_arg --repo-path "$repo_path"
-    require_arg --server-user "$server_user"
-    install_packages
-    ensure_uv
-    sync_venv "$(project_dir)"
-    write_env_file
-    write_systemd_unit
-    write_nginx_site
-    start_service
-    print_status
-    ;;
-  status)
-    print_status
-    ;;
-  test)
-    test_mcp
-    ;;
-  configure-hermes)
-    configure_hermes
-    ;;
-  *)
-    echo "Unknown command: $cmd" >&2
-    usage >&2
-    exit 64
-    ;;
+apply)
+  require_arg --server-fqdn "$server_fqdn"
+  require_arg --camera-username "$camera_username"
+  require_arg --repo-path "$repo_path"
+  require_arg --server-user "$server_user"
+  install_packages
+  ensure_uv
+  sync_venv "$(project_dir)"
+  write_env_file
+  write_systemd_unit
+  write_nginx_site
+  start_service
+  print_status
+  ;;
+status)
+  print_status
+  ;;
+test)
+  test_mcp
+  ;;
+configure-hermes)
+  configure_hermes
+  ;;
+*)
+  echo "Unknown command: $cmd" >&2
+  usage >&2
+  exit 64
+  ;;
 esac

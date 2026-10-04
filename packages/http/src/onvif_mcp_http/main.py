@@ -105,6 +105,9 @@ MCP_OAUTH_JWKS_URL = os.environ.get(
     "MCP_OAUTH_JWKS_URL",
     "http://127.0.0.1:8080/auth/realms/mcp/protocol/openid-connect/certs",
 )
+SERVER_FQDN = os.environ.get(
+    "SERVER_FQDN"
+)
 oauth_settings = (
     AuthSettings(
         issuer_url=AnyHttpUrl(MCP_OAUTH_ISSUER),
@@ -134,25 +137,13 @@ mcp = FastMCP(
             "127.0.0.1:*", 
             "localhost:*", 
             "[::1]:*",
-            "10.1.1.2:*", 
-            "10.1.1.3:*", 
-            "10.1.1.5:*",
-            "10.1.1.6:*",
-            "gmktec.home.arpa", 
-            "flexi.home.arpa",
-            "nuc.home.arpa",
+            SERVER_FQDN,
         ],
         allowed_origins=[
             "http://127.0.0.1:*",
             "http://localhost:*",
             "http://[::1]:*",
-            "http://10.1.1.2:*",
-            "http://10.1.1.3:*",
-            "http://10.1.1.5:*",
-            "http://10.1.1.6.*",
-            "https://gmktec.home.arpa",
-            "http://flexi.home.arpa:8080",
-            "http://nuc.home.arpa",
+            f"http://{SERVER_FQDN}",
         ],
     ),
 )

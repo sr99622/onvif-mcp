@@ -389,7 +389,7 @@ verify_unauth() {
 }
 
 verify_browser() {
-  python3 "$(project_dir)/scripts/stream_auth_step9_driver.py" --origin "$(origin)" --snapshot-path "$snapshot_path" --webrtc-url /webrtc/4B0013BPAABE264/MediaProfile000/
+  "$(project_dir)/.venv/bin/python3" "$(project_dir)/scripts/stream_auth_step9_driver.py" --origin "$(origin)" --snapshot-path "$snapshot_path" --webrtc-url "/webrtc${snapshot_path#/snapshot}"
   hermes mcp test "$hermes_name"
 }
 
