@@ -31,7 +31,7 @@ login_user="mcp-user"
 browser_client_id="camera-web"
 compose_dir="/opt/keycloak"
 nginx_site=""
-snapshot_path="/snapshot/4B0013BPAABE264/MediaProfile000/"
+snapshot_path=""
 hermes_name="camera"
 while [[ $# -gt 0 ]]; do
   case "$1" in
