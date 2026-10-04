@@ -9,20 +9,20 @@ Do not obsess over every camera detail. Many cameras have bugs that will cause t
 
 | Name | Value |
 |---|---|
-| `{{SMB_MOUNT}}`        | /mnt/camera-backup |
-| `{{SMB_USERNAME}}`     | stephen |
-| `{{SMB_SERVER_FQDN}}`  | taurus.home.arpa |
-| `{{PRVT_NET_EN_NAME}}` | enp2s0 |
-| `{{SERVER_FQDN}}`      | trigkey.home.arpa |
-| `{{CAMERA_USERNAME}}`  | admin |
-| `{{REPO_PATH}}`        | /home/stephen |
-| `{{SERVER_USER}}`      | stephen |
-| `{{CA_ROOT_PATH}}`     | /home/stephen/Private-CA |
-| `{{BACKUP_PATH}}`      | /mnt/camera-backup |
-| `{{SERVER_IP}}`        | 10.1.1.3 |
-| `{{RVRS_SRV_IP}}`      | 3.1.1.10 |
-| `{{UPSTREAM_DNS}}`     | 192.168.68.1 |
-| `{{GMAIL_ADDRESS}}`    | keycloak.admin.sample@gmail.com |
+| `{{SMB_MOUNT}}`        | - |
+| `{{SMB_USERNAME}}`     | - |
+| `{{SMB_SERVER_FQDN}}`  | - |
+| `{{PRVT_NET_EN_NAME}}` | - |
+| `{{SERVER_FQDN}}`      | - |
+| `{{CAMERA_USERNAME}}`  | - |
+| `{{REPO_PATH}}`        | - |
+| `{{SERVER_USER}}`      | - |
+| `{{CA_ROOT_PATH}}`     | - |
+| `{{BACKUP_PATH}}`      | - |
+| `{{SERVER_IP}}`        | - |
+| `{{RVRS_SRV_IP}}`      | - |
+| `{{UPSTREAM_DNS}}`     | - |
+| `{{GMAIL_ADDRESS}}`    | - |
 
 **Runbooks**
 
