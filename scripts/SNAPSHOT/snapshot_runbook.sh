@@ -46,7 +46,8 @@ write_env_file() {
   {
     if [[ -f /etc/onvif-mcp-http.env ]]; then
       # Preserve existing keys (e.g. SERVER_FQDN) written by earlier runbooks.
-      cat /etc/onvif-mcp-http.env
+      # The file is mode 600 root:root, so read it through sudo.
+      sudo cat /etc/onvif-mcp-http.env
     fi
     printf 'MCP_HTTP_HOST=127.0.0.1\n'
     printf 'MCP_HTTP_PORT=8001\n'

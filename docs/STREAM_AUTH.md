@@ -85,17 +85,6 @@ scripts/STREAM_AUTH/stream_auth_runbook.sh apply \
   --repo-path {{REPO_PATH}}
 ```
 
-For this deployment, the resolved command is:
-
-```bash
-cd /home/stephen/onvif-mcp
-scripts/STREAM_AUTH/stream_auth_runbook.sh apply \
-  --server-fqdn gmktec.home.arpa \
-  --server-ip 10.1.1.5 \
-  --backup-path /mnt/camera-backup \
-  --repo-path /home/stephen
-```
-
 The script performs these executable stages:
 
 1. Preflight verifies Keycloak/PostgreSQL, Nginx, MediaMTX, MCP HTTP, and
@@ -134,15 +123,6 @@ cd {{REPO_PATH}}/onvif-mcp
 scripts/STREAM_AUTH/stream_auth_runbook.sh status \
   --server-fqdn {{SERVER_FQDN}} \
   --server-ip {{SERVER_IP}}
-```
-
-For this deployment:
-
-```bash
-cd /home/stephen/onvif-mcp
-scripts/STREAM_AUTH/stream_auth_runbook.sh status \
-  --server-fqdn gmktec.home.arpa \
-  --server-ip 10.1.1.5
 ```
 
 Required outcomes:

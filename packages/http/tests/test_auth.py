@@ -10,8 +10,8 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from onvif_mcp_http.auth import JWTVerifier
 
 
-ISSUER = "https://gmktec.home.arpa/auth/realms/mcp"
-AUDIENCE = "https://gmktec.home.arpa/mcp"
+ISSUER = "https://localhost/auth/realms/mcp"
+AUDIENCE = "https://localhost/mcp"
 
 
 class StaticJWKClient:

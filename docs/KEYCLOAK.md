@@ -81,16 +81,6 @@ scripts/KEYCLOAK/keycloak_runbook.sh apply \
   --repo-path {{REPO_PATH}}
 ```
 
-For this deployment, the resolved command is:
-
-```bash
-cd /home/stephen/onvif-mcp
-scripts/KEYCLOAK/keycloak_runbook.sh apply \
-  --server-fqdn gmktec.home.arpa \
-  --backup-path /mnt/camera-backup \
-  --repo-path /home/stephen
-```
-
 The script performs these executable stages:
 
 1. Installs Docker/Compose prerequisites and starts Docker.
@@ -178,15 +168,6 @@ cd {{REPO_PATH}}/onvif-mcp
 scripts/KEYCLOAK/keycloak_runbook.sh status \
   --server-fqdn {{SERVER_FQDN}} \
   --repo-path {{REPO_PATH}}
-```
-
-For this deployment:
-
-```bash
-cd /home/stephen/onvif-mcp
-scripts/KEYCLOAK/keycloak_runbook.sh status \
-  --server-fqdn gmktec.home.arpa \
-  --repo-path /home/stephen
 ```
 
 Required outcomes before declaring the installation ready:

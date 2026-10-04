@@ -63,17 +63,6 @@ scripts/KEYCLOAK_EMAIL/keycloak_email_runbook.sh apply \
   --repo-path {{REPO_PATH}}
 ```
 
-For this deployment, the resolved command is:
-
-```bash
-cd /home/stephen/onvif-mcp
-scripts/KEYCLOAK_EMAIL/keycloak_email_runbook.sh apply \
-  --gmail-address keycloak.admin.sample@gmail.com \
-  --server-fqdn gmktec.home.arpa \
-  --backup-path /mnt/camera-backup/ \
-  --repo-path /home/stephen
-```
-
 The script performs these executable stages:
 
 1. Verifies `/opt/keycloak/gmail-smtp.pass` exists and is `0600 root:root`.
@@ -98,15 +87,6 @@ cd {{REPO_PATH}}/onvif-mcp
 scripts/KEYCLOAK_EMAIL/keycloak_email_runbook.sh status \
   --gmail-address {{GMAIL_ADDRESS}} \
   --server-fqdn {{SERVER_FQDN}}
-```
-
-For this deployment:
-
-```bash
-cd /home/stephen/onvif-mcp
-scripts/KEYCLOAK_EMAIL/keycloak_email_runbook.sh status \
-  --gmail-address keycloak.admin.sample@gmail.com \
-  --server-fqdn gmktec.home.arpa
 ```
 
 Required outcomes before declaring SMTP configuration complete:

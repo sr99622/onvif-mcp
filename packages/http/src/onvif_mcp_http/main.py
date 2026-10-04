@@ -46,12 +46,10 @@ MCP_OAUTH_ENABLED = os.environ.get("MCP_OAUTH_ENABLED", "").lower() in {
     "yes",
 }
 MCP_OAUTH_ISSUER = os.environ.get(
-    "MCP_OAUTH_ISSUER",
-    "https://gmktec.home.arpa/auth/realms/mcp",
+    "MCP_OAUTH_ISSUER"
 )
 MCP_RESOURCE_URL = os.environ.get(
-    "MCP_RESOURCE_URL",
-    "https://gmktec.home.arpa/mcp",
+    "MCP_RESOURCE_URL"
 )
 MCP_OAUTH_JWKS_URL = os.environ.get(
     "MCP_OAUTH_JWKS_URL",

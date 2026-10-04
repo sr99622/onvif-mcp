@@ -57,20 +57,6 @@ scripts/ADD_USER_EMAIL/add_user_email_runbook.sh apply \
   --repo-path {{REPO_PATH}}
 ```
 
-For this deployment, the resolved command is:
-
-```bash
-cd /home/stephen/onvif-mcp
-scripts/ADD_USER_EMAIL/add_user_email_runbook.sh apply \
-  --new-login-user stephen \
-  --first-name Stephen \
-  --last-name Rhodes \
-  --user-email sr99622@gmail.com \
-  --server-fqdn gmktec.home.arpa \
-  --backup-path /mnt/camera-backup/ \
-  --repo-path /home/stephen
-```
-
 The script performs these executable stages:
 
 1. Verifies Keycloak local discovery, authenticates as the existing administrator
@@ -109,16 +95,6 @@ scripts/ADD_USER_EMAIL/add_user_email_runbook.sh status \
   --server-fqdn {{SERVER_FQDN}}
 ```
 
-For this deployment:
-
-```bash
-cd /home/stephen/onvif-mcp
-scripts/ADD_USER_EMAIL/add_user_email_runbook.sh status \
-  --new-login-user stephen \
-  --user-email sr99622@gmail.com \
-  --server-fqdn gmktec.home.arpa
-```
-
 Pending onboarding state is expected immediately after invitation:
 
 - enabled=true;
@@ -154,12 +130,6 @@ After setup, the recipient can open:
 https://{{SERVER_FQDN}}/cameras/
 ```
 
-For this deployment:
-
-```text
-https://gmktec.home.arpa/cameras/
-```
-
 If MCP access is required, follow ADD_CLIENT_ON_SERVER.md for a new client IP and
 CLIENT.md for client setup. The recipient completes their browser OAuth login
 themselves, then runs the normal Hermes MCP verification. IP enrollment is not
@@ -178,18 +148,6 @@ scripts/ADD_USER_EMAIL/add_user_email_runbook.sh resend \
   --server-fqdn {{SERVER_FQDN}} \
   --backup-path {{BACKUP_PATH}} \
   --repo-path {{REPO_PATH}}
-```
-
-For this deployment:
-
-```bash
-cd /home/stephen/onvif-mcp
-scripts/ADD_USER_EMAIL/add_user_email_runbook.sh resend \
-  --new-login-user stephen \
-  --user-email sr99622@gmail.com \
-  --server-fqdn gmktec.home.arpa \
-  --backup-path /mnt/camera-backup/ \
-  --repo-path /home/stephen
 ```
 
 The script requires exactly one matching username/email, no credentials,

@@ -107,7 +107,7 @@ id -g stephen
 sudoedit /etc/fstab
 ```
 
-Add the following line, replacing `LOCAL_UID` and `LOCAL_GID` with those numeric IDs (both were `1000` on gmktec). If an entry for `{{SMB_MOUNT}}` already exists, correct that entry instead of adding a duplicate.
+Add the following line, replacing `LOCAL_UID` and `LOCAL_GID` with those numeric IDs. If an entry for `{{SMB_MOUNT}}` already exists, correct that entry instead of adding a duplicate.
 
 ```fstab
 //{{SMB_SERVER_FQDN}}/camera-ca-private {{SMB_MOUNT}} cifs credentials=/etc/cifs-utils/credentials/camera-backup,vers=3.1.1,uid=LOCAL_UID,gid=LOCAL_GID,file_mode=0600,dir_mode=0700,nosuid,nodev,noexec,_netdev,noauto,x-systemd.automount 0 0
