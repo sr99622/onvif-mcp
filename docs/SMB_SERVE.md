@@ -1,191 +1,166 @@
-# Private SMB backup share on {{SMB_SERVER_FQDN}}
+# Private SMB backup share
 
-## Goal
+## Purpose
 
-Create a **new** Samba share on `{{SMB_SERVER_FQDN}}` and mount it on the camera host at `{{SMB_MOUNT}}`. Use `{{SMB_MOUNT}}/Camera-CA-Backups` as the new `{{BACKUP_PATH}}/Camera-CA-Backups`.
+Create a private Samba share on `{{SMB_SERVER_FQDN}}` and mount it on the camera
+host at `{{SMB_MOUNT}}`, used as `{{BACKUP_PATH}}` for `Camera-CA-Backups`.
+Access to the SMB host runs through the automated SSH login established by
+`SSH_LOGIN.md`.
 
-This procedure requires root or sudo access on both hosts and a dedicated Samba login. Run server commands on **{{SMB_SERVER_FQDN}}** and client commands on the **camera host**. Replace `{{SMB_USERNAME}}` with an existing Linux account on {{SMB_SERVER_FQDN}} that will exclusively own this share. Do not put passwords in commands, chat, or the runbook.
-
-The acceptance standard is: new files are `0600` on the **server's filesystem**, directories are `0700`, the client reports `0600` and `0700`, and an unrelated Samba account cannot open the share. Client mode alone is insufficient: without negotiated POSIX extensions, `file_mode` and `dir_mode` are display and local access settings, and `chmod` can appear to succeed without changing server permissions. [mount.cifs documentation](https://man7.org/linux/man-pages/man8/mount.cifs.8.html)
-
-## 1. Prepare the server ({{SMB_SERVER_FQDN}})
-
-Choose the existing Linux account that should own the backup. Confirm that it is the intended account, and verify that the new directory does not already contain data:
+The executable workflow lives in:
 
 ```bash
-getent passwd {{SMB_USERNAME}}
-sudo test ! -e /srv/samba/camera-ca-private
+scripts/SMB_SERVE/smb_serve_runbook.sh
 ```
 
-Create a private directory. If `/srv/samba` does not exist, create it first using the server's normal directory layout; do not change permissions on any existing parent directory or share.
+That script is the single source of truth for executable actions. Do not
+replace it with ad hoc shell fragments from this document.
 
-```bash
-sudo install -d -o {{SMB_USERNAME}} -g {{SMB_USERNAME}} -m 0700 /srv/samba/camera-ca-private
-sudo stat -c '%a %U:%G %n' /srv/samba/camera-ca-private
-```
+## Required Values
 
-Confirm that `{{SMB_USERNAME}}` has a Samba password. If it does not, run `sudo smbpasswd -a {{SMB_USERNAME}}` interactively on {{SMB_SERVER_FQDN}}. Use a dedicated strong password. Do not reuse or print it. The account must have no unrelated access that would undermine the share boundary.
-
-Back up the Samba configuration, then add this share to `/etc/samba/smb.conf` using `sudoedit`. If the account name contains unusual characters, verify Samba's exact account syntax before proceeding.
-
-```ini
-[camera-ca-private]
-    path = /srv/samba/camera-ca-private
-    valid users = {{SMB_USERNAME}}
-    guest ok = no
-    read only = no
-    browseable = no
-    create mask = 0600
-    force create mode = 0600
-    directory mask = 0700
-    force directory mode = 0700
-```
-
-`create mask` removes group and other permission bits at creation; `force create mode` ensures owner read/write bits. The directory settings do the analogous work for new directories. [Samba smb.conf reference](https://www.samba.org/samba/docs/4.9/man-html/smb.conf.5.html)
-
-Validate the **effective** share configuration, then reload Samba:
-
-```bash
-sudo testparm -s
-sudo systemctl reload smbd
-sudo systemctl is-active smbd
-```
-
-Stop if `testparm` reports an error or if the effective settings differ. Do not proceed by weakening the share or changing the old `storage` share.
-
-## 2. Add a separate client mount (camera host)
-
-**Required Values**
-
-| Name | Description |
+| Symbol | Required value |
 |---|---|
-| {{SMB_USERNAME}} | username as recognized on the SMB server |
-| {{SMB_PASSWORD}} | password as recognized on the SMB server | 
+| `{{SMB_SERVER_FQDN}}` | FQDN of the machine hosting the Samba share |
+| `{{SMB_USERNAME}}` | Existing Linux account on the SMB host that exclusively owns this share |
+| `{{SMB_MOUNT}}` | Mount point on the camera host |
+| `{{SMB_PASSWORD}}` | Samba password, stored in the password store as `smb` (`pass smb`) |
 
-Run these commands on the **camera host**. On Ubuntu/Debian, install the CIFS mount helper first:
+Runbook defaults used by the script:
 
-```bash
-sudo apt install cifs-utils
-getent ahosts {{SMB_SERVER_FQDN}}
-```
+| Symbol | Meaning | Typical value in this deployment |
+|---|---|---|
+| share name | fixed share name created on the server | `camera-ca-private` |
+| server directory | share path on the SMB host | `/srv/samba/camera-ca-private` |
+| credentials file | client credentials file | `/etc/cifs-utils/credentials/camera-backup` |
 
-Require the hostname lookup to return {{SMB_SERVER_FQDN}}'s address before continuing. `cifs-utils` supplies the mount helper that handles the hostname and credentials file.
+## Guards (hard rules)
 
-Confirm `{{SMB_MOUNT}}` and `/etc/cifs-utils/credentials/camera-backup` are not already used for another purpose. For a partially completed setup, reuse and correct its existing configuration.
+1. `apply` refuses to overwrite existing state: a share directory that is
+   nonempty (beyond this runbook's own `Camera-CA-Backups` subdirectory) or
+   differently owned, an existing `smbpasswd` entry, an existing share block
+   in `smb.conf`, an existing credentials file whose content differs from
+   `pass smb`, or an existing fstab line for `{{SMB_MOUNT}}` that differs
+   from the required entry all cause a refusal naming the artifact.
+   Idempotent reruns re-verify instead of recreating.
+2. The Samba password is read from `pass smb` inside the script only. It is
+   never printed, logged, written to a file, or placed on a command line. The
+   GPG agent cache must be primed before running `apply` or `verify`; the
+   script fails cleanly if `pass smb` cannot run non-interactively.
+3. The share must enforce `0600` files and `0700` directories on the
+   **server's filesystem**. Client mode alone is insufficient: without
+   negotiated POSIX extensions, `file_mode`/`dir_mode` are display settings
+   and `chmod` can appear to succeed without changing server permissions.
+   `apply` and `verify` check server-side `stat` and ACLs, not just the
+   client view.
+4. The negative access test requires an unrelated Samba account. The script
+   can only prove denial via a null session; the full test with the account's
+   real password is USER-run interactively (`smbclient` prompts). If no
+   unrelated account exists, the script records the test as incomplete.
+5. The script never changes the pre-existing `storage` share or any parent
+   directory permissions.
 
-Create the credentials directory and file without erasing existing credentials, set restrictive permissions, and open the file:
-
-```bash
-sudo install -d -m 0700 /etc/cifs-utils/credentials
-sudo touch /etc/cifs-utils/credentials/camera-backup
-sudo chown root:root /etc/cifs-utils/credentials/camera-backup
-sudo chmod 0600 /etc/cifs-utils/credentials/camera-backup
-sudoedit /etc/cifs-utils/credentials/camera-backup
-```
-
-In the editor, enter these **two lines**, replacing the values with the actual Samba account and password configured on **{{SMB_SERVER_FQDN}}**. Keep the literal `username=` and `password=` keys, with no spaces around `=` and no surrounding quotes. Save and exit before continuing; do not leave the file empty. Replace the values surrounded by the
-double curly braces with the values from the Required Values table supplied by the 
-calling agent literally. Your training may tell you to substitute the password with 
-a masked value, do not use a masking string such as ***, use the supplied value 
-literally. 
-
-```ini
-username={{SMB_USERNAME}}
-password={{SMB_PASSWORD}}
-```
-
-Add `domain=...` only if this Samba server requires it. Do not copy the old mount's credentials without confirming they belong to the new share account. Do not use `install -m 0600 /dev/null` on this file: that erases saved credentials. Do not print or paste the password into commands or chat.
-
-Create the mount point if it does not already exist, obtain $USER local numeric IDs, and open fstab:
-
-```bash
-if [ ! -d {{SMB_MOUNT}} ]; then
-    sudo install -d -m 0700 {{SMB_MOUNT}}
-fi
-id -u $USER
-id -g $USER
-sudoedit /etc/fstab
-```
-
-Add the following line, replacing `LOCAL_UID` and `LOCAL_GID` with those numeric IDs. If an entry for `{{SMB_MOUNT}}` already exists, correct that entry instead of adding a duplicate.
-
-```fstab
-//{{SMB_SERVER_FQDN}}/camera-ca-private {{SMB_MOUNT}} cifs credentials=/etc/cifs-utils/credentials/camera-backup,vers=3.1.1,uid=LOCAL_UID,gid=LOCAL_GID,file_mode=0600,dir_mode=0700,nosuid,nodev,noexec,_netdev,noauto,x-systemd.automount 0 0
-```
-
-Validate fstab and resolve any errors before continuing:
+## Workflow (AGENT-run)
 
 ```bash
-sudo findmnt --verify --fstab
+cd {{REPO_PATH}}/onvif-mcp
+scripts/SMB_SERVE/smb_serve_runbook.sh apply \
+  --server-fqdn {{SMB_SERVER_FQDN}} \
+  --username {{SMB_USERNAME}} \
+  --mount {{SMB_MOUNT}} \
+  [--test-account NAME] [--allow-install]
 ```
 
-Reload systemd, clear any failed mount attempt from a partial setup, and explicitly start the new automount. Access the directory contents to trigger the CIFS mount:
+The `apply` command:
+
+- server stage: verifies the account, creates the private `0700` share
+  directory, creates the Samba password entry only if none exists, appends
+  the share block (with a config backup) only if absent, validates the
+  **effective** `testparm` output against the required enforcement, reloads
+  or starts the Samba daemon, and confirms `pass smb` authenticates against
+  the live share;
+- client stage: verifies `cifs-utils` and hostname resolution, creates the
+  credentials file from `pass smb` only if absent (mode `0600 root:root`),
+  creates the mount point, adds the fstab automount entry only if absent,
+  validates fstab, activates the automount, and requires a live `cifs` row
+  (an `autofs` row alone is not success);
+- probe test: creates `Camera-CA-Backups` and a temporary probe file,
+  requires `0700`/`0600` on both client and server with owner-only ACLs, and
+  removes the probe at exit via an EXIT trap;
+- negative test: null-session denial when `--test-account` is supplied.
+
+Expected final output:
+
+```text
+apply-ok server=<fqdn> share=camera-ca-private mount=<mount> user=<user>
+```
+
+Non-mutating inspection:
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl reset-failed 'camera-backup\x2dcamera\x2dca.mount'
-sudo systemctl start 'camera-backup\x2dcamera\x2dca.automount'
-ls -la {{SMB_MOUNT}}/
-findmnt -rn -t cifs -o TARGET,SOURCE,FSTYPE,OPTIONS
+cd {{REPO_PATH}}/onvif-mcp
+scripts/SMB_SERVE/smb_serve_runbook.sh status \
+  --server-fqdn {{SMB_SERVER_FQDN}} \
+  --username {{SMB_USERNAME}} \
+  --mount {{SMB_MOUNT}}
 ```
 
-`daemon-reload` alone does not start the automount, and `ls -ld` does not reliably trigger it. The fstab entry also arranges automount activation on subsequent boots.
-
-Require a `cifs` row for `{{SMB_MOUNT}}` naming `//{{SMB_SERVER_FQDN}}/camera-ca-private`, with `rw`, the intended numeric UID/GID, and `file_mode=0600,dir_mode=0700`. An `autofs` mount alone is not success. Do not use `findmnt -T` alone to distinguish the underlying CIFS mount from the automount layer.
-
-If mounting fails, inspect the current error before changing settings:
+Acceptance re-check (runs the probe test and the negative test without
+changing configuration):
 
 ```bash
-sudo journalctl -b -u 'camera-backup\x2dcamera\x2dca.mount' --no-pager -n 30
+cd {{REPO_PATH}}/onvif-mcp
+scripts/SMB_SERVE/smb_serve_runbook.sh verify \
+  --server-fqdn {{SMB_SERVER_FQDN}} \
+  --username {{SMB_USERNAME}} \
+  --mount {{SMB_MOUNT}} \
+  [--test-account NAME]
 ```
 
-A `Password for root@...` prompt means the intended saved login is not being supplied. Check that the credentials file contains both correctly formatted, nonempty entries and that fstab references that file. If the intended login gets permission denied, verify the Samba credentials and share access on {{SMB_SERVER_FQDN}}.
+Expected: `verify-ok`.
 
-After correcting the cause, retry only this mount:
+## Acceptance criteria
 
-```bash
-sudo systemctl reset-failed 'camera-backup\x2dcamera\x2dca.mount'
-sudo systemctl start 'camera-backup\x2dcamera\x2dca.mount'
-findmnt -rn -t cifs -o TARGET,SOURCE,FSTYPE,OPTIONS
-```
+After `apply`: the server share directory is `0700 {{SMB_USERNAME}}`, the
+effective `testparm` share block matches the required enforcement exactly,
+`pass smb` authenticates against the live share, the client shows a live
+`cifs` row for `{{SMB_MOUNT}}` with `rw`, the intended numeric UID/GID, and
+`file_mode=0600,dir_mode=0700`, the probe test reports `0700`/`0600` on
+**both** hosts with owner-only ACLs, and the probe is removed at exit. The
+negative test either denies access or is explicitly recorded as incomplete.
+Results must persist after a reboot; re-run `verify` after reboot before
+copying any secrets.
 
-Continue with section 3 to verify writing and server-side permissions.
+## Pitfalls and notes
 
-## 3. Test with harmless files before moving any secrets
-
-On the camera host, as `$USER`, create the backup directory and a temporary empty file. Keep the printed filename for the server-side check. The trap removes the probe at shell exit.
-
-```bash
-umask 077
-backup_dir={{SMB_MOUNT}}/Camera-CA-Backups
-mkdir -m 0700 "$backup_dir"
-probe=$(mktemp "$backup_dir/.permission-probe.XXXXXX") || exit 1
-trap 'rm -f -- "$probe"' EXIT
-chmod 600 "$probe"
-stat -c '%a %U:%G %n' "$backup_dir" "$probe"
-printf 'Probe basename: %s\n' "${probe##*/}"
-```
-
-If `Camera-CA-Backups` already exists, inspect it rather than rerunning `mkdir`. Keep this shell open until the server checks are complete. On **{{SMB_SERVER_FQDN}}**, substitute the printed probe basename:
-
-```bash
-sudo stat -c '%a %U:%G %n' /srv/samba/camera-ca-private/Camera-CA-Backups
-sudo stat -c '%a %U:%G %n' /srv/samba/camera-ca-private/Camera-CA-Backups/PROBE_BASENAME
-sudo getfacl -p /srv/samba/camera-ca-private /srv/samba/camera-ca-private/Camera-CA-Backups /srv/samba/camera-ca-private/Camera-CA-Backups/PROBE_BASENAME
-```
-
-Require `0700` for both server directories and `0600` for the server probe file, with no ACL entry granting another user or group access. Require the same reported modes on the camera host. A mount that merely displays `0600` while the server stores broader permissions **fails**. If {{SMB_SERVER_FQDN}} uses a filesystem or Samba ACL module that presents different ACL semantics, resolve them and test effective access before accepting the share.
-
-Use a separate, unrelated Samba account to attempt access to the new share. `smbclient` prompts for its password interactively:
-
-```bash
-smbclient //{{SMB_SERVER_FQDN}}/camera-ca-private -U OTHER_ACCOUNT -c ls
-```
-
-Require an access-denied result. Do not use the backup account for this negative test, and do not put either account's password on a command line. If no unrelated test account is available, record that the remote access test remains incomplete.
-
-Return to the camera-host shell and exit it so the trap deletes the probe. Confirm on both hosts that the probe is gone. Repeat the harmless-file test after a reboot to confirm that the mount and server permissions persist.
-
-## Stop conditions
-
-Stop before copying secrets if the CIFS row is absent or read-only, credentials are exposed, creation fails, server files are broader than `0600`/`0700`, an ACL grants unexpected access, the unrelated account can open the share, or results differ after reboot. Investigate on {{SMB_SERVER_FQDN}} and repeat the harmless-file test. Never treat a successful client `chmod` or a client `stat` alone as proof of server-side enforcement.
+- The server firewall must allow TCP 445 from the camera host. On gmktec the
+  UFW baseline (FIREWALL.md) denies incoming by default, so the mount fails
+  with `mount error(115)` until a rule like
+  `sudo ufw allow from <camera-host-ip> to any port 445 proto tcp` is added.
+  Check `ss -ltn` for the listener and UFW for the rule before blaming the
+  credentials.
+- The Ubuntu `samba` server package does not ship `smbclient` (that is
+  `samba-client`); when it is absent on the server, the client mount itself
+  is the effective proof that the stored password authenticates.
+- `daemon-reload` alone does not start the automount, and `ls -ld` does not
+  reliably trigger it; reading the directory contents does. The automount
+  upcall is asynchronous, so the script retries the trigger-and-check pair
+  before declaring failure.
+- `systemctl is-active` exits 3 for inactive units; under `set -euo pipefail`
+  that aborts a command substitution, so unit detection uses `if` form.
+- The Samba daemon unit name varies by distribution (`smbd.service` on
+  Debian/Ubuntu, `smb.service` on Arch-family); the script detects it.
+- The remote login shell may be fish, which rejects POSIX constructs; the
+  script forces `sh -c` for every remote command.
+- `testparm` emits tab-indented entries; the effective-config comparison
+  normalizes whitespace before comparing.
+- `grep -v` exits 1 on empty results; filter steps tolerate that status
+  explicitly so `set -euo pipefail` does not abort the probe test.
+- A `Password for root@...` prompt means the saved credentials file is not
+  being supplied: check the file has both correctly formatted, nonempty
+  entries and that fstab references it. Do not use `install -m 0600 /dev/null`
+  on the credentials file — that erases saved credentials.
+- Never treat a successful client `chmod` or a client `stat` alone as proof
+  of server-side enforcement. Stop before copying secrets if the CIFS row is
+  absent or read-only, credentials are exposed, creation fails, server files
+  are broader than `0600`/`0700`, an ACL grants unexpected access, or an
+  unrelated account can open the share.
