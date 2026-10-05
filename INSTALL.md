@@ -48,6 +48,8 @@ Do not obsess over every camera detail. Many cameras have bugs that will cause t
 
 [DNS.md](docs/DNS.md)
 
+[SSH_LOGIN.md](docs/SSH_LOGIN.md)
+
 At the completion of Phase 1, pause and allow the user to check for available context before continuing with Phase 2.
 
 ### Phase 2
