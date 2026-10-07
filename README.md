@@ -26,7 +26,7 @@ Clients can connect to the camera web apps without further configuration beyond 
 
 ## Security Features
 
-The documentation includes instructions for creating and maintaining a private Certificate Authority in order to provide certificates for HTTPS encrytption. Keycloak is used for the OAuth server and provides short-lived JWT token authentication for both the camera MCP server and the camera stream apps. Cameras are isolated on a private network accessible only by proxy behind the protected server. Per-user credentials are securely stored and can be revoked at any time.
+The documentation includes instructions for creating and maintaining a private Certificate Authority in order to provide certificates for HTTPS encrytption. Keycloak is used for the OAuth server and provides short-lived JWT token authentication for both the camera MCP server and the camera m apps. Cameras are isolated on a private network accessible only by proxy behind the protected server. Per-user credentials are securely stored and can be revoked at any time.
 
 Clients using only the camera apps do not require any additional configuration. Clients that intend to use MCP services need to be registered with the server by IP address, which implies that they will need to have a static IP. If this requirement is overly strict, the authentication can be set to looser restriction by IP subnet, allowing a range of device IPs from the designated subnet.
 
@@ -37,6 +37,41 @@ The server is built in stages as listed below. Server host preparation sets up t
  The Hermes agent is used to perform the configuration and can be prompted to follow this document and implement the steps as described in the runbooks referenced below. Values required for each step of the implementation are listed in the tables, Prompt Hermes with your own site specific variables and Hermes can implement the configuration autonomously.
 
 Be mindful of model context size when running the configurations shown below. Starting a fresh context after it reaches 50 percent is advised. Runbooks can be executed individually on systems with modest context if necessary. The runbooks can be found in the `{{REPO_PATH}}/onvif-mcp/docs` directory. The runbooks are intended to be executed in the order listed.
+
+## Agentic Server Administration
+
+The Hermes agent is capable of managing most server functionality autonomously. This is a very powerful mechanism that enables control over a server without requiring that the user have deep expertise in the nuances of different server programs and protocols. For most well documented server functions, current agents have sufficient understanding to manage and maintain programs and processes without significant external guidance. 
+
+This arrangement raises some questions regarding the permissions that should be given to the agent. While in theory it seems possible to force the agent to request sudo access each time it needs to execute a root function, in practice this strategy has been found to be unreliable and will most often produce unsatisfactory results. This leads to the recommendation that the agent be given passwordless sudo access. Enabling this access involves creating a root protected file that gives the user account with which the agent is associated particular assigned privileges. For the sake of simplicity, the file is formatted in this case to allow full sudo access to all features, but could be implemented in a stricter sense, confining the agent to a limited set of allowed commands. The command chain below will create the permissions file as described. Note that this functionality is also implemented in the enable-nopasswd.sh script.
+
+```
+sudo env USER="$USER" bash -c '
+set -euo pipefail
+u="${USER:?USER environment variable is not set}"
+[[ "$u" =~ ^[a-zA-Z_][a-zA-Z0-9_-]*$ ]] || { echo "Invalid USER value: $u" >&2; exit 1; }
+f="$(mktemp)"
+trap "rm -f \"$f\"" EXIT
+printf "%s ALL=(ALL) NOPASSWD: ALL\n" "$u" > "$f"
+chmod 0440 "$f"
+visudo -cf "$f"
+install -o root -g root -m 0440 "$f" "/etc/sudoers.d/${u}-nopasswd"
+echo "Created /etc/sudoers.d/${u}-nopasswd"
+'
+
+```
+To revoke access, simply delete the file in the /etc/sudoers.d folder.
+
+## Backup Strategies
+
+A complex system in a production environment requires a robust backup strategy to avoid excessive downtime in the event of a server failure. The system is designed to support incremental backups as it is installed and maintained. There are two storage types available to hold backup data, shared SMB folder and mounted external drive.
+
+  * Shared SMB folder
+
+  The agent is capable of configuring both the server and client sides of a shared SMB folder for backup purposes. In order for the agent to be able to work on the server side of the external host, it must be configured with SSH access and have been set up with passwordless sudo as describe above in Agentic Server Administration. In this configuration, the camera host on which the agentic administrator resides, is the SMB client.
+
+  * Mounted external drive
+
+  This is a simpler strategy that involves only a mounted external drive accessible to the agent. This will be a common arrangement in many systems and avoids the complexity of setting up an SMB arrangement.
 
 1. ### Server Preparation
 
