@@ -59,11 +59,11 @@ A complex system in a production environment requires a robust backup strategy t
 
 * Shared SMB folder
 
-    The agent is capable of configuring both the server and client sides of a shared SMB folder for backup purposes. In order for the agent to be able to work on the server side of the external host, it must be configured with SSH access and have been set up with passwordless sudo as describe above in Agentic Server Administration. In this configuration, the camera host on which the agentic administrator resides, is the SMB client.
+    The agent is capable of configuring both the server and client sides of a shared SMB folder for backup purposes. In order for the agent to be able to work on the server side of the external host, it must be configured with SSH access and have been set up with passwordless sudo as describe above in Agentic Server Administration. In this configuration, the camera host, on which the agentic administrator resides, is the SMB client.
 
 * Mounted external drive
 
-    This is a simpler strategy that involves only a mounted external drive accessible to the agent. This will be a common arrangement in many systems and avoids the complexity of setting up an SMB arrangement.
+    This is a simpler strategy that involves only a mounted external drive accessible to the agent. This will be a common arrangement in many systems and avoids the complexity of setting up a shared SMB folder.
 
 ## Building the Server
 
