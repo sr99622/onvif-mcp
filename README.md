@@ -30,14 +30,6 @@ The documentation includes instructions for creating and maintaining a private C
 
 Clients using only the camera apps do not require any additional configuration. Clients that intend to use MCP services need to be registered with the server by IP address, which implies that they will need to have a static IP. If this requirement is overly strict, the authentication can be set to looser restriction by IP subnet, allowing a range of device IPs from the designated subnet.
 
-## Building the Server
-
-The server is built in stages as listed below. Server host preparation sets up the baseline operating system configuration, Plain HTTP sets up the services without encryption, HTTPS creates the certificate and maps the endpoints for protection, and Authentication implements the Keycloak server for login credential requirements. A firewall can be added at the conclusion of the configuration for additional protection.
-
- The Hermes agent is used to perform the configuration and can be prompted to follow this document and implement the steps as described in the runbooks referenced below. Values required for each step of the implementation are listed in the tables, Prompt Hermes with your own site specific variables and Hermes can implement the configuration autonomously.
-
-Be mindful of model context size when running the configurations shown below. Starting a fresh context after it reaches 50 percent is advised. Runbooks can be executed individually on systems with modest context if necessary. The runbooks can be found in the `{{REPO_PATH}}/onvif-mcp/docs` directory. The runbooks are intended to be executed in the order listed.
-
 ## Agentic Server Administration
 
 The Hermes agent is capable of managing most server functionality autonomously. This is a very powerful mechanism that enables control over a server without requiring that the user have deep expertise in the nuances of different server programs and protocols. For most well documented server functions, current agents have sufficient understanding to manage and maintain programs and processes without significant external guidance. 
@@ -72,6 +64,14 @@ A complex system in a production environment requires a robust backup strategy t
   * Mounted external drive
 
   This is a simpler strategy that involves only a mounted external drive accessible to the agent. This will be a common arrangement in many systems and avoids the complexity of setting up an SMB arrangement.
+
+## Building the Server
+
+The server is built in stages as listed below. Server host preparation sets up the baseline operating system configuration, Plain HTTP sets up the services without encryption, HTTPS creates the certificate and maps the endpoints for protection, and Authentication implements the Keycloak server for login credential requirements. A firewall can be added at the conclusion of the configuration for additional protection.
+
+ The Hermes agent is used to perform the configuration and can be prompted to follow this document and implement the steps as described in the runbooks referenced below. Values required for each step of the implementation are listed in the tables, Prompt Hermes with your own site specific variables and Hermes can implement the configuration autonomously.
+
+Be mindful of model context size when running the configurations shown below. Starting a fresh context after it reaches 50 percent is advised. Runbooks can be executed individually on systems with modest context if necessary. The runbooks can be found in the `{{REPO_PATH}}/onvif-mcp/docs` directory. The runbooks are intended to be executed in the order listed.
 
 1. ### Server Preparation
 
