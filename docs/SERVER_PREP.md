@@ -2,166 +2,68 @@
 
 This is a suggested configuration for the server. The best way to build this system is to start with a fresh Ubuntu installation on a dedicated machine. Update the system after installation to get the latest versions of tools.
 
-Later steps in the configuration may reference nvim as installed here, so be aware that skipping steps may require workarounds. One important feature is the passwordless sudo which Hermes needs to complete many tasks, and removing that step will make the configurations that follow very difficult. 
-
-The first part of the document describes useful but not critical steps, the [**Essential Configrations**](#essential-configurations) section describes critical steps. 
+This two-part script installs and enables SSH server, LazyVim and Hermes. 
 
 **NOTE**: The document assumes that all commands are run from the $HOME directory.
 
-## Short Version
+##  Part 1. Install dependencies
+
+Run this script, it will exit the terminal when done. Re-open the terminal and run the second part.
 
 ```
-
 sudo apt install git curl tar xz-utils build-essential ripgrep wl-clipboard xclip xsel openssh-server -y
 sudo systemctl enable --now ssh
-git clone https://github.com/sr99622/onvif-mcp
-sudo env USER="$USER" onvif-mcp/scripts/enable-nopasswd.sh
 git config --global core.editor "nvim"
-git config --global user.email "sr99622@gmail.com"
-git config --global user.name "Stephen Rhodes"
+git clone https://github.com/sr99622/onvif-mcp
 curl -LsSf https://astral.sh/uv/install.sh | sh
-source .bashrc
+source ~/.bashrc
 uv
 wget -P ~/.local/share/fonts https://github.com/ryanoasis/nerd-fonts/releases/download/v3.0.2/JetBrainsMono.zip && cd ~/.local/share/fonts && unzip JetBrainsMono.zip && rm JetBrainsMono.zip
 cd
-fc-cache -f -v 
+bash -c '
+for attempt in 1 2 3; do
+    if fc-cache -f -v; then
+        printf "Font cache updated successfully.\n"
+        exit 0
+    fi
+    printf "Font cache update failed (attempt %s of 3).\n" "$attempt" >&2
+    if [ "$attempt" -lt 3 ]; then
+        sleep 2
+    fi
+done
+printf "Font cache update failed after 3 attempts.\n" >&2
+exit 1
+'
 exit
+```
+
+## Part 2. Install LazyVim and Hermes
+
+```
 curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.tar.gz
 sudo rm -rf /opt/nvim-linux-x86_64
 sudo tar -C /opt -xzf nvim-linux-x86_64.tar.gz
-vi .bashrc
-source .bashrc
-git clone https://github.com/LazyVim/starter ~/.config/nvim
-rm -rf ~/.config/nvim.git
-nvim
-nvim .config/nvim/init.lua
-nvim ~/.config/nvim/lua/plugins/icons.lua
-```
+cat >> ~/.bashrc <<'EOF'
 
-## Install git
-
-We will need git for next steps, so install and configure.
-
-```bash
-sudo apt install git
-git config --global core.editor "nvim"
-git config --global user.email <your email>
-git config --global user.name <your name>
-```
-
-## Github CLI
-
-Integrate github to the desktop, first set up archive 
-
-```bash
-sudo mkdir -p -m 755 /etc/apt/keyrings && wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null && sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-sudo apt update && sudo apt install gh -y
-gh auth login
-```
-
-## Install LazyVim Editing Tool
-
-You can run the rest of the configuration from remote. We want to install an editor that will work from the remote terminal. We will be installing LazyVim. The first step is to install the latest version of neovim.
-
-```bash
-sudo apt install curl tar xz-utils
-curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.tar.gz
-sudo rm -rf /opt/nvim-linux-x86_64
-sudo tar -C /opt -xzf nvim-linux-x86_64.tar.gz
-```
-
-We need to add the nvim directory to the PATH, and conifgure sudoedit so we can use this for elevated privilege files. Open the .bashrc
-
-```bash
-vi ~/.bashrc
-```
-
-And add the environment variables
-
-```
 export PATH="$PATH:/opt/nvim-linux-x86_64/bin"
 export SUDO_EDITOR="nvim"
-```
 
-And now activate the environment
-
-```bash
+EOF
 source ~/.bashrc
-```
-
-LazyVim uses development tools to configure itself, so add these with the build-essential package. It also will need ripgrep.
-
-```bash
-sudo apt install build-essential
-sudo apt install ripgrep
-```
-
-Install JetBrains font package
-
-```bash
-wget -P ~/.local/share/fonts https://github.com/ryanoasis/nerd-fonts/releases/download/v3.0.2/JetBrainsMono.zip && cd ~/.local/share/fonts && unzip JetBrainsMono.zip && rm JetBrainsMono.zip
-cd
-```
-
-Register the font in the cache 
-
-```bash
-fc-cache -f -v 
-```
-
-Check the exit code to make sure it completed successfully, you may need to run this twice. For some reason it often fails on the first run. 
-
-Close and re-open the terminal then select Preferences from the hamburger icon in the upper right corner. Scroll down a bit and unselect 'Use System Font', then use the menu to select the 'JetBrainsMono Nerd Font Mono' type of your choice.
-
-#### Install LazyVim
-
-Here we install the LazyVim package. The git configuration is removed in case you want to archive your own conifguration on git somewhere.
-
-```bash
 git clone https://github.com/LazyVim/starter ~/.config/nvim
 rm -rf ~/.config/nvim.git
-nvim
-```
+cat >> ~/.config/nvim/init.lua <<'EOF'
 
-LazyVim will configure itself on the first nvim run.
-
-System clipboard access
-
-```bash
-sudo apt install wl-clipboard xclip xsel
-```
-
-Auto Refresh
-
-If you are using agents to modify code, it helps to have nvim auto refresh to stay in sync. Add this to the init.lua in the nvim configuration. First open the configuration file
-
-```bash
-nvim .config/nvim/init.lua
-```
-
-Insert the following text into the file.
-
-```
 vim.opt.autoread = true
 
 vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold", "CursorHoldI" }, {
   pattern = "*",
   command = "if mode() != 'c' | checktime | endif",
 })
-```
 
-Fix .lock and .toml file icons
+EOF
+cat >> ~/.config/nvim/lua/plugins/icons.lua <<'EOF'
 
-The stock install of LazyVim lacks icons for these file extensions. To fix, edit the icons.lua config file
-
-```
-nvim ~/.config/nvim/lua/plugins/icons.lua
-```
-
-Insert the following text into the file.
-
-```
 return {
   {
     "nvim-mini/mini.icons",
@@ -173,38 +75,24 @@ return {
     },
   },
 }
+EOF
+curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
 ```
 
-## Install tmux
-
-tmux lets you split the screen into different prompts. This makes it super easy to run multiple prompts from the remote terminal.
+## (Optional) configure git user
 
 ```
-sudo apt install tmux
+bash -c '
+printf "Configure git with your email address, enter your email address:\n"
+read -r git_email </dev/tty
+printf "Configure git with your name, enter your full name:\n"
+read -r git_name </dev/tty
+git config --global user.email "$git_email"
+git config --global user.name "$git_name"
+'
 ```
 
-The default tmux bindings can be awkword, so we customize.
-
-```
-nvim .tmux.conf
-```
-
-Add the follwing into the configuration file
-
-```
-unbind C-b
-set-option -g prefix C-a
-bind-key C-a send-prefix
-bind | split-window -h
-bind - split-window -v
-unbind '"'
-unbind %
-bind-key X kill-pane
-```
-
-Now, to split a screen horizontally, Ctl+a |, vertically, Ctl+a -
-
-## Install VS Code
+## (Optional) Install VS Code
 
 VS Code can be useful when editing markdown files. Open this link in the browser to download the .deb file installer
 
@@ -226,45 +114,3 @@ sudo apt install ./Downloads/<code.....deb>
 
 Use the GUI tool in the Settings app. Go to Network and find your Adapter. Assuming that you are on the wired network (you should be), click the gear wheel in the panel, which will pop up a dialog. **Remove Connection Profile...** to get rid of the default DHCP setting. After removing the profile, Click the '+' for Wired to get a new profile. Click the IPv4 tab to get the settings tab and Select the Manual radio button. Set your Address, Netmask, Gateway and DNS, the click Apply. Reboot to make sure the settings took hold, do not take anything on faith.
 
-## Enable Remote Access
-
-```bash
-sudo apt install openssh-server -y
-sudo systemctl enable --now ssh
-```
-
-## Other packages needed only if you have not installed optional tools above
-
-```bash
-sudo apt install git curl tar xz-utils ripgrep
-```
-
-## Install uv
-
-This will be needed for the camera MCP server.
-
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-source .bashrc
-uv
-```
-
-## Download onvif-mcp repository
-
-```bash
-git clone https://github.com/sr99622/onvif-mcp
-```
-
-## Set up passwordless sudo
-
-```bash
-sudo env USER="$USER" onvif-mcp/scripts/enable-nopasswd.sh
-```
-
-## Install Hermes
-
-```bash
-curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
-```
-
-Reboot the machine to verify that settings are correct and survive reboot.
