@@ -329,7 +329,7 @@ The command will fail with a 403 error.
 
 ### Configure server access for the IP address
 
-Go to the server machine, log in and start a hermes instance and prompt. In this prompt the {{CLIENT_SOURCE_IP}} is a literal placeholder for the agent to substitute in the model call, you should replace {{REPO_PATH}} with your installation location. Assuming the {{REPO_PATH}} is $HOME, the command will take the form
+Go to the server machine, log in and start a hermes instance and prompt. In this prompt the {{CLIENT_SOURCE_IP}} is a literal placeholder for the agent to substitute in the model call, you should replace {{REPO_PATH}} with the full path to the repository. Assuming the {{REPO_PATH}} is $HOME/onvif-mcp, the command will take the form
 
 ```
 execute $HOME/onvif-mcp/docs/ADD_CLIENT_ON_SERVER.md using {{CLIENT_SOURCE_IP}} <ip-address>

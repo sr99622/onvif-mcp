@@ -38,13 +38,6 @@ dedicated Gmail account, then runs the script in their own interactive terminal
 on the camera server. Enter the Google app password at the hidden prompt. It is
 not the Gmail account's main password. Do not paste either password into Hermes.
 
-Resolved command for this deployment:
-
-```bash
-cd $HOME/onvif-mcp
-sudo $HOME/onvif-mcp/scripts/KEYCLOAK_EMAIL/keycloak_email_runbook.sh user-store-password
-```
-
 The script creates `/opt/keycloak/gmail-smtp.pass` as `0600 root:root` and never
 prints the secret. An existing file is not overwritten. To rotate the credential
 later, deliberately replace that file using a hidden prompt, then rerun the
@@ -55,7 +48,7 @@ later, deliberately replace that file using a hidden prompt, then rerun the
 Run with resolved values:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/KEYCLOAK_EMAIL/keycloak_email_runbook.sh apply \
   --gmail-address {{GMAIL_ADDRESS}} \
   --server-fqdn {{SERVER_FQDN}} \
@@ -83,7 +76,7 @@ authentication flows. No container restart is needed for this realm setting.
 ## 3. Status checks (AGENT-run)
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/KEYCLOAK_EMAIL/keycloak_email_runbook.sh status \
   --gmail-address {{GMAIL_ADDRESS}} \
   --server-fqdn {{SERVER_FQDN}}

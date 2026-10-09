@@ -27,7 +27,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 require_arg() { local name="$1" value="$2"; [[ -n "$value" ]] || { echo "Missing required argument: $name" >&2; exit 64; }; }
-project_dir() { printf '%s/onvif-mcp' "${repo_path%/}"; }
+project_dir() { printf '%s' "${repo_path%/}"; }
 
 install_packages() {
   missing=()

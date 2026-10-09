@@ -52,7 +52,7 @@ private keys are excluded: nginx configuration may contain authentication data.
 Run with resolved values:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/NGINX_BACKUP/nginx_backup_runbook.sh create-checkpoint \
   --server-fqdn {{SERVER_FQDN}} \
   --backup-path {{BACKUP_PATH}} \
@@ -63,7 +63,7 @@ When a coordinated Keycloak checkpoint path is already known, pass it explicitly
 so metadata records the compatible pair:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/NGINX_BACKUP/nginx_backup_runbook.sh create-checkpoint \
   --server-fqdn {{SERVER_FQDN}} \
   --backup-path {{BACKUP_PATH}} \
@@ -103,7 +103,7 @@ completed one in place.
 ## Inspect checkpoint status (AGENT-run)
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/NGINX_BACKUP/nginx_backup_runbook.sh status \
   --backup-path {{BACKUP_PATH}}
 ```

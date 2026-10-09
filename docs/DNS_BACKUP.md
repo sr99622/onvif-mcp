@@ -51,7 +51,7 @@ files, or runbook copies belong in this archive.
 Run with resolved values:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/DNS_BACKUP/dns_backup_runbook.sh create-checkpoint \
   --server-fqdn {{SERVER_FQDN}} \
   --server-ip {{SERVER_IP}} \
@@ -85,7 +85,7 @@ rather than overwriting a completed checkpoint.
 ## Inspect checkpoint status (AGENT-run)
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/DNS_BACKUP/dns_backup_runbook.sh status \
   --backup-path {{BACKUP_PATH}}
 ```

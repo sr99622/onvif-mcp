@@ -26,7 +26,7 @@ cmd="${1:-}"
 shift || true
 server_fqdn=""
 backup_path=""
-repo_path="$HOME"
+repo_path="$HOME/onvif-mcp"
 admin_user="keycloak-admin"
 realm="mcp"
 scope="mcp:tools"
@@ -90,7 +90,7 @@ require_arg() {
     exit 64
   }
 }
-project_dir() { printf '%s/onvif-mcp' "${repo_path%/}"; }
+project_dir() { printf '%s' "${repo_path%/}"; }
 public_url() { printf 'https://%s/auth' "$server_fqdn"; }
 issuer() { printf 'https://%s/auth/realms/%s' "$server_fqdn" "$realm"; }
 resource_url() { printf 'https://%s/mcp' "$server_fqdn"; }

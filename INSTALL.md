@@ -12,7 +12,7 @@ Do not obsess over every camera detail. Many cameras have bugs that will cause t
 | `{{PRVT_NET_EN_NAME}}` | enx50a0300e6cb1 |
 | `{{SERVER_FQDN}}`      | nuc.home.arpa |
 | `{{CAMERA_USERNAME}}`  | admin |
-| `{{REPO_PATH}}`        | /home/stephen |
+| `{{REPO_PATH}}`        | /home/stephen/onvif-mcp |
 | `{{SERVER_USER}}`      | stephen |
 | `{{CA_ROOT_PATH}}`     | /home/stephen/Private-CA |
 | `{{BACKUP_PATH}}`      | /mnt/camera-backup |

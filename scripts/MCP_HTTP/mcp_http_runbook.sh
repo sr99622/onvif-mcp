@@ -70,7 +70,7 @@ require_arg() {
 }
 
 project_dir() {
-  printf '%s/onvif-mcp' "${repo_path%/}"
+  printf '%s' "${repo_path%/}"
 }
 
 install_packages() {

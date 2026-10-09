@@ -54,7 +54,7 @@ two archives into `keycloak-*`, `stream-auth-*`, `add-user-*`, or
 Run with resolved values:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/KEYCLOAK_BACKUP/keycloak_backup_runbook.sh create-checkpoint \
   --backup-path {{BACKUP_PATH}} \
   --trigger KEYCLOAK.md
@@ -64,7 +64,7 @@ When a coordinated nginx checkpoint path is already known, pass it explicitly so
 metadata records the compatible pair:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/KEYCLOAK_BACKUP/keycloak_backup_runbook.sh create-checkpoint \
   --backup-path {{BACKUP_PATH}} \
   --trigger KEYCLOAK.md \
@@ -99,7 +99,7 @@ than editing a completed checkpoint.
 ## Inspect checkpoint status (AGENT-run)
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/KEYCLOAK_BACKUP/keycloak_backup_runbook.sh status \
   --backup-path {{BACKUP_PATH}}
 ```

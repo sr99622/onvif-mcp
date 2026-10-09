@@ -24,7 +24,7 @@ Target state:
 | `{{SERVER_FQDN}}` | Server fully qualified domain name |
 | `{{CAMERA_USERNAME}}` | Camera username, normally `admin` |
 | `pass show camera` | Camera password from the local password store |
-| `{{REPO_PATH}}` | Parent directory containing this repository |
+| `{{REPO_PATH}}` | Full path to this repository |
 
 Stop and ask the user if any required value is missing. Do not ask the user to paste the camera password into the runbook, shell history, or chat. The executable script reads the first line from `pass show camera` and URL-encodes it before writing MediaMTX RTSP source URLs.
 
@@ -33,12 +33,12 @@ Stop and ask the user if any required value is missing. Do not ask the user to p
 This document is a script for the agent. The executable source of truth is:
 
 ```text
-{{REPO_PATH}}/onvif-mcp/scripts/MEDIAMTX/mediamtx_runbook.sh
+{{REPO_PATH}}/scripts/MEDIAMTX/mediamtx_runbook.sh
 ```
 
 Before executing any AGENT-run command or presenting any USER-run command, replace every double-curly placeholder with the real site value. Do not ask the user to type placeholders literally.
 
-For this runbook, the agent normally runs the commands directly. If a command must be shown to the user, include `cd {{REPO_PATH}}/onvif-mcp` as the first line of the copy-paste block after resolving `{{REPO_PATH}}`.
+For this runbook, the agent normally runs the commands directly. If a command must be shown to the user, include `cd {{REPO_PATH}}` as the first line of the copy-paste block after resolving `{{REPO_PATH}}`.
 
 Do not replace the scripted workflow with ad hoc shell fragments. If behavior must change, update `scripts/MEDIAMTX/mediamtx_runbook.sh` and keep this runbook as orchestration guidance.
 
@@ -47,7 +47,7 @@ Do not replace the scripted workflow with ad hoc shell fragments. If behavior mu
 Run from the repository directory:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/MEDIAMTX/mediamtx_runbook.sh apply \
   --server-fqdn {{SERVER_FQDN}} \
   --camera-username {{CAMERA_USERNAME}} \
@@ -71,7 +71,7 @@ The script performs the full MediaMTX runbook:
 If `pass show camera` fails because GPG needs the passphrase, stop and ask the user to run this in their own terminal:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 pass show camera >/dev/null
 ```
 
@@ -82,7 +82,7 @@ After the user confirms that command succeeded, rerun the `apply` command. Do no
 Run:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/MEDIAMTX/mediamtx_runbook.sh status --server-fqdn {{SERVER_FQDN}}
 ```
 
@@ -103,7 +103,7 @@ Warnings about skipped generic tracks or occasional RTP packet loss are not, by 
 Run:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/MEDIAMTX/mediamtx_runbook.sh test --server-fqdn {{SERVER_FQDN}}
 ```
 

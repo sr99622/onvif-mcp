@@ -63,7 +63,7 @@ Runbook defaults used by the script:
 ## Workflow (AGENT-run)
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/SMB_SERVE/smb_serve_runbook.sh apply \
   --server-fqdn {{SMB_SERVER_FQDN}} \
   --username {{SMB_USERNAME}} \
@@ -98,7 +98,7 @@ apply-ok server=<fqdn> share=camera-ca-private mount=<mount> user=<user>
 Non-mutating inspection:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/SMB_SERVE/smb_serve_runbook.sh status \
   --server-fqdn {{SMB_SERVER_FQDN}} \
   --username {{SMB_USERNAME}} \
@@ -109,7 +109,7 @@ Acceptance re-check (runs the probe test and the negative test without
 changing configuration):
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/SMB_SERVE/smb_serve_runbook.sh verify \
   --server-fqdn {{SMB_SERVER_FQDN}} \
   --username {{SMB_USERNAME}} \

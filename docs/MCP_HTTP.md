@@ -11,8 +11,8 @@ Target state:
 - Nginx endpoint: `http://{{SERVER_FQDN}}/mcp`
 - Environment file: `/etc/onvif-mcp-http.env`, mode `600 root:root`
 - Unit file: `/etc/systemd/system/onvif-mcp-http.service`, mode `644 root:root`
-- Python venv: `{{REPO_PATH}}/onvif-mcp/.venv`
-- Executable: `{{REPO_PATH}}/onvif-mcp/.venv/bin/onvif-mcp-http`
+- Python venv: `{{REPO_PATH}}/.venv`
+- Executable: `{{REPO_PATH}}/.venv/bin/onvif-mcp-http`
 - Hermes MCP entry: `camera` pointing to `http://{{SERVER_FQDN}}/mcp`
 
 ## Required Values
@@ -22,7 +22,7 @@ Target state:
 | `{{SERVER_FQDN}}` | Fully Qualified Domain Name of the server |
 | `{{CAMERA_USERNAME}}` | Camera username |
 | `pass show camera` | Camera password from the local password store |
-| `{{REPO_PATH}}` | Parent directory containing this repository |
+| `{{REPO_PATH}}` | Full path to this repository |
 | `{{SERVER_USER}}` | System user the service runs as |
 
 Stop and ask the user if any required value is missing. Do not hard-code the camera password in the systemd unit, shell history, this runbook, or agent chat. The executable script reads the first line from `pass show camera` when generating `/etc/onvif-mcp-http.env`.
@@ -32,12 +32,12 @@ Stop and ask the user if any required value is missing. Do not hard-code the cam
 This document is a script for the agent. The executable source of truth is:
 
 ```text
-{{REPO_PATH}}/onvif-mcp/scripts/MCP_HTTP/mcp_http_runbook.sh
+{{REPO_PATH}}/scripts/MCP_HTTP/mcp_http_runbook.sh
 ```
 
 Before executing any AGENT-run command or presenting any USER-run command, replace every double-curly placeholder with the real site value. Do not ask the user to type placeholders literally.
 
-For this runbook, the agent normally runs the commands directly. If a command must be shown to the user, include `cd {{REPO_PATH}}/onvif-mcp` as the first line of the copy-paste block after resolving `{{REPO_PATH}}`.
+For this runbook, the agent normally runs the commands directly. If a command must be shown to the user, include `cd {{REPO_PATH}}` as the first line of the copy-paste block after resolving `{{REPO_PATH}}`.
 
 Do not replace the scripted workflow with ad hoc shell fragments. If behavior must change, update `scripts/MCP_HTTP/mcp_http_runbook.sh` and keep this runbook as orchestration guidance.
 
@@ -46,7 +46,7 @@ Do not replace the scripted workflow with ad hoc shell fragments. If behavior mu
 Run from the repository directory:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/MCP_HTTP/mcp_http_runbook.sh apply \
   --server-fqdn {{SERVER_FQDN}} \
   --camera-username {{CAMERA_USERNAME}} \
@@ -57,8 +57,8 @@ scripts/MCP_HTTP/mcp_http_runbook.sh apply \
 The script performs the full MCP HTTP runbook:
 
 - Installs missing Debian/Ubuntu packages when `apt-get` is available.
-- Runs `uv sync --all-packages` in `{{REPO_PATH}}/onvif-mcp`.
-- Verifies `{{REPO_PATH}}/onvif-mcp/.venv/bin/onvif-mcp-http` exists.
+- Runs `uv sync --all-packages` in `{{REPO_PATH}}`.
+- Verifies `{{REPO_PATH}}/.venv/bin/onvif-mcp-http` exists.
 - Reads the camera password from `pass show camera`.
 - Writes `/etc/onvif-mcp-http.env` with mode `600 root:root`.
 - Writes `/etc/systemd/system/onvif-mcp-http.service` with mode `644 root:root`.
@@ -71,7 +71,7 @@ The script performs the full MCP HTTP runbook:
 If `pass show camera` fails because GPG needs the passphrase, stop and ask the user to run this in their own terminal:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 pass show camera >/dev/null
 ```
 
@@ -82,7 +82,7 @@ After the user confirms that command succeeded, rerun the `apply` command. Do no
 Run:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/MCP_HTTP/mcp_http_runbook.sh status \
   --server-fqdn {{SERVER_FQDN}} \
   --repo-path {{REPO_PATH}}
@@ -102,7 +102,7 @@ Acceptance checks:
 Run:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/MCP_HTTP/mcp_http_runbook.sh test --server-fqdn {{SERVER_FQDN}}
 ```
 
@@ -115,7 +115,7 @@ The MCP server enforces host/origin validation. Use the real FQDN endpoint in te
 Run:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/MCP_HTTP/mcp_http_runbook.sh configure-hermes --server-fqdn {{SERVER_FQDN}}
 ```
 

@@ -77,7 +77,7 @@ do not disable private-CA verification.
 Run with resolved values:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/STREAM_AUTH/stream_auth_runbook.sh apply \
   --server-fqdn {{SERVER_FQDN}} \
   --server-ip {{SERVER_IP}} \
@@ -119,7 +119,7 @@ The script performs these executable stages:
 ## Status checks (AGENT-run)
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/STREAM_AUTH/stream_auth_runbook.sh status \
   --server-fqdn {{SERVER_FQDN}} \
   --server-ip {{SERVER_IP}}

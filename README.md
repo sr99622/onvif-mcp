@@ -71,7 +71,7 @@ The server is built in stages as listed below. Server host preparation sets up t
 
  The Hermes agent is used to perform the configuration and can be prompted to follow this document and implement the steps as described in the runbooks referenced below. Values required for each step of the implementation are listed in the tables, Prompt Hermes with your own site specific variables and Hermes can implement the configuration autonomously.
 
-Be mindful of model context size when running the configurations shown below. Starting a fresh context after it reaches 50 percent is advised. Runbooks can be executed individually on systems with modest context if necessary. The runbooks can be found in the `{{REPO_PATH}}/onvif-mcp/docs` directory. The runbooks are intended to be executed in the order listed.
+Be mindful of model context size when running the configurations shown below. Starting a fresh context after it reaches 50 percent is advised. Runbooks can be executed individually on systems with modest context if necessary. The runbooks can be found in the `{{REPO_PATH}}/docs` directory. The runbooks are intended to be executed in the order listed.
 
 1. ### Server Preparation
 
@@ -137,7 +137,7 @@ Be mindful of model context size when running the configurations shown below. St
     |------|-------------|
     | `{{SERVER_FQDN}}` | Fully Qualified Domain Name of the server, e.g. camera.home.arpa |
     | `{{CAMERA_USERNAME}}` | Common username for cameras |
-    | `{{REPO_PATH}}` | Parent directory of this repository |
+    | `{{REPO_PATH}}` | Full path to this repository |
     | `{{SERVER_USER}}` | Account name on the server under which Hermes is run |
 
     **Runbooks**
@@ -164,7 +164,7 @@ Be mindful of model context size when running the configurations shown below. St
     | `{{BACKUP_PATH}}` | SMB shared drive to be created on the local host (e.g. `/mnt/camera-backup`) |
     | `{{SERVER_FQDN}}` | Fully Qualified Domain Name of the server, e.g. camera.home.arpa |
     | `{{SERVER_USER}}` | Account name on the server under which Hermes is run |
-    | `{{REPO_PATH}}` | Parent directory of this repository |
+    | `{{REPO_PATH}}` | Full path to this repository |
     | `{{SERVER_IP}}` | IP address of the server e.g. 10.1.1.2 |
     | `{{RVRS_SRV_IP}}` | Reverse IP address of the server e.g. 2.1.1.10 |
     | `{{UPSTREAM_DNS}}` | Upstream DNS resolver |

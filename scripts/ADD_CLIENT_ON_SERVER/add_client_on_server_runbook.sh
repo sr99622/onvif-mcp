@@ -25,7 +25,7 @@ shift || true
 
 client_source_ip=""
 backup_path=""
-repo_path="$HOME"
+repo_path="$HOME/onvif-mcp"
 realm="mcp"
 admin_user="keycloak-admin"
 keycloak_port="8080"
@@ -67,7 +67,7 @@ require_arg() {
     exit 64
   }
 }
-project_dir() { printf '%s/onvif-mcp' "${repo_path%/}"; }
+project_dir() { printf '%s' "${repo_path%/}"; }
 backup_script() { printf '%s/scripts/KEYCLOAK_BACKUP/keycloak_backup_runbook.sh' "$(project_dir)"; }
 artifact_dir() { printf '%s/scripts/ADD_CLIENT_ON_SERVER' "$(project_dir)"; }
 server_url() { printf 'http://127.0.0.1:%s%s' "$keycloak_port" "$keycloak_path"; }

@@ -36,7 +36,7 @@ done
 
 require_arg() { local name="$1" value="$2"; [[ -n "$value" ]] || { echo "Missing required argument: $name" >&2; exit 64; }; }
 require_all() { require_arg --server-fqdn "$server_fqdn"; require_arg --server-ip "$server_ip"; require_arg --server-user "$server_user"; require_arg --ca-root "$ca_root"; require_arg --backup-path "$backup_path"; require_arg --repo-path "$repo_path"; }
-project_dir() { printf '%s/onvif-mcp' "${repo_path%/}"; }
+project_dir() { printf '%s' "${repo_path%/}"; }
 ca_dir() { printf '%s/camera-system-ca' "${ca_root%/}"; }
 local_backup_dir() { printf '%s/backups' "${ca_root%/}"; }
 smb_backup_dir() { printf '%s/Camera-CA-Backups' "${backup_path%/}"; }

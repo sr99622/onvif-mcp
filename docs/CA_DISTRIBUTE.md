@@ -77,7 +77,7 @@ no interactive user-run steps.
 Run the script with resolved values:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/CA_DISTRIBUTE/ca_distribute_runbook.sh apply \
   --server-fqdn {{SERVER_FQDN}} \
   --server-ip {{SERVER_IP}} \
@@ -107,7 +107,7 @@ The `apply` command performs the full workflow:
 Run:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/CA_DISTRIBUTE/ca_distribute_runbook.sh verify \
   --server-fqdn {{SERVER_FQDN}} \
   --server-ip {{SERVER_IP}}
@@ -116,7 +116,7 @@ scripts/CA_DISTRIBUTE/ca_distribute_runbook.sh verify \
 Then inspect non-secret status:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/CA_DISTRIBUTE/ca_distribute_runbook.sh status \
   --server-fqdn {{SERVER_FQDN}} \
   --server-ip {{SERVER_IP}}

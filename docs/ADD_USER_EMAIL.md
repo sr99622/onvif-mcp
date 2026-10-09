@@ -18,7 +18,7 @@ existing realm password policy still applies.
 | `{{USER_EMAIL}}` | Real inbox controlled by the recipient |
 | `{{SERVER_FQDN}}` | Camera server hostname |
 | `{{BACKUP_PATH}}` | Existing backup folder |
-| `{{REPO_PATH}}` | Parent directory for this repository |
+| `{{REPO_PATH}}` | Full path to this repository |
 
 No PASSWORD input is accepted. Do not invent an email address, create a temporary
 password, mark email verified manually, or run headless login drivers that would
@@ -47,7 +47,7 @@ script.
 Run with resolved values:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/ADD_USER_EMAIL/add_user_email_runbook.sh apply \
   --new-login-user {{NEW_LOGIN_USER}} \
   --first-name {{FIRST_NAME}} \
@@ -89,7 +89,7 @@ recipient confirms receipt and completes setup.
 ## 2. Status checks (AGENT-run)
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/ADD_USER_EMAIL/add_user_email_runbook.sh status \
   --new-login-user {{NEW_LOGIN_USER}} \
   --user-email {{USER_EMAIL}} \
@@ -142,7 +142,7 @@ Use resend only for the same intended pending user and email, such as an expired
 or failed invitation:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/ADD_USER_EMAIL/add_user_email_runbook.sh resend \
   --new-login-user {{NEW_LOGIN_USER}} \
   --user-email {{USER_EMAIL}} \

@@ -27,7 +27,7 @@ shift || true
 gmail_address=""
 server_fqdn=""
 backup_path=""
-repo_path="$HOME"
+repo_path="$HOME/onvif-mcp"
 realm="mcp"
 admin_user="keycloak-admin"
 while [[ $# -gt 0 ]]; do
@@ -71,7 +71,7 @@ require_arg() {
     exit 64
   }
 }
-project_dir() { printf '%s/onvif-mcp' "${repo_path%/}"; }
+project_dir() { printf '%s' "${repo_path%/}"; }
 issuer() { printf 'https://%s/auth/realms/%s' "$server_fqdn" "$realm"; }
 backup_script() { printf '%s/scripts/KEYCLOAK_BACKUP/keycloak_backup_runbook.sh' "$(project_dir)"; }
 

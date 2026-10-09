@@ -27,7 +27,7 @@ replace it with ad hoc shell fragments from this document.
 |---|---|
 | `{{SSH_SERVER_FQDN}}` | FQDN of the machine being logged in to |
 | `{{SSH_USERNAME}}` | User on that machine |
-| `{{REPO_PATH}}` | Parent directory of the onvif-mcp repository |
+| `{{REPO_PATH}}` | Full path to this repository |
 
 Runbook defaults used by the script:
 
@@ -64,7 +64,7 @@ Run with resolved values from the user's own terminal, because the first run
 prompts for the server password exactly once:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/SSH_LOGIN/ssh_login_runbook.sh apply \
   --server-fqdn {{SSH_SERVER_FQDN}} \
   --username {{SSH_USERNAME}}
@@ -88,7 +88,7 @@ apply-ok alias=<alias> server=<fqdn> user=<user>
 ## 2. Revoke the automated login (USER-run)
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/SSH_LOGIN/ssh_login_runbook.sh revoke \
   --server-fqdn {{SSH_SERVER_FQDN}} \
   --username {{SSH_USERNAME}}
@@ -111,7 +111,7 @@ revoke-ok alias=<alias> server=<fqdn> user=<user> (other config and authorized_k
 ## 3. Verify and inspect (AGENT-run)
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/SSH_LOGIN/ssh_login_runbook.sh verify \
   --server-fqdn {{SSH_SERVER_FQDN}} \
   --username {{SSH_USERNAME}}
@@ -124,7 +124,7 @@ authorized_keys match on the server, and a live `BatchMode` login. Expected:
 Non-mutating inspection:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/SSH_LOGIN/ssh_login_runbook.sh status \
   --server-fqdn {{SSH_SERVER_FQDN}} \
   --username {{SSH_USERNAME}}

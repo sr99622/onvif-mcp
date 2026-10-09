@@ -11,14 +11,14 @@ Target state:
 - Runtime registry: `/etc/onvif-mcp/camera_registry.json`
 - Registry URL: `http://{{SERVER_FQDN}}/outputs/camera_registry.json`
 - nginx worker user: `webcam`, with group access to the repository owner's group
-- App files are served in place from `{{REPO_PATH}}/onvif-mcp/apps/`; they are not copied into `/usr/share/nginx/html`
+- App files are served in place from `{{REPO_PATH}}/apps/`; they are not copied into `/usr/share/nginx/html`
 
 ## Required Values
 
 | Value | Description |
 |---|---|
 | `{{SERVER_FQDN}}` | Server fully qualified domain name |
-| `{{REPO_PATH}}` | Parent directory containing this repository |
+| `{{REPO_PATH}}` | Full path to this repository |
 | `{{SERVER_USER}}` | Repository owner / server user |
 
 Stop and ask the user if any required value is missing.
@@ -28,12 +28,12 @@ Stop and ask the user if any required value is missing.
 This document is a script for the agent. The executable source of truth is:
 
 ```text
-{{REPO_PATH}}/onvif-mcp/scripts/APPS/apps_runbook.sh
+{{REPO_PATH}}/scripts/APPS/apps_runbook.sh
 ```
 
 Before executing any AGENT-run command or presenting any USER-run command, replace every double-curly placeholder with the real site value. Do not ask the user to type placeholders literally.
 
-For this runbook, the agent normally runs the commands directly. If a command must be shown to the user, include `cd {{REPO_PATH}}/onvif-mcp` as the first line of the copy-paste block after resolving `{{REPO_PATH}}`.
+For this runbook, the agent normally runs the commands directly. If a command must be shown to the user, include `cd {{REPO_PATH}}` as the first line of the copy-paste block after resolving `{{REPO_PATH}}`.
 
 Do not replace the scripted workflow with ad hoc shell fragments. If behavior must change, update `scripts/APPS/apps_runbook.sh` and keep this runbook as orchestration guidance.
 
@@ -42,7 +42,7 @@ Do not replace the scripted workflow with ad hoc shell fragments. If behavior mu
 Run from the repository directory:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/APPS/apps_runbook.sh apply \
   --server-fqdn {{SERVER_FQDN}} \
   --repo-path {{REPO_PATH}} \
@@ -68,7 +68,7 @@ The script performs the full apps runbook:
 Run:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/APPS/apps_runbook.sh status \
   --server-fqdn {{SERVER_FQDN}} \
   --repo-path {{REPO_PATH}}
@@ -93,7 +93,7 @@ Acceptance checks:
 Run:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/APPS/apps_runbook.sh test --server-fqdn {{SERVER_FQDN}}
 ```
 

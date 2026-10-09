@@ -65,7 +65,7 @@ with the real site value. Do not ask the user to type or edit placeholders.
 Run the script with resolved values:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/DNS/dns_runbook.sh apply \
   --server-fqdn {{SERVER_FQDN}} \
   --server-ip {{SERVER_IP}} \
@@ -100,7 +100,7 @@ The `apply` command performs the full workflow:
 Run:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/DNS/dns_runbook.sh verify \
   --server-fqdn {{SERVER_FQDN}} \
   --server-ip {{SERVER_IP}} \
@@ -111,7 +111,7 @@ scripts/DNS/dns_runbook.sh verify \
 Then inspect status:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/DNS/dns_runbook.sh status \
   --server-fqdn {{SERVER_FQDN}} \
   --server-ip {{SERVER_IP}}

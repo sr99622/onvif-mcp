@@ -74,7 +74,7 @@ Confirm identity and baseline state before applying the script:
 Run with resolved values:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/KEYCLOAK/keycloak_runbook.sh apply \
   --server-fqdn {{SERVER_FQDN}} \
   --backup-path {{BACKUP_PATH}} \
@@ -143,7 +143,7 @@ If you need to rerun only the Hermes OAuth login step, use the subcommand below;
 it is non-interactive and must not be replaced with a manual browser flow:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/KEYCLOAK/keycloak_runbook.sh login-hermes \
   --server-fqdn {{SERVER_FQDN}} \
   --repo-path {{REPO_PATH}}
@@ -164,7 +164,7 @@ completes DCR and login so the active client registration is included.
 ## 4. Status checks (AGENT-run)
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/KEYCLOAK/keycloak_runbook.sh status \
   --server-fqdn {{SERVER_FQDN}} \
   --repo-path {{REPO_PATH}}
@@ -190,7 +190,7 @@ After nginx validation, create a complete nginx checkpoint per
 [NGINX_BACKUP.md](NGINX_BACKUP.md):
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/NGINX_BACKUP/nginx_backup_runbook.sh create-checkpoint \
   --server-fqdn {{SERVER_FQDN}} \
   --backup-path {{BACKUP_PATH}} \
@@ -201,7 +201,7 @@ After the isolated restore test and successful real-client DCR/login, create a
 Keycloak checkpoint per [KEYCLOAK_BACKUP.md](KEYCLOAK_BACKUP.md):
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/KEYCLOAK_BACKUP/keycloak_backup_runbook.sh create-checkpoint \
   --backup-path {{BACKUP_PATH}} \
   --trigger KEYCLOAK.md
@@ -221,7 +221,7 @@ Keycloak checkpoints.
 Status:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/KEYCLOAK/keycloak_runbook.sh status \
   --server-fqdn {{SERVER_FQDN}} \
   --repo-path {{REPO_PATH}}

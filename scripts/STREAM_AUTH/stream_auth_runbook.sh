@@ -25,7 +25,7 @@ shift || true
 server_fqdn=""
 server_ip=""
 backup_path=""
-repo_path="$HOME"
+repo_path="$HOME/onvif-mcp"
 realm="mcp"
 login_user="mcp-user"
 browser_client_id="camera-web"
@@ -90,7 +90,7 @@ require_arg() {
     exit 64
   }
 }
-project_dir() { printf '%s/onvif-mcp' "${repo_path%/}"; }
+project_dir() { printf '%s' "${repo_path%/}"; }
 origin() { printf 'https://%s' "$server_fqdn"; }
 issuer() { printf 'https://%s/auth/realms/%s' "$server_fqdn" "$realm"; }
 resource_url() { printf 'https://%s/mcp' "$server_fqdn"; }

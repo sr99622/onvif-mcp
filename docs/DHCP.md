@@ -20,7 +20,7 @@ The server's other interface and existing LAN/Internet configuration must not be
 | Value | Description |
 |---|---|
 | `{{PRVT_NET_EN_NAME}}` | Ethernet adapter hosting the private camera subnet |
-| `{{REPO_PATH}}` | Parent directory containing this repository |
+| `{{REPO_PATH}}` | Full path to this repository |
 
 Stop and ask the user if any required value is missing.
 
@@ -29,12 +29,12 @@ Stop and ask the user if any required value is missing.
 This document is a script for the agent. The executable source of truth is:
 
 ```text
-{{REPO_PATH}}/onvif-mcp/scripts/DHCP/dhcp_runbook.sh
+{{REPO_PATH}}/scripts/DHCP/dhcp_runbook.sh
 ```
 
 Before executing any AGENT-run command or presenting any USER-run command, replace every double-curly placeholder with the real site value. Do not ask the user to type placeholders literally.
 
-For this runbook, the agent normally runs the commands directly. If a command must be shown to the user, include `cd {{REPO_PATH}}/onvif-mcp` as the first line of the copy-paste block after resolving `{{REPO_PATH}}`.
+For this runbook, the agent normally runs the commands directly. If a command must be shown to the user, include `cd {{REPO_PATH}}` as the first line of the copy-paste block after resolving `{{REPO_PATH}}`.
 
 Do not replace the scripted workflow with ad hoc shell fragments. If behavior must change, update `scripts/DHCP/dhcp_runbook.sh` and keep this runbook as orchestration guidance.
 
@@ -43,7 +43,7 @@ Do not replace the scripted workflow with ad hoc shell fragments. If behavior mu
 Run from the repository directory:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/DHCP/dhcp_runbook.sh apply --interface {{PRVT_NET_EN_NAME}}
 ```
 
@@ -66,7 +66,7 @@ The script performs the full DHCP runbook:
 Run:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/DHCP/dhcp_runbook.sh status --interface {{PRVT_NET_EN_NAME}}
 ```
 

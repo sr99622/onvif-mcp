@@ -10,7 +10,7 @@ http://{{SERVER_FQDN}}/snapshot/<serial_number>/<profile_token>/
 
 Target state:
 
-- Source: `{{REPO_PATH}}/onvif-mcp/services/snapshot_proxy.py`
+- Source: `{{REPO_PATH}}/services/snapshot_proxy.py`
 - Routes: `/etc/onvif-mcp/snapshot_routes.json`
 - Shared environment file: `/etc/onvif-mcp-http.env`, mode `600 root:root`
 - Service: `snapshot-proxy.service`, enabled and active
@@ -23,7 +23,7 @@ Target state:
 | Value | Description |
 |---|---|
 | `{{SERVER_FQDN}}` | Server fully qualified domain name |
-| `{{REPO_PATH}}` | Parent directory containing this repository |
+| `{{REPO_PATH}}` | Full path to this repository |
 | `{{SERVER_USER}}` | System user the proxy runs as |
 | `{{CAMERA_USERNAME}}` | Camera username |
 | `pass show camera` | Camera password from the local password store |
@@ -35,12 +35,12 @@ Stop and ask the user if any required value is missing. Do not hard-code the cam
 This document is a script for the agent. The executable source of truth is:
 
 ```text
-{{REPO_PATH}}/onvif-mcp/scripts/SNAPSHOT/snapshot_runbook.sh
+{{REPO_PATH}}/scripts/SNAPSHOT/snapshot_runbook.sh
 ```
 
 Before executing any AGENT-run command or presenting any USER-run command, replace every double-curly placeholder with the real site value. Do not ask the user to type placeholders literally.
 
-For this runbook, the agent normally runs the commands directly. If a command must be shown to the user, include `cd {{REPO_PATH}}/onvif-mcp` as the first line of the copy-paste block after resolving `{{REPO_PATH}}`.
+For this runbook, the agent normally runs the commands directly. If a command must be shown to the user, include `cd {{REPO_PATH}}` as the first line of the copy-paste block after resolving `{{REPO_PATH}}`.
 
 Do not replace the scripted workflow with ad hoc shell fragments. If behavior must change, update `scripts/SNAPSHOT/snapshot_runbook.sh` and keep this runbook as orchestration guidance.
 
@@ -49,7 +49,7 @@ Do not replace the scripted workflow with ad hoc shell fragments. If behavior mu
 Run from the repository directory:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/SNAPSHOT/snapshot_runbook.sh apply \
   --server-fqdn {{SERVER_FQDN}} \
   --camera-username {{CAMERA_USERNAME}} \
@@ -72,7 +72,7 @@ The script performs the full snapshot runbook:
 If `pass show camera` fails because GPG needs the passphrase, stop and ask the user to run this in their own terminal:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 pass show camera >/dev/null
 ```
 
@@ -83,7 +83,7 @@ After the user confirms that command succeeded, rerun the `apply` command. Do no
 Run:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/SNAPSHOT/snapshot_runbook.sh status --server-fqdn {{SERVER_FQDN}}
 ```
 
@@ -101,7 +101,7 @@ Acceptance checks:
 Run:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/SNAPSHOT/snapshot_runbook.sh test --server-fqdn {{SERVER_FQDN}}
 ```
 

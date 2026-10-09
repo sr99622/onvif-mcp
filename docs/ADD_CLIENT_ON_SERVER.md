@@ -76,7 +76,7 @@ REST calls with an old token or a component UUID remembered from another run.
 Run with resolved values:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/ADD_CLIENT_ON_SERVER/add_client_on_server_runbook.sh apply \
   --client-source-ip {{CLIENT_SOURCE_IP}} \
   --backup-path {{BACKUP_PATH}} \
@@ -106,7 +106,7 @@ The script performs these executable stages:
 ## 2. Status checks (AGENT-run)
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/ADD_CLIENT_ON_SERVER/add_client_on_server_runbook.sh status \
   --client-source-ip {{CLIENT_SOURCE_IP}}
 ```

@@ -27,7 +27,7 @@ copy-paste prompts that must be shown when interactive user action is required.
 | `{{SERVER_USER}}` | Account name for the agent and service ownership |
 | `{{CA_ROOT_PATH}}` | Private CA root directory |
 | `{{BACKUP_PATH}}` | Mounted SMB share path |
-| `{{REPO_PATH}}` | Parent directory containing `onvif-mcp` |
+| `{{REPO_PATH}}` | Full path to this repository |
 | `{{TIMESTAMP}}` | generated UTC timestamp, `YYYYMMDDhhmmssZ` |
 
 Passphrases are not supplied as variables and must never be pasted into chat.
@@ -57,7 +57,7 @@ replace every double-curly placeholder with the real site value. Do not ask the
 user to type or edit placeholders such as `{{SERVER_FQDN}}`, `{{SERVER_IP}}`,
 `{{CA_ROOT_PATH}}`, or `{{REPO_PATH}}`.
 
-When a USER-run command invokes a repository script, include `cd {{REPO_PATH}}/onvif-mcp`
+When a USER-run command invokes a repository script, include `cd {{REPO_PATH}}`
 as the first line after resolving it to the real repository path. The user must
 be able to copy and paste the prompt without modification.
 
@@ -86,7 +86,7 @@ because GPG needs a pinentry prompt, stop and show the user this exact resolved
 copy-paste block:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/SITE_CERT/site_cert_runbook.sh prime-gpg-cache
 ```
 
@@ -100,7 +100,7 @@ Run the script with resolved values. Omit `--timestamp` unless continuing a know
 attempt that already reserved a timestamp; otherwise the script generates one.
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/SITE_CERT/site_cert_runbook.sh apply \
   --server-fqdn {{SERVER_FQDN}} \
   --server-ip {{SERVER_IP}} \
@@ -142,7 +142,7 @@ and renewal references need it.
 Run verification with the exact timestamp printed by `apply`:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/SITE_CERT/site_cert_runbook.sh verify \
   --server-fqdn {{SERVER_FQDN}} \
   --server-ip {{SERVER_IP}} \
@@ -156,7 +156,7 @@ scripts/SITE_CERT/site_cert_runbook.sh verify \
 Then inspect non-secret status:
 
 ```bash
-cd {{REPO_PATH}}/onvif-mcp
+cd {{REPO_PATH}}
 scripts/SITE_CERT/site_cert_runbook.sh status \
   --server-fqdn {{SERVER_FQDN}} \
   --server-ip {{SERVER_IP}} \
