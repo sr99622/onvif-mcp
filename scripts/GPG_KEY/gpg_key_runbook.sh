@@ -20,6 +20,8 @@ This script implements docs/GPG_KEY.md with site-specific values as arguments.
 It never accepts passwords as arguments. GPG/pass prompts remain interactive.
 The backup path is a pre-mounted location (SMB share, external drive, or any
 directory on the system drive) that must already exist and be writable.
+Whatever storage type is used, the location must enforce the SMB-mount
+permission model: mode 0700 owned by the runbook user, no extra ACL entries.
 USAGE
 }
 
@@ -84,6 +86,26 @@ require_arg() {
   if [[ -z "$value" ]]; then
     echo "Missing required argument: $name" >&2
     exit 64
+  fi
+}
+
+require_backup_location() {
+  local target="${backup_path%/}"
+  [[ -d "$target" ]] || { echo "$target does not exist; the backup location must already be mounted or created before running the runbook." >&2; exit 1; }
+  [[ -w "$target" ]] || { echo "$target is not writable by $(id -un)" >&2; exit 1; }
+  # Storage type is free (SMB share, mounted external drive, or local folder),
+  # but the SMB-mount permission model is enforced on all of them: owner-only
+  # 0700 directory, no ACL entries beyond the base owner-only set.
+  local mode owner extra_acl
+  mode="$(stat -c '%a' "$target")"
+  owner="$(stat -c '%U:%G' "$target")"
+  [[ "$mode" == "700" ]] || { echo "$target is mode $mode, not 0700; refusing to write backups into a group- or world-readable location." >&2; exit 1; }
+  [[ "$owner" == "$(id -un):$(id -gn)" ]] || { echo "$target is owned by $owner, not $(id -un):$(id -gn); refusing." >&2; exit 1; }
+  if command -v getfacl >/dev/null; then
+    extra_acl="$(getfacl -p "$target" 2>/dev/null | grep -v '^#' | grep -v '^$' | grep -v -E '^(user::rw-?x?|group::---|other::---)$' || true)"
+    [[ -z "$extra_acl" ]] || { echo "FAIL: unexpected ACL entry on the backup location:"; echo "$extra_acl" >&2; exit 1; }
+  else
+    echo "note: getfacl not installed; ACL check skipped (install acl for full enforcement)." >&2
   fi
 }
 
@@ -211,23 +233,16 @@ verify-passwords)
 
 backup)
   require_arg --backup-path "$backup_path"
+  require_backup_location
   if [[ -z "$label" ]]; then
     label="$(date -u +%Y%m%d%H%M%SZ)-initial"
-  fi
-  if [[ ! -d "$backup_path" ]]; then
-    echo "$backup_path does not exist; the backup location must already be mounted/created before running the runbook." >&2
-    exit 1
-  fi
-  if [[ ! -w "$backup_path" ]]; then
-    echo "$backup_path is not writable; stop and warn the user before backing up." >&2
-    exit 1
   fi
   umask 077
   backup_dir="$backup_path/Camera-CA-Backups"
   local_export="$HOME/ca-vault-gpg.key.gpg"
   backup_export="$backup_dir/ca-vault-gpg.key.gpg"
   test -s "$local_export"
-  mkdir -p "$backup_dir"
+  install -d -m 0700 "$backup_dir"
   if [[ ! -e "$backup_export" ]]; then
     install -m 600 "$local_export" "$backup_export"
   else

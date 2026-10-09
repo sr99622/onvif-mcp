@@ -26,7 +26,7 @@ copy-paste prompts that must be shown when interactive user action is required.
 | `{{SERVER_IP}}` | Server IP address used by clients for HTTPS |
 | `{{SERVER_USER}}` | Account name for the agent and service ownership |
 | `{{CA_ROOT_PATH}}` | Private CA root directory |
-| `{{BACKUP_PATH}}` | Mounted SMB share path |
+| `{{BACKUP_PATH}}` | Backup location (SMB shared folder, mounted external drive, or local folder); must already exist and enforce the SMB-mount permission model (mode 0700 owner-only, no extra ACL entries) |
 | `{{REPO_PATH}}` | Full path to this repository |
 | `{{TIMESTAMP}}` | generated UTC timestamp, `YYYYMMDDhhmmssZ` |
 
@@ -46,9 +46,10 @@ Complete `CREATE_CA_CERT.md` first. The local CA must exist on this same host:
 {{CA_ROOT_PATH}}/camera-system-ca/openssl.cnf
 ```
 
-The backup path must be a real mounted CIFS filesystem, not just a local
-directory or autofs placeholder. The script refuses to write CA backups unless a
-concrete CIFS row exists for `{{BACKUP_PATH}}`.
+The backup path must already exist, be writable, and enforce the SMB-mount
+permission model: mode 0700 owned by the runbook user, no extra ACL entries.
+The storage type is free (SMB share, mounted external drive, or local folder).
+The script refuses to write CA backups unless these checks pass.
 
 ## Agent Presentation Rules
 
@@ -112,8 +113,8 @@ scripts/SITE_CERT/site_cert_runbook.sh apply \
 
 The `apply` command performs the full workflow:
 
-- verifies packages, CA artifacts, password-store access, and the CIFS backup
-  mount;
+- verifies packages, CA artifacts, password-store access, and the backup
+  location (exists, writable, mode 0700 owner-only, no extra ACL entries);
 - creates `/etc/nginx/tls` root-owned mode `700`;
 - generates `/etc/nginx/tls/{{SERVER_FQDN}}.key.pem` if missing;
 - creates and verifies `/etc/nginx/tls/{{SERVER_FQDN}}.csr.pem` with SAN

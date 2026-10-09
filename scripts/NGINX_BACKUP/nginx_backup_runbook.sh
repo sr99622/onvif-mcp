@@ -29,10 +29,24 @@ done
 require_arg() { local name="$1" value="$2"; [[ -n "$value" ]] || { echo "Missing required argument: $name" >&2; exit 64; }; }
 backup_root() { printf '%s/nginx' "${backup_path%/}"; }
 
-require_mounted_backup() {
+require_backup_location() {
   local target="${backup_path%/}"
-  findmnt -rn -T "$target" >/dev/null || { echo "$target is not mounted or reachable" >&2; exit 1; }
+  [[ -d "$target" ]] || { echo "$target does not exist; the backup location must already be mounted or created before running the runbook." >&2; exit 1; }
   [[ -w "$target" ]] || { echo "$target is not writable by $(id -un)" >&2; exit 1; }
+  # Storage type is free (SMB share, mounted external drive, or local folder),
+  # but the SMB-mount permission model is enforced on all of them: owner-only
+  # 0700 directory, no ACL entries beyond the base owner-only set.
+  local mode owner extra_acl
+  mode="$(stat -c '%a' "$target")"
+  owner="$(stat -c '%U:%G' "$target")"
+  [[ "$mode" == "700" ]] || { echo "$target is mode $mode, not 0700; refusing to write backups into a group- or world-readable location." >&2; exit 1; }
+  [[ "$owner" == "$(id -un):$(id -gn)" ]] || { echo "$target is owned by $owner, not $(id -un):$(id -gn); refusing." >&2; exit 1; }
+  if command -v getfacl >/dev/null; then
+    extra_acl="$(getfacl -p "$target" 2>/dev/null | grep -v '^#' | grep -v '^$' | grep -v -E '^(user::rw-?x?|group::---|other::---)$' || true)"
+    [[ -z "$extra_acl" ]] || { echo "FAIL: unexpected ACL entry on the backup location:"; echo "$extra_acl" >&2; exit 1; }
+  else
+    echo "note: getfacl not installed; ACL check skipped (install acl for full enforcement)." >&2
+  fi
 }
 
 preflight() {
@@ -164,7 +178,7 @@ write_metadata() {
 }
 
 create_checkpoint() {
-  require_arg --server-fqdn "$server_fqdn"; require_arg --backup-path "$backup_path"; require_mounted_backup; preflight
+  require_arg --server-fqdn "$server_fqdn"; require_arg --backup-path "$backup_path"; require_backup_location; preflight
   local root timestamp staging final
   root="$(backup_root)"
   timestamp="$(date -u +%Y%m%d%H%M%SZ)"
@@ -177,7 +191,7 @@ create_checkpoint() {
   build_manifest "$staging"
   sudo tar --owner=0 --group=0 --preserve-permissions --acls --xattrs -cf "$staging/nginx.tar" -C / --files-from "$staging/manifest.txt"
   sudo tar -tf "$staging/nginx.tar" | sort > "$staging/archive-members.txt"
-  sort "$staging/manifest.txt" > "$staging/manifest.sorted"
+  sudo sort "$staging/manifest.txt" > "$staging/manifest.sorted"
   diff -u "$staging/manifest.sorted" "$staging/archive-members.txt"
   sudo env staging="$staging" python3 - <<'PY'
 import os, tarfile

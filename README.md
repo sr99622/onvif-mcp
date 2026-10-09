@@ -55,7 +55,7 @@ To revoke access, simply delete the file in the /etc/sudoers.d folder.
 
 ## Backup Strategies
 
-A complex system in a production environment requires a robust backup strategy to avoid excessive downtime in the event of a server failure. The system is designed to support incremental backups as it is installed and maintained. There are two storage types available to hold backup data, shared SMB folder and mounted external drive.
+A complex system in a production environment requires a robust backup strategy to avoid excessive downtime in the event of a server failure. The system is designed to support incremental backups as it is installed and maintained. Backup data can be held in a shared SMB folder, a mounted external drive, or a local filesystem folder. Whichever storage type is chosen, the backup location must enforce the same permission model the SMB mount enforced: mode 0700 owned by the runbook user, files 0600, no extra ACL entries.
 
 * Shared SMB folder
 
@@ -64,6 +64,10 @@ A complex system in a production environment requires a robust backup strategy t
 * Mounted external drive
 
     This is a simpler strategy that involves only a mounted external drive accessible to the agent. This will be a common arrangement in many systems and avoids the complexity of setting up a shared SMB folder.
+
+* Local filesystem folder
+
+    A folder on the local filesystem is also accepted as `{{BACKUP_PATH}}`, provided it enforces the permission model above. Note that a local folder does not provide off-host redundancy; it is intended for staging, testing, or single-machine arrangements.
 
 ## Building the Server
 
@@ -83,11 +87,11 @@ Be mindful of model context size when running the configurations shown below. St
 
     The system will need several secret passwords for cameras, shared folders and server management. The [GPG_KEY.md](docs/GPG_KEY.md) runbook contains instructions for setting up a GPG protected password store for these secrets.
 
-    The server will need a backup location for critical data. An SMB share is a good place to do this. Assuming you have another Ubuntu machine set up on your local network, Hermes can do this for you using the instructions in the runbook [SMB_SERVE.md](docs/SMB_SERVE.md). Other mounted storage locations work as well, but the procedures that follow will expect there to be a directory into which backup files can be written with proper file permissions.
+    The server will need a backup location for critical data. An SMB share is a good place to do this. Assuming you have another Ubuntu machine set up on your local network, Hermes can do this for you using the instructions in the runbook [SMB_SERVE.md](docs/SMB_SERVE.md). A mounted external drive or a local filesystem folder works as well, but whichever storage type is chosen, the procedures that follow expect a directory that enforces the SMB-mount permission model: mode 0700 owned by the runbook user, files 0600, no extra ACL entries.
 
-    Assuming you have chosen the SMB strategy and have a server set up, prompt the agent to create the gpg key, password store, smb mount and backup the keys.
+    Assuming you have chosen a backup storage type (SMB share, mounted external drive, or local folder) and the location is set up, prompt the agent to create the gpg key, password store, and backup the keys. If you chose the SMB strategy, the mount is created by SMB_SERVE.md before this step.
 
-    During this step, the user will be prompted to create the GPG key on the local host. Advise the user that this key should be kept in a secure location. Once the key has been created, the password store will be created and the user will be prompted to enter the password for the cameras. This system assumes that the camera password is shared by the cameras on the network. The user will also be prompted to enter the SMB password associated with the SMB_USERNAME. The password store and GPG key will then be backed up on the SMB_MOUNT shared folder.
+    During this step, the user will be prompted to create the GPG key on the local host. Advise the user that this key should be kept in a secure location. Once the key has been created, the password store will be created and the user will be prompted to enter the password for the cameras. This system assumes that the camera password is shared by the cameras on the network. If the SMB strategy was chosen, the user will also be prompted to enter the SMB password associated with the SMB_USERNAME. The password store and GPG key will then be backed up to `{{BACKUP_PATH}}`.
 
     **Required Values**
 
@@ -152,7 +156,7 @@ Be mindful of model context size when running the configurations shown below. St
 
 5. ### HTTPS Encryption
 
-    Included are runbooks for generating and distributing a Certificate Authority (CA) and site certificate locally. The endpoints are re-mapped to provide encryption for the suite of services. The instructions include a backup to the SMB shared drive configured earlier.
+    Included are runbooks for generating and distributing a Certificate Authority (CA) and site certificate locally. The endpoints are re-mapped to provide encryption for the suite of services. The instructions include a backup to the backup location (`{{BACKUP_PATH}}`) configured earlier.
 
     Following completion of this section, nginx will be serving the endpoints under SSL encryption and clients will need to authorize the keys from their certificate store. Instructions for client configuration are in the [CLIENT.md](docs/CLIENT.md) runbook. The site certificate can be accessed through an unencrypted endpoint on the server.
 
@@ -161,7 +165,7 @@ Be mindful of model context size when running the configurations shown below. St
     | Name | Description |
     |------|-------------|
     | `{{CA_ROOT_PATH}}` | Private CA root directory (e.g. $HOME/Private-CA) |
-    | `{{BACKUP_PATH}}` | SMB shared drive to be created on the local host (e.g. `/mnt/camera-backup`) |
+    | `{{BACKUP_PATH}}` | Backup location (SMB shared folder, mounted external drive, or local folder); must already exist and enforce the SMB-mount permission model (mode 0700 owner-only, no extra ACL entries) |
     | `{{SERVER_FQDN}}` | Fully Qualified Domain Name of the server, e.g. camera.home.arpa |
     | `{{SERVER_USER}}` | Account name on the server under which Hermes is run |
     | `{{REPO_PATH}}` | Full path to this repository |

@@ -17,7 +17,7 @@ a new machine.
 
 | Name | Description |
 |---|---|
-| `{{BACKUP_PATH}}` | Pre-mounted backup location (SMB shared folder, mounted external drive, or any directory on the system drive) |
+| `{{BACKUP_PATH}}` | Backup location (SMB shared folder, mounted external drive, or local folder); must already exist and enforce the SMB-mount permission model (mode 0700 owner-only, no extra ACL entries) |
 | `{{REPO_PATH}}` | Full path to this repository on the camera host |
 | `{{GPG_FINGERPRINT}}` | Full fingerprint copied from the step 2 `sec` output |
 | `{{TIMESTAMP}}` | generated timestamp at capture time with `date -u +%Y%m%d%H%M%SZ` |
@@ -32,9 +32,11 @@ The password-store backup is stored at
 backup; create a new timestamped copy after any password-store manipulation.
 
 The backup location must already be mounted or created before this runbook is
-executed; this runbook does not mount anything. Do not create backup files under
-an unmounted local directory by mistake. If `{{BACKUP_PATH}}` does not exist or
-is not writable, stop and warn the user; do not continue with the runbook.
+executed; this runbook does not mount anything. Whatever storage type is used,
+it must enforce the SMB-mount permission model: mode 0700 owned by the runbook
+user, no extra ACL entries. If `{{BACKUP_PATH}}` does not exist, is not
+writable, or fails the permission checks, stop and warn the user; do not
+continue with the runbook.
 
 ## Agent Presentation Rules
 

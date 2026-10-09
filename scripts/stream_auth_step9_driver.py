@@ -145,11 +145,12 @@ def main():
                    help="protected app route to land on after login")
     p.add_argument("--second-route", default="/multiview/",
                    help="second protected route checked in the same session")
-    p.add_argument("--snapshot-path",
-                   default="/snapshot/4B0013BPAABE264/MediaProfile000/",
-                   help="known direct snapshot path ({{SNAPSHOT_PATH}})")
-    p.add_argument("--webrtc-url", default="/webrtc/ND021810001394/MediaProfile000/",
-                   help="known direct WebRTC stream URL under /webrtc/.../")
+    p.add_argument("--snapshot-path", required=True,
+                   help="known direct snapshot path ({{SNAPSHOT_PATH}}); required, "
+                        "resolve from /etc/onvif-mcp/snapshot_routes.json")
+    p.add_argument("--webrtc-url", required=True,
+                   help="known direct WebRTC stream URL under /webrtc/.../; required, "
+                        "resolve from a working stream route")
     p.add_argument("--realm", default="mcp", help="Keycloak realm ({{MCP_REALM}})")
     p.add_argument("--username", default="mcp-user",
                    help="browser login user ({{MCP_LOGIN_USER}})")

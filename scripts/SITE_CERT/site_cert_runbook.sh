@@ -39,7 +39,7 @@ require_all() { require_arg --server-fqdn "$server_fqdn"; require_arg --server-i
 project_dir() { printf '%s' "${repo_path%/}"; }
 ca_dir() { printf '%s/camera-system-ca' "${ca_root%/}"; }
 local_backup_dir() { printf '%s/backups' "${ca_root%/}"; }
-smb_backup_dir() { printf '%s/Camera-CA-Backups' "${backup_path%/}"; }
+backup_dir() { printf '%s/Camera-CA-Backups' "${backup_path%/}"; }
 short_label() { printf '%s' "$server_fqdn" | sed 's/[^A-Za-z0-9._-]/-/g' | cut -d. -f1; }
 
 ensure_timestamp() {
@@ -47,11 +47,23 @@ ensure_timestamp() {
   [[ "$timestamp" =~ ^[0-9]{14}Z$ ]] || { echo "Timestamp must be UTC form YYYYMMDDhhmmssZ; got: $timestamp" >&2; exit 64; }
 }
 
-require_cifs_backup() {
-  if ! findmnt -rn -t cifs -o TARGET | grep -Fx "${backup_path%/}" >/dev/null; then
-    echo "${backup_path%/} is not a mounted CIFS filesystem; refusing to write CA backups into a local directory." >&2
-    findmnt -rn -T "${backup_path%/}" -o TARGET,SOURCE,FSTYPE,OPTIONS >&2 || true
-    exit 1
+require_backup_location() {
+  local target="${backup_path%/}"
+  [[ -d "$target" ]] || { echo "$target does not exist; the backup location must already be mounted or created before running the runbook." >&2; exit 1; }
+  [[ -w "$target" ]] || { echo "$target is not writable by $(id -un)" >&2; exit 1; }
+  # Storage type is free (SMB share, mounted external drive, or local folder),
+  # but the SMB-mount permission model is enforced on all of them: owner-only
+  # 0700 directory, no ACL entries beyond the base owner-only set.
+  local mode owner extra_acl
+  mode="$(stat -c '%a' "$target")"
+  owner="$(stat -c '%U:%G' "$target")"
+  [[ "$mode" == "700" ]] || { echo "$target is mode $mode, not 0700; refusing to write backups into a group- or world-readable location." >&2; exit 1; }
+  [[ "$owner" == "$(id -un):$(id -gn)" ]] || { echo "$target is owned by $owner, not $(id -un):$(id -gn); refusing." >&2; exit 1; }
+  if command -v getfacl >/dev/null; then
+    extra_acl="$(getfacl -p "$target" 2>/dev/null | grep -v '^#' | grep -v '^$' | grep -v -E '^(user::rw-?x?|group::---|other::---)$' || true)"
+    [[ -z "$extra_acl" ]] || { echo "FAIL: unexpected ACL entry on the backup location:"; echo "$extra_acl" >&2; exit 1; }
+  else
+    echo "note: getfacl not installed; ACL check skipped (install acl for full enforcement)." >&2
   fi
 }
 
@@ -91,8 +103,8 @@ verify_prereqs() {
   test -s "$HOME/.password-store/camera-ca/root-key-passphrase.gpg"
   pass show camera-ca/root-key-passphrase >/dev/null
   mkdir -p "$(local_backup_dir)"
-  require_cifs_backup
-  mkdir -p "$(smb_backup_dir)"
+  require_backup_location
+  mkdir -p "$(backup_dir)"
 }
 
 generate_tls_key_and_csr() {
@@ -175,16 +187,16 @@ ensure_age_entry() {
 backup_password_store() {
   local label="$timestamp-site-cert-passphrase"
   local local_file="$(local_backup_dir)/password-store-backup-$label.tar.gz"
-  local smb_file="$(smb_backup_dir)/password-store-backup-$label.tar.gz"
+  local backup_file="$(backup_dir)/password-store-backup-$label.tar.gz"
   if [[ ! -e "$local_file" ]]; then
     tar -C "$HOME" -czf "$local_file" .password-store
     chmod 600 "$local_file"
   fi
   test -s "$local_file"
-  [[ -e "$smb_file" ]] || cp --update=none "$local_file" "$(smb_backup_dir)/"
-  cmp -s "$local_file" "$smb_file"
-  tr -d '\n' < "$HOME/.password-store/.gpg-id" > "$(smb_backup_dir)/pass-gpg-id.txt"
-  printf '\n' >> "$(smb_backup_dir)/pass-gpg-id.txt"
+  [[ -e "$backup_file" ]] || cp --update=none "$local_file" "$(backup_dir)/"
+  cmp -s "$local_file" "$backup_file"
+  tr -d '\n' < "$HOME/.password-store/.gpg-id" > "$(backup_dir)/pass-gpg-id.txt"
+  printf '\n' >> "$(backup_dir)/pass-gpg-id.txt"
 }
 
 archive_ca_state() {
@@ -206,10 +218,10 @@ archive_ca_state() {
   tar -tzf "$tmp" | grep -Fx "camera-system-ca/csr/$server_fqdn.ext.cnf" >/dev/null
   tar -tzf "$tmp" | grep -Fx "camera-system-ca/index.txt" >/dev/null
   tar -tzf "$tmp" | grep -Fx "camera-system-ca/serial" >/dev/null
-  local smb_archive="$(smb_backup_dir)/$(basename "$archive")"
-  [[ -e "$smb_archive" ]] || cp --update=none "$archive" "$(smb_backup_dir)/"
-  cmp -s "$archive" "$smb_archive"
-  sha256sum "$archive" "$smb_archive"
+  local backup_archive="$(backup_dir)/$(basename "$archive")"
+  [[ -e "$backup_archive" ]] || cp --update=none "$archive" "$(backup_dir)/"
+  cmp -s "$archive" "$backup_archive"
+  sha256sum "$archive" "$backup_archive"
 }
 
 install_nginx_certs() {
@@ -415,7 +427,7 @@ print_status() {
   echo "== certificate =="; [[ -f "/etc/nginx/tls/$server_fqdn.crt.pem" ]] && sudo openssl x509 -in "/etc/nginx/tls/$server_fqdn.crt.pem" -noout -subject -issuer -dates -serial || true
   echo "== nginx =="; sudo nginx -t 2>&1 || true; systemctl is-active nginx 2>/dev/null || true; sudo ss -lntp 'sport = :443' || true
   echo "== endpoints =="; for u in /cameras/ /multiview/ /outputs/camera_registry.json; do code="$(sudo curl -k -sS --resolve "$server_fqdn:443:$server_ip" -o /dev/null -w '%{http_code}' "https://$server_fqdn$u" || true)"; printf '%-40s %s\n' "$u" "$code"; done
-  echo "== backups =="; find "$(smb_backup_dir)" -maxdepth 1 -type f -name "*${timestamp:-}*" -printf '%m %u:%g %s %p\n' 2>/dev/null | sort || true
+  echo "== backups =="; find "$(backup_dir)" -maxdepth 1 -type f -name "*${timestamp:-}*" -printf '%m %u:%g %s %p\n' 2>/dev/null | sort || true
 }
 
 case "$cmd" in
@@ -430,7 +442,7 @@ case "$cmd" in
   verify)
     require_all; require_arg --timestamp "$timestamp"; verify_prereqs
     sign_certificate; archive_ca_state; install_nginx_certs; sudo nginx -t; validate_https
-    test -s "$(smb_backup_dir)/camera-system-ca-after-$(short_label)-cert-$timestamp.tar.gz.age"
+    test -s "$(backup_dir)/camera-system-ca-after-$(short_label)-cert-$timestamp.tar.gz.age"
     echo "verify-ok timestamp=$timestamp"
     ;;
   status)

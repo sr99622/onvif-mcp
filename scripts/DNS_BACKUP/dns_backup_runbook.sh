@@ -32,13 +32,24 @@ require_arg() { local name="$1" value="$2"; [[ -n "$value" ]] || { echo "Missing
 require_all() { require_arg --server-fqdn "$server_fqdn"; require_arg --server-ip "$server_ip"; require_arg --rvrs-srv-ip "$rvrs_srv_ip"; require_arg --upstream-dns "$upstream_dns"; require_arg --backup-path "$backup_path"; }
 backup_root() { printf '%s/dns' "${backup_path%/}"; }
 
-require_mounted_backup() {
+require_backup_location() {
   local target="${backup_path%/}"
-  if ! findmnt -rn -T "$target" -o TARGET | grep -Fx "$target" >/dev/null; then
-    echo "$target is not a mounted filesystem target; refusing DNS checkpoint." >&2
-    exit 1
+  [[ -d "$target" ]] || { echo "$target does not exist; the backup location must already be mounted or created before running the runbook." >&2; exit 1; }
+  [[ -w "$target" ]] || { echo "$target is not writable by $(id -un)" >&2; exit 1; }
+  # Storage type is free (SMB share, mounted external drive, or local folder),
+  # but the SMB-mount permission model is enforced on all of them: owner-only
+  # 0700 directory, no ACL entries beyond the base owner-only set.
+  local mode owner extra_acl
+  mode="$(stat -c '%a' "$target")"
+  owner="$(stat -c '%U:%G' "$target")"
+  [[ "$mode" == "700" ]] || { echo "$target is mode $mode, not 0700; refusing to write backups into a group- or world-readable location." >&2; exit 1; }
+  [[ "$owner" == "$(id -un):$(id -gn)" ]] || { echo "$target is owned by $owner, not $(id -un):$(id -gn); refusing." >&2; exit 1; }
+  if command -v getfacl >/dev/null; then
+    extra_acl="$(getfacl -p "$target" 2>/dev/null | grep -v '^#' | grep -v '^$' | grep -v -E '^(user::rw-?x?|group::---|other::---)$' || true)"
+    [[ -z "$extra_acl" ]] || { echo "FAIL: unexpected ACL entry on the backup location:"; echo "$extra_acl" >&2; exit 1; }
+  else
+    echo "note: getfacl not installed; ACL check skipped (install acl for full enforcement)." >&2
   fi
-  test -w "$target" || { echo "$target is not writable by $(id -un)" >&2; exit 1; }
 }
 
 require_dns_verified() {
@@ -113,13 +124,13 @@ write_metadata() {
 }
 
 create_checkpoint() {
-  require_all; require_mounted_backup; require_dns_verified
+  require_all; require_backup_location; require_dns_verified
   local root timestamp staging final tar_members tmpinspect
   root="$(backup_root)"
   timestamp="$(date -u +%Y%m%d%H%M%SZ)"
   staging="$root/.staging-$timestamp-$$"
   final="$root/$timestamp"
-  sudo install -d -m 0700 "$root"
+  install -d -m 0700 "$root"
   test ! -e "$staging"
   test ! -e "$final"
   install -d -m 0700 "$staging"

@@ -1,6 +1,6 @@
 # Server Backup and Restore
 
-The system is designed such that it can be recovered from backup in the event of server failure. The integrated backup mechanism requires a shared folder served by another machine. A runbook is included for setting up a shared Linux SMB server with corresponding client configuration on the camera host with appropriate file permissions.
+The system is designed such that it can be recovered from backup in the event of server failure. The integrated backup mechanism stores recovery points under `{{BACKUP_PATH}}`, which may be a shared folder served by another machine (SMB), a mounted external drive, or a local filesystem folder. A runbook is included for setting up the shared Linux SMB server with corresponding client configuration on the camera host; whichever storage type is used, the location must enforce the same permission model the SMB mount enforced (mode 0700 owner-only, files 0600, no extra ACL entries).
 
 ## Recovery Procedure
 

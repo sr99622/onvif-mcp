@@ -19,7 +19,7 @@ restore procedure remains documented guidance until a restore script is added.
 | Symbol | Description |
 |---|---|
 | `{{SERVER_FQDN}}` | Fully Qualified Domain Name of the server |
-| `{{BACKUP_PATH}}` | Mounted backup root |
+| `{{BACKUP_PATH}}` | Backup location (SMB shared folder, mounted external drive, or local folder); must already exist and enforce the SMB-mount permission model (mode 0700 owner-only, no extra ACL entries) |
 
 ## Layout and scope
 
@@ -77,7 +77,8 @@ The script performs the checkpoint workflow:
   and nginx unit override state;
 - refuses a checkpoint when the default site is enabled, a rollback/backup file
   is loaded, or no `listen 443 ssl;` route is active;
-- confirms the backup path is mounted and writable;
+- confirms the backup path exists, is writable, and enforces the SMB-mount
+  permission model (mode 0700 owner-only, no extra ACL entries);
 - creates a unique hidden staging directory under `{{BACKUP_PATH}}/nginx/`;
 - builds a reviewed manifest of root-relative files and symlinks rather than
   archiving `/etc/nginx` as a recursive directory operand;

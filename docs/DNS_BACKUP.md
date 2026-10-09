@@ -20,7 +20,7 @@ restore procedure remains documented guidance until a restore script is added.
 | `{{SERVER_IP}}` | LAN IP address of the server |
 | `{{RVRS_SRV_IP}}` | Reverse IP address of the server for PTR lookup |
 | `{{UPSTREAM_DNS}}` | Upstream DNS resolver |
-| `{{BACKUP_PATH}}` | Mounted backup root |
+| `{{BACKUP_PATH}}` | Backup location (SMB shared folder, mounted external drive, or local folder); must already exist and enforce the SMB-mount permission model (mode 0700 owner-only, no extra ACL entries) |
 
 ## Layout and scope
 
@@ -69,7 +69,8 @@ The script performs the checkpoint workflow:
 - verifies the private A record, PTR record, public forwarding, and private-zone
   NXDOMAIN behavior;
 - verifies `IGNORE_RESOLVCONF=yes` and disabled resolver-registration hooks;
-- confirms the backup path is mounted and writable;
+- confirms the backup path exists, is writable, and enforces the SMB-mount
+  permission model (mode 0700 owner-only, no extra ACL entries);
 - creates a unique hidden staging directory under `{{BACKUP_PATH}}/dns/`;
 - archives the complete managed configuration set into `dns.tar`;
 - reads the archive back into protected temporary inspection storage;

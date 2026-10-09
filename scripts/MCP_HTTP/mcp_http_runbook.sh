@@ -229,6 +229,7 @@ test_mcp() {
     base="https://$server_fqdn/mcp"
   else
     base="http://$server_fqdn/mcp"
+    cacert=""
   fi
   init="$(curl -sD- ${cacert:+--cacert "$cacert"} -X POST -H 'Content-Type: application/json' -H 'Accept: text/event-stream, application/json' -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"curl-test","version":"1.0"}}}' "$base")"
   session="$(printf '%s\n' "$init" | awk 'tolower($1)=="mcp-session-id:" {gsub("\r", "", $2); print $2; exit}')"

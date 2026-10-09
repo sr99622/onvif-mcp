@@ -48,7 +48,7 @@ require_paths() {
 
 ca_dir() { printf '%s/camera-system-ca' "$ca_root"; }
 local_backup_dir() { printf '%s/backups' "$ca_root"; }
-smb_backup_dir() { printf '%s/Camera-CA-Backups' "$backup_path"; }
+backup_dir() { printf '%s/Camera-CA-Backups' "$backup_path"; }
 
 ensure_timestamp() {
   if [[ -z "$timestamp" ]]; then
@@ -60,12 +60,23 @@ ensure_timestamp() {
   fi
 }
 
-require_cifs_backup() {
-  local target="$backup_path"
-  if ! findmnt -rn -t cifs -o TARGET | grep -Fx "$target" >/dev/null; then
-    echo "$target is not a mounted CIFS filesystem; refusing to write CA backups into a local directory." >&2
-    findmnt -rn -T "$target" -o TARGET,SOURCE,FSTYPE,OPTIONS >&2 || true
-    exit 1
+require_backup_location() {
+  local target="${backup_path%/}"
+  [[ -d "$target" ]] || { echo "$target does not exist; the backup location must already be mounted or created before running the runbook." >&2; exit 1; }
+  [[ -w "$target" ]] || { echo "$target is not writable by $(id -un)" >&2; exit 1; }
+  # Storage type is free (SMB share, mounted external drive, or local folder),
+  # but the SMB-mount permission model is enforced on all of them: owner-only
+  # 0700 directory, no ACL entries beyond the base owner-only set.
+  local mode owner extra_acl
+  mode="$(stat -c '%a' "$target")"
+  owner="$(stat -c '%U:%G' "$target")"
+  [[ "$mode" == "700" ]] || { echo "$target is mode $mode, not 0700; refusing to write backups into a group- or world-readable location." >&2; exit 1; }
+  [[ "$owner" == "$(id -un):$(id -gn)" ]] || { echo "$target is owned by $owner, not $(id -un):$(id -gn); refusing." >&2; exit 1; }
+  if command -v getfacl >/dev/null; then
+    extra_acl="$(getfacl -p "$target" 2>/dev/null | grep -v '^#' | grep -v '^$' | grep -v -E '^(user::rw-?x?|group::---|other::---)$' || true)"
+    [[ -z "$extra_acl" ]] || { echo "FAIL: unexpected ACL entry on the backup location:"; echo "$extra_acl" >&2; exit 1; }
+  else
+    echo "note: getfacl not installed; ACL check skipped (install acl for full enforcement)." >&2
   fi
 }
 
@@ -127,8 +138,8 @@ verify_pass_store_prereqs() {
   test -s "$HOME/.password-store/.gpg-id"
   pass show camera >/dev/null
   test -n "$(find "$HOME/.password-store" -maxdepth 2 -type f -name '*.gpg' -print -quit)"
-  test -s "$(smb_backup_dir)/ca-vault-gpg.key.gpg"
-  compgen -G "$(smb_backup_dir)/password-store-backup-*.tar.gz" >/dev/null
+  test -s "$(backup_dir)/ca-vault-gpg.key.gpg"
+  compgen -G "$(backup_dir)/password-store-backup-*.tar.gz" >/dev/null
 }
 
 create_ca_layout() {
@@ -245,21 +256,21 @@ insert_generated_passphrases() {
 backup_password_store() {
   local label="$1"
   local local_file="$(local_backup_dir)/password-store-backup-$label.tar.gz"
-  local smb_file="$(smb_backup_dir)/password-store-backup-$label.tar.gz"
-  mkdir -p "$(smb_backup_dir)"
+  local backup_file="$(backup_dir)/password-store-backup-$label.tar.gz"
+  install -d -m 0700 "$(backup_dir)"
   if [[ ! -e "$local_file" ]]; then
     tar -C "$HOME" -czf "$local_file" .password-store
     chmod 600 "$local_file"
   fi
   test -s "$local_file"
-  if [[ ! -e "$smb_file" ]]; then
-    cp --update=none "$local_file" "$(smb_backup_dir)/"
+  if [[ ! -e "$backup_file" ]]; then
+    cp --update=none "$local_file" "$(backup_dir)/"
   fi
-  cmp -s "$local_file" "$smb_file"
-  tr -d '\n' < "$HOME/.password-store/.gpg-id" > "$(smb_backup_dir)/pass-gpg-id.txt"
-  printf '\n' >> "$(smb_backup_dir)/pass-gpg-id.txt"
-  tar -tzf "$smb_file" | grep -Fx '.password-store/.gpg-id' >/dev/null
-  tar -tzf "$smb_file" | grep -Fx '.password-store/camera-ca/root-key-passphrase.gpg' >/dev/null
+  cmp -s "$local_file" "$backup_file"
+  tr -d '\n' < "$HOME/.password-store/.gpg-id" > "$(backup_dir)/pass-gpg-id.txt"
+  printf '\n' >> "$(backup_dir)/pass-gpg-id.txt"
+  tar -tzf "$backup_file" | grep -Fx '.password-store/.gpg-id' >/dev/null
+  tar -tzf "$backup_file" | grep -Fx '.password-store/camera-ca/root-key-passphrase.gpg' >/dev/null
 }
 
 generate_ca_key() {
@@ -323,14 +334,14 @@ verify_age_archive() {
   tar -tzf "$tmp" | grep -Fx 'camera-system-ca/crlnumber' >/dev/null
 }
 
-copy_age_archive_to_smb() {
+copy_age_archive_to_backup() {
   local local_archive="$(local_backup_dir)/camera-system-ca-initial-$timestamp.tar.gz.age"
-  local smb_archive="$(smb_backup_dir)/camera-system-ca-initial-$timestamp.tar.gz.age"
-  if [[ ! -e "$smb_archive" ]]; then
-    cp --update=none "$local_archive" "$(smb_backup_dir)/"
+  local backup_archive="$(backup_dir)/camera-system-ca-initial-$timestamp.tar.gz.age"
+  if [[ ! -e "$backup_archive" ]]; then
+    cp --update=none "$local_archive" "$(backup_dir)/"
   fi
-  cmp -s "$local_archive" "$smb_archive"
-  sha256sum "$local_archive" "$smb_archive"
+  cmp -s "$local_archive" "$backup_archive"
+  sha256sum "$local_archive" "$backup_archive"
 }
 
 print_status() {
@@ -339,16 +350,16 @@ print_status() {
   command -v openssl >/dev/null && openssl version | sed -n '1p' || echo "openssl missing"
   command -v age >/dev/null && age --version || echo "age missing"
   command -v pass >/dev/null && pass --version || echo "pass missing"
-  echo "== Backup mount =="
+  echo "== Backup location =="
+  stat -c 'backup-path mode=%a owner=%U:%G path=%n' "$backup_path" 2>/dev/null || echo "backup path missing"
   findmnt -rn -T "$backup_path" -o TARGET,SOURCE,FSTYPE,OPTIONS || true
-  findmnt -rn -t cifs -o TARGET,SOURCE,FSTYPE,OPTIONS || true
   echo "== Password store =="
   test -s "$HOME/.password-store/.gpg-id" && stat -c '%a %U:%G %s %n' "$HOME/.password-store/.gpg-id" || echo "password-store .gpg-id missing"
   find "$HOME/.password-store" -maxdepth 3 -type f -name '*.gpg' -printf '%p\n' 2>/dev/null | sort || true
   echo "== CA files =="
   [[ -d "$(ca_dir)" ]] && find "$(ca_dir)" -maxdepth 3 -printf '%m %u:%g %p\n' | sort || echo "CA directory missing"
   echo "== Backup files =="
-  [[ -d "$(smb_backup_dir)" ]] && find "$(smb_backup_dir)" -maxdepth 1 -type f -printf '%m %u:%g %s %p\n' | sort || echo "SMB backup directory missing"
+  [[ -d "$(backup_dir)" ]] && find "$(backup_dir)" -maxdepth 1 -type f -printf '%m %u:%g %s %p\n' | sort || echo "backup directory missing"
 }
 
 case "$cmd" in
@@ -364,8 +375,8 @@ case "$cmd" in
     require_paths
     ensure_timestamp
     install_packages
-    require_cifs_backup
-    mkdir -p "$(smb_backup_dir)"
+    require_backup_location
+    install -d -m 0700 "$(backup_dir)"
     verify_pass_store_prereqs
     create_ca_layout
     init_ca_database
@@ -379,22 +390,22 @@ case "$cmd" in
     backup_password_store "$timestamp-pre-ca-archive"
     create_age_archive
     verify_age_archive
-    copy_age_archive_to_smb
-    test -s "$(smb_backup_dir)/ca-vault-gpg.key.gpg"
+    copy_age_archive_to_backup
+    test -s "$(backup_dir)/ca-vault-gpg.key.gpg"
     echo "apply-ok timestamp=$timestamp"
     ;;
   verify)
     require_paths
     require_arg --timestamp "$timestamp"
-    require_cifs_backup
+    require_backup_location
     verify_pass_store_prereqs
     verify_ca_key
     verify_root_certificate
     verify_age_archive
-    cmp -s "$(local_backup_dir)/camera-system-ca-initial-$timestamp.tar.gz.age" "$(smb_backup_dir)/camera-system-ca-initial-$timestamp.tar.gz.age"
-    test -s "$(smb_backup_dir)/ca-vault-gpg.key.gpg"
-    test -s "$(smb_backup_dir)/password-store-backup-$timestamp-ca-passphrases.tar.gz"
-    test -s "$(smb_backup_dir)/password-store-backup-$timestamp-pre-ca-archive.tar.gz"
+    cmp -s "$(local_backup_dir)/camera-system-ca-initial-$timestamp.tar.gz.age" "$(backup_dir)/camera-system-ca-initial-$timestamp.tar.gz.age"
+    test -s "$(backup_dir)/ca-vault-gpg.key.gpg"
+    test -s "$(backup_dir)/password-store-backup-$timestamp-ca-passphrases.tar.gz"
+    test -s "$(backup_dir)/password-store-backup-$timestamp-pre-ca-archive.tar.gz"
     echo "verify-ok timestamp=$timestamp"
     ;;
   status)

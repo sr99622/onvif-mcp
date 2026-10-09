@@ -4,7 +4,7 @@
 
 Create the private root Certificate Authority used by the camera system, store the
 CA unlock secrets in the existing local `pass` + GPG vault, and back up the
-complete CA state to the mounted SMB backup share.
+complete CA state to the backup location.
 
 The executable workflow lives in:
 
@@ -22,21 +22,23 @@ copy-paste prompts that must be shown when interactive user action is required.
 | Name | Meaning |
 |---|---|
 | `{{CA_ROOT_PATH}}` | Private CA root directory |
-| `{{BACKUP_PATH}}` | Mounted SMB share path |
+| `{{BACKUP_PATH}}` | Backup location (SMB shared folder, mounted external drive, or local folder); must already exist and enforce the SMB-mount permission model (mode 0700 owner-only, no extra ACL entries) |
 | `{{REPO_PATH}}` | Full path to this repository on the camera host |
 | `{{TIMESTAMP}}` | generated UTC timestamp, `YYYYMMDDhhmmssZ` |
 
 For the current implementation, the CA working directory is
 `{{CA_ROOT_PATH}}/camera-system-ca`, local encrypted backups are written under
-`{{CA_ROOT_PATH}}/backups`, and SMB encrypted backups are written under
+`{{CA_ROOT_PATH}}/backups`, and encrypted backups are written under
 `{{BACKUP_PATH}}/Camera-CA-Backups`.
 
 ## Prerequisites
 
-Complete `GPG_KEY.md` before starting this runbook. The backup share must already
-be a real mounted CIFS filesystem, not merely a local directory or an autofs
-placeholder, and the password store must already contain `camera`.
-The SMB backup folder must already contain the GPG secret-key export created by
+Complete `GPG_KEY.md` before starting this runbook. The backup location must
+already exist and be writable, and it must enforce the SMB-mount permission
+model: mode 0700 owned by the runbook user, no extra ACL entries. The storage
+type is free (SMB share, mounted external drive, or local folder); the
+permission model is not. The password store must already contain `camera`.
+The backup folder must already contain the GPG secret-key export created by
 `GPG_KEY.md`:
 
 ```text
@@ -78,8 +80,9 @@ using the scripted command in step 2.
    passphrase entries and again immediately before the CA archive is created.
 5. Secrets are verified by consumers (`openssl pkey -check`, `age -d` and
    `tar -tzf`), never by printing secret values.
-6. Do not write backups into `{{BACKUP_PATH}}` unless it is verified as a real
-   mounted CIFS filesystem.
+6. Do not write backups into `{{BACKUP_PATH}}` unless it is verified to exist,
+   be writable by the runbook user, and enforce the SMB-mount permission model
+   (mode 0700 owner-only, no extra ACL entries).
 
 ## 1. Prepare the CA workstation (AGENT-run)
 
@@ -127,8 +130,9 @@ scripts/CREATE_CA_CERT/create_ca_cert_runbook.sh apply \
 
 The `apply` command performs the full workflow:
 
-- verifies the mounted CIFS backup path;
-- verifies the existing password store, `camera` and `smb` entries, prior
+- verifies the backup location: exists, writable, mode 0700 owned by the
+  runbook user, no extra ACL entries;
+- verifies the existing password store, the `camera` entry, prior
   password-store backup, and `ca-vault-gpg.key.gpg`;
 - creates the protected CA directory tree and OpenSSL CA database;
 - writes `openssl.cnf` with `copy_extensions = none` and the root/server
@@ -144,8 +148,8 @@ The `apply` command performs the full workflow:
   `password-store-backup-{{TIMESTAMP}}-pre-ca-archive.tar.gz`;
 - creates and verifies the authenticated `age` archive
   `camera-system-ca-initial-{{TIMESTAMP}}.tar.gz.age`;
-- copies the age archive to SMB without overwriting an existing archive and
-  verifies the local and SMB copies match.
+- copies the age archive to the backup location without overwriting an existing
+  archive and verifies the local and backup copies match.
 
 Record the timestamp printed by `apply-ok timestamp=...`; later runbooks need it
 for recovery and audit references.
@@ -218,8 +222,10 @@ commands.
   `pass insert` step is the only origin.
 - Do not initialize or recreate the password store here. If the store is missing,
   return to `GPG_KEY.md`.
-- A mounted `autofs` row alone is not enough. The script requires a concrete
-  `cifs` row for `{{BACKUP_PATH}}` before backing up CA state.
+- The storage type is free (SMB share, mounted external drive, or local
+  folder), but the permission model is not: the script refuses `{{BACKUP_PATH}}`
+  unless it is mode 0700 owned by the runbook user with no extra ACL entries,
+  the same enforcement the SMB mount provided.
 - GPG-agent cache expiry can block headless `pass` operations. Use the scripted
   USER-run `prime-gpg-cache` command, not ad hoc `pass show` fragments.
 - `age -p` and encrypted OpenSSL key generation need PTY handling on this host;

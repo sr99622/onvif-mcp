@@ -82,8 +82,14 @@ scripts/STREAM_AUTH/stream_auth_runbook.sh apply \
   --server-fqdn {{SERVER_FQDN}} \
   --server-ip {{SERVER_IP}} \
   --backup-path {{BACKUP_PATH}} \
-  --repo-path {{REPO_PATH}}
+  --repo-path {{REPO_PATH}} \
+  --snapshot-path <resolved-snapshot-route>
 ```
+
+`--snapshot-path` is required: the script defaults it to empty, which makes the
+preflight probe the snapshot proxy root and fail with HTTP 400. Resolve it at
+runtime from `/etc/onvif-mcp/snapshot_routes.json` to a route known to return a
+valid JPEG, and pass it as `/snapshot/<route>`.
 
 The script performs these executable stages:
 

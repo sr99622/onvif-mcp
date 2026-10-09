@@ -434,7 +434,13 @@ PY
 }
 
 verify_unauth() {
-  local paths=(/cameras/ /multiview/ /outputs/ /webrtc/ /playback/ '/playback/list?path=AMC014641NE6L35AT8%2FMediaProfile000' '/playback/get?path=AMC014641NE6L35AT8%2FMediaProfile000&start=2026-09-27T09%3A00%3A00-04%3A00&duration=60&format=mp4' /playback-cache/ /snapshot/ "$snapshot_path")
+  # Playback test paths derive from the resolved --snapshot-path route; no
+  # site-specific camera IDs or dates are hardcoded in this script.
+  local route="${snapshot_path#/snapshot/}"
+  local enc_route="${route//\//%2F}"
+  local start
+  start="$(date -u -d 'yesterday' +%Y-%m-%dT09:00:00Z)"
+  local paths=(/cameras/ /multiview/ /outputs/ /webrtc/ /playback/ "/playback/list?path=${enc_route}" "/playback/get?path=${enc_route}&start=${start}&duration=60&format=mp4" /playback-cache/ /snapshot/ "$snapshot_path")
   for path in "${paths[@]}"; do
     out="$(curl -sS -o /dev/null -w "%{http_code} %{redirect_url}" "https://$server_fqdn${path}")"
     echo "$path HTTP $out"

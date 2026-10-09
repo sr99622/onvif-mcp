@@ -4,6 +4,9 @@
 
 Create a private Samba share on `{{SMB_SERVER_FQDN}}` and mount it on the camera
 host at `{{SMB_MOUNT}}`, used as `{{BACKUP_PATH}}` for `Camera-CA-Backups`.
+This is the SMB storage option; a mounted external drive or a local folder may
+be used as `{{BACKUP_PATH}}` instead, provided it enforces the same permission
+model this runbook establishes (0700/0600 owner-only, no extra ACL entries).
 Access to the SMB host runs through the automated SSH login established by
 `SSH_LOGIN.md`.
 

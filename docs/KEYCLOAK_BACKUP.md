@@ -16,14 +16,14 @@ restore procedure remains documented guidance until a restore script is added.
 
 Install the generic backup script and one-shot service using KEYCLOAK.md. The
 service creates a local database dump only; archiving and publication to the
-backup share below are also required. Initial installation must pass
+backup location below are also required. Initial installation must pass
 KEYCLOAK.md's isolated restore test before its post-login checkpoint.
 
 ## Required Values
 
 | Symbol | Description |
 |---|---|
-| `{{BACKUP_PATH}}` | Mounted backup root |
+| `{{BACKUP_PATH}}` | Backup location (SMB shared folder, mounted external drive, or local folder); must already exist and enforce the SMB-mount permission model (mode 0700 owner-only, no extra ACL entries) |
 
 ## Layout and scope
 
@@ -76,7 +76,8 @@ The script performs the checkpoint workflow:
 
 - verifies Docker, Keycloak/PostgreSQL, `/opt/keycloak` modes, and the one-shot
   backup service are ready;
-- confirms the backup path is mounted and writable;
+- confirms the backup path exists, is writable, and enforces the SMB-mount
+  permission model (mode 0700 owner-only, no extra ACL entries);
 - creates a unique hidden staging directory under `{{BACKUP_PATH}}/keycloak/`;
 - runs `keycloak-postgres-backup.service` and requires exactly one new dump;
 - archives `/opt/keycloak` as `keycloak.tar` with root `keycloak/`;

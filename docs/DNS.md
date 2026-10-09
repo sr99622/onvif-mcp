@@ -22,7 +22,7 @@ it with ad hoc shell fragments from this document.
 | `{{SERVER_IP}}` | LAN IP address of the server |
 | `{{RVRS_SRV_IP}}` | Reverse IP address of the server for PTR lookup |
 | `{{UPSTREAM_DNS}}` | Upstream DNS resolver |
-| `{{BACKUP_PATH}}` | Mounted backup root |
+| `{{BACKUP_PATH}}` | Backup location (SMB shared folder, mounted external drive, or local folder); must already exist and enforce the SMB-mount permission model (mode 0700 owner-only, no extra ACL entries) |
 
 ## Design decisions
 
