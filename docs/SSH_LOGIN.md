@@ -27,6 +27,7 @@ replace it with ad hoc shell fragments from this document.
 |---|---|
 | `{{SSH_SERVER_FQDN}}` | FQDN of the machine being logged in to |
 | `{{SSH_USERNAME}}` | User on that machine |
+| `{{REPO_PATH}}` | Parent directory of the onvif-mcp repository |
 
 Runbook defaults used by the script:
 

@@ -23,7 +23,7 @@ replace it with ad hoc shell fragments from this document.
 | `{{SMB_SERVER_FQDN}}` | FQDN of the machine hosting the Samba share |
 | `{{SMB_USERNAME}}` | Existing Linux account on the SMB host that exclusively owns this share |
 | `{{SMB_MOUNT}}` | Mount point on the camera host |
-| `{{SMB_PASSWORD}}` | Samba password, stored in the password store as `smb` (`pass smb`) |
+| `{{SMB_PASSWORD}}` | Samba password, entered at the script's no-echo prompt (`read -s`) |
 
 Runbook defaults used by the script:
 
@@ -39,13 +39,14 @@ Runbook defaults used by the script:
    nonempty (beyond this runbook's own `Camera-CA-Backups` subdirectory) or
    differently owned, an existing `smbpasswd` entry, an existing share block
    in `smb.conf`, an existing credentials file whose content differs from
-   `pass smb`, or an existing fstab line for `{{SMB_MOUNT}}` that differs
-   from the required entry all cause a refusal naming the artifact.
+   the prompted password, or an existing fstab line for `{{SMB_MOUNT}}` that
+   differs from the required entry all cause a refusal naming the artifact.
    Idempotent reruns re-verify instead of recreating.
-2. The Samba password is read from `pass smb` inside the script only. It is
-   never printed, logged, written to a file, or placed on a command line. The
-   GPG agent cache must be primed before running `apply` or `verify`; the
-   script fails cleanly if `pass smb` cannot run non-interactively.
+2. The Samba password is prompted interactively without echo (`read -s`)
+   inside the script only. It is never printed, logged, written to a file,
+   or placed on a command line. `apply` and `verify` must run in a terminal
+   so the prompt can read from the TTY; the script fails cleanly if no TTY
+   is available or the entered password is empty.
 3. The share must enforce `0600` files and `0700` directories on the
    **server's filesystem**. Client mode alone is insufficient: without
    negotiated POSIX extensions, `file_mode`/`dir_mode` are display settings
@@ -76,10 +77,10 @@ The `apply` command:
   directory, creates the Samba password entry only if none exists, appends
   the share block (with a config backup) only if absent, validates the
   **effective** `testparm` output against the required enforcement, reloads
-  or starts the Samba daemon, and confirms `pass smb` authenticates against
-  the live share;
+  or starts the Samba daemon, and confirms the prompted password
+  authenticates against the live share;
 - client stage: verifies `cifs-utils` and hostname resolution, creates the
-  credentials file from `pass smb` only if absent (mode `0600 root:root`),
+  credentials file from the prompted password only if absent (mode `0600 root:root`),
   creates the mount point, adds the fstab automount entry only if absent,
   validates fstab, activates the automount, and requires a live `cifs` row
   (an `autofs` row alone is not success);
@@ -122,7 +123,7 @@ Expected: `verify-ok`.
 
 After `apply`: the server share directory is `0700 {{SMB_USERNAME}}`, the
 effective `testparm` share block matches the required enforcement exactly,
-`pass smb` authenticates against the live share, the client shows a live
+the prompted password authenticates against the live share, the client shows a live
 `cifs` row for `{{SMB_MOUNT}}` with `rw`, the intended numeric UID/GID, and
 `file_mode=0600,dir_mode=0700`, the probe test reports `0700`/`0600` on
 **both** hosts with owner-only ACLs, and the probe is removed at exit. The
@@ -140,7 +141,7 @@ copying any secrets.
   credentials.
 - The Ubuntu `samba` server package does not ship `smbclient` (that is
   `samba-client`); when it is absent on the server, the client mount itself
-  is the effective proof that the stored password authenticates.
+  is the effective proof that the prompted password authenticates.
 - `daemon-reload` alone does not start the automount, and `ls -ld` does not
   reliably trigger it; reading the directory contents does. The automount
   upcall is asynchronous, so the script retries the trigger-and-check pair
@@ -149,12 +150,24 @@ copying any secrets.
   that aborts a command substitution, so unit detection uses `if` form.
 - The Samba daemon unit name varies by distribution (`smbd.service` on
   Debian/Ubuntu, `smb.service` on Arch-family); the script detects it.
+- On Arch-family hosts the plain `samba` package ships no default
+  `smb.conf` and enables no service, so `testparm` fails with
+  "Can't load /etc/samba/smb.conf" until `cachyos-samba-settings` is
+  installed; the pacman install branch includes it (it creates the default
+  `smb.conf`, enables `smb`/`nmb`, and adds the user to `sambashare`).
 - The remote login shell may be fish, which rejects POSIX constructs; the
   script forces `sh -c` for every remote command.
 - `testparm` emits tab-indented entries; the effective-config comparison
   normalizes whitespace before comparing.
 - `grep -v` exits 1 on empty results; filter steps tolerate that status
   explicitly so `set -euo pipefail` does not abort the probe test.
+- `umask` is a shell builtin, not an executable, so `sudo umask` always
+  fails ("command not found"); the credentials file mode is enforced by an
+  explicit `chmod 0600` instead.
+- systemd mount/automount unit names escape `-` inside a path element as
+  `\x2d` (`/mnt/camera-backup` → `mnt-camera\x2dbackup.automount`); a plain
+  dash substitution produces an invalid unit name that `systemctl start`
+  silently fails, so the automount never fires.
 - A `Password for root@...` prompt means the saved credentials file is not
   being supplied: check the file has both correctly formatted, nonempty
   entries and that fstab references it. Do not use `install -m 0600 /dev/null`

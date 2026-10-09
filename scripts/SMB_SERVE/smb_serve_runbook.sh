@@ -20,10 +20,10 @@ verify : checks both sides against the acceptance criteria without changing
          given.
 status : prints current server and client state without changing anything.
 
-The Samba password is read from the password store (`pass smb`) inside the
-script only; it is never printed, logged, or written to disk. The password
-must already be stored in `pass` and the GPG agent cache must be primed
-(`gpgconf --launch gpg-agent`); apply fails cleanly if either is missing.
+The Samba password is prompted interactively without echo (`read -s`)
+inside the script only; it is never printed, logged, or written to disk.
+apply and verify must run in a terminal (TTY) so the prompt can read the
+password; they fail cleanly if no TTY is available.
 USAGE
 }
 
@@ -62,7 +62,7 @@ share_name="camera-ca-private"
 server_dir="/srv/samba/$share_name"
 creds_file="/etc/cifs-utils/credentials/camera-backup"
 alias_name="${server_fqdn%%.*}"
-mount_unit="${mount#/}"; mount_unit="${mount_unit//\//-}"
+mount_unit="${mount#/}"; mount_unit="${mount_unit//\//-}"; mount_unit="${mount_unit//-/\\x2d}"
 
 rssh() {
   # Remote login shell is fish on some hosts; force POSIX sh for every remote
@@ -73,11 +73,14 @@ rssh() {
 }
 
 get_password() {
-  command -v pass >/dev/null || { echo "pass is not installed on the camera host." >&2; exit 1; }
-  gpgconf --launch gpg-agent >/dev/null 2>&1 || true
+  # Prompt interactively without echo. The prompt goes to stderr and the
+  # password is read from the TTY, so the function works even when stdin is
+  # redirected; only the password itself reaches stdout via printf.
   local pw
-  pw="$(pass smb 2>/dev/null)" || { echo "Guard: 'pass smb' failed. Prime the GPG agent cache in your own terminal (gpgconf --launch gpg-agent, or run 'pass smb' interactively) and rerun." >&2; exit 1; }
-  [[ -n "$pw" ]] || { echo "Guard: 'pass smb' returned an empty password." >&2; exit 1; }
+  read -r -s -p "Samba password for $username@$server_fqdn: " pw </dev/tty \
+    || { echo "Guard: password prompt failed (no TTY available; run in your own terminal)." >&2; exit 1; }
+  echo >&2
+  [[ -n "$pw" ]] || { echo "Guard: no password entered." >&2; exit 1; }
   printf '%s' "$pw"
 }
 
@@ -93,7 +96,9 @@ server_stage() {
       if rssh 'command -v apt-get >/dev/null'; then
         rssh 'sudo apt-get update >/dev/null && sudo apt-get install -y samba'
       elif rssh 'command -v pacman >/dev/null'; then
-        rssh 'sudo pacman -Sy --noconfirm --needed samba'
+        # cachyos-samba-settings supplies the default smb.conf and enables the
+        # smb/nmb services; plain samba on Arch ships neither.
+        rssh 'sudo pacman -Sy --noconfirm --needed samba cachyos-samba-settings'
       else
         echo "Guard: no supported package manager (apt-get or pacman) found on $server_fqdn; install samba manually." >&2
         exit 1
@@ -173,8 +178,8 @@ EOF
   # is the effective proof — mounting fails if the password is wrong.
   if rssh 'command -v smbclient >/dev/null'; then
     printf '%s\n' "$pw" | rssh "smbclient -L //localhost/$share_name -U $username >/dev/null" 2>&1 \
-      || { echo "FAIL: 'pass smb' password does not authenticate as $username on $server_fqdn. Resolve manually; the script will not overwrite the entry." >&2; exit 1; }
-    echo "server: 'pass smb' password authenticates against the live share"
+      || { echo "FAIL: the prompted password does not authenticate as $username on $server_fqdn. Resolve manually; the script will not overwrite the entry." >&2; exit 1; }
+    echo "server: prompted password authenticates against the live share"
   else
     echo "server: smbclient not on $server_fqdn; password authentication will be proven by the client mount"
   fi
@@ -197,14 +202,15 @@ client_stage() {
     existing="$(sudo cat "$creds_file")"
     [[ "$existing" == "username=$username
 password=$pw" ]] \
-      || { echo "Guard: $creds_file content does not match 'pass smb' for $username. Inspect before proceeding." >&2; exit 1; }
+      || { echo "Guard: $creds_file content does not match the prompted password for $username. Inspect before proceeding." >&2; exit 1; }
     echo "client: credentials file verified, left verbatim"
   else
     sudo install -d -m 0700 /etc/cifs-utils/credentials
-    sudo umask 077
+    # No `sudo umask 077` here: umask is a shell builtin, not an executable,
+    # so sudo cannot run it. The explicit chmod below enforces the mode.
     printf 'username=%s\npassword=%s\n' "$username" "$pw" | sudo tee "$creds_file" >/dev/null
     sudo chmod 0600 "$creds_file"
-    echo "client: credentials file created from pass store (mode 0600 root:root)"
+    echo "client: credentials file created from the prompted password (mode 0600 root:root)"
   fi
 
   # Mount point.
@@ -293,8 +299,8 @@ negative_test() {
   fi
   command -v smbclient >/dev/null || { echo "note: smbclient not installed on the camera host; remote access test incomplete." >&2; return 0; }
   rssh "getent passwd $test_account >/dev/null" || { echo "note: test account $test_account does not exist on $server_fqdn; remote access test incomplete." >&2; return 0; }
-  # The test account's password is not in the password store, so the script can
-  # only prove denial via a null session here. A full negative test with the
+  # The test account's password is not known to the script, so denial can
+  # only be proven via a null session here. A full negative test with the
   # account's real password is USER-run interactively (smbclient prompts).
   if smbclient "//$server_fqdn/$share_name" -U "$test_account" -N -c ls >/dev/null 2>&1; then
     echo "FAIL: unrelated account $test_account opened the share with a null session." >&2
