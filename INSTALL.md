@@ -9,18 +9,15 @@ Do not obsess over every camera detail. Many cameras have bugs that will cause t
 
 | Name | Value |
 |---|---|
-| `{{SMB_MOUNT}}`        | /mnt/camera-backup |
-| `{{SMB_USERNAME}}`     | stephen |
-| `{{SMB_SERVER_FQDN}}`  | taurus.home.arpa |
-| `{{PRVT_NET_EN_NAME}}` | enp2s0 |
-| `{{SERVER_FQDN}}`      | trigkey.home.arpa |
+| `{{PRVT_NET_EN_NAME}}` | enx50a0300e6cb1 |
+| `{{SERVER_FQDN}}`      | nuc.home.arpa |
 | `{{CAMERA_USERNAME}}`  | admin |
-| `{{REPO_PATH}}`        | /home/camera |
-| `{{SERVER_USER}}`      | camera |
-| `{{CA_ROOT_PATH}}`     | /home/camera/Private-CA |
+| `{{REPO_PATH}}`        | /home/stephen |
+| `{{SERVER_USER}}`      | stephen |
+| `{{CA_ROOT_PATH}}`     | /home/stephen/Private-CA |
 | `{{BACKUP_PATH}}`      | /mnt/camera-backup |
-| `{{SERVER_IP}}`        | 10.1.1.3 |
-| `{{RVRS_SRV_IP}}`      | 3.1.1.10 |
+| `{{SERVER_IP}}`        | 10.1.1.6 |
+| `{{RVRS_SRV_IP}}`      | 6.1.1.10 |
 | `{{UPSTREAM_DNS}}`     | 192.168.68.1 |
 | `{{GMAIL_ADDRESS}}`    | keycloak.admin.sample@gmail.com |
 
@@ -47,10 +44,6 @@ Do not obsess over every camera detail. Many cameras have bugs that will cause t
 [CA_DISTRIBUTE.md](docs/CA_DISTRIBUTE.md)
 
 [DNS.md](docs/DNS.md)
-
-[SSH_LOGIN.md](docs/SSH_LOGIN.md)
-
-[SMB_SERVE.md](docs/SMB_SERVE.md)
 
 At the completion of Phase 1, pause and allow the user to check for available context before continuing with Phase 2.
 

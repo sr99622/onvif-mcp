@@ -6,20 +6,20 @@ usage() {
 Usage:
   gpg_key_runbook.sh agent-prep
   gpg_key_runbook.sh generate-key
-  gpg_key_runbook.sh status --smb-mount PATH --smb-server-fqdn HOST --smb-username USER
+  gpg_key_runbook.sh status --backup-path PATH
   gpg_key_runbook.sh export-key --fingerprint FPR
   gpg_key_runbook.sh verify-export --fingerprint FPR
   gpg_key_runbook.sh init-store --fingerprint FPR
   gpg_key_runbook.sh insert-passwords
   gpg_key_runbook.sh verify-passwords
-  gpg_key_runbook.sh mount-smb --smb-mount PATH --smb-server-fqdn HOST --smb-username USER [--local-user USER]
-  gpg_key_runbook.sh backup --smb-mount PATH [--label LABEL]
+  gpg_key_runbook.sh backup --backup-path PATH [--label LABEL]
   gpg_key_runbook.sh import-key --key-file PATH
   gpg_key_runbook.sh restore-store --backup-file PATH
 
 This script implements docs/GPG_KEY.md with site-specific values as arguments.
-It never accepts passwords as arguments. GPG/pass prompts remain interactive;
-the SMB password is read from `pass show smb` when creating CIFS credentials.
+It never accepts passwords as arguments. GPG/pass prompts remain interactive.
+The backup path is a pre-mounted location (SMB share, external drive, or any
+directory on the system drive) that must already exist and be writable.
 USAGE
 }
 
@@ -35,9 +35,7 @@ fi
 shift || true
 
 fingerprint=""
-smb_mount=""
-smb_server_fqdn=""
-smb_username=""
+backup_path=""
 local_user="${USER}"
 label=""
 key_file=""
@@ -49,16 +47,8 @@ while [[ $# -gt 0 ]]; do
     fingerprint="${2:?missing --fingerprint value}"
     shift 2
     ;;
-  --smb-mount)
-    smb_mount="${2:?missing --smb-mount value}"
-    shift 2
-    ;;
-  --smb-server-fqdn)
-    smb_server_fqdn="${2:?missing --smb-server-fqdn value}"
-    shift 2
-    ;;
-  --smb-username)
-    smb_username="${2:?missing --smb-username value}"
+  --backup-path)
+    backup_path="${2:?missing --backup-path value}"
     shift 2
     ;;
   --local-user)
@@ -97,30 +87,11 @@ require_arg() {
   fi
 }
 
-mount_unit_for() {
-  local path="$1"
-  if command -v systemd-escape >/dev/null 2>&1; then
-    systemd-escape --path --suffix=mount "$path"
-  else
-    echo "mnt-camera\x2dbackup.mount"
-  fi
-}
-
-automount_unit_for() {
-  local path="$1"
-  if command -v systemd-escape >/dev/null 2>&1; then
-    systemd-escape --path --suffix=automount "$path"
-  else
-    echo "mnt-camera\x2dbackup.automount"
-  fi
-}
-
 case "$cmd" in
 agent-prep)
   missing_packages=()
   command -v gpg >/dev/null 2>&1 || missing_packages+=(gnupg)
   command -v pass >/dev/null 2>&1 || missing_packages+=(pass)
-  command -v mount.cifs >/dev/null 2>&1 || missing_packages+=(cifs-utils)
   [[ -x /usr/bin/pinentry-curses ]] || missing_packages+=(pinentry-curses)
   if [[ ${#missing_packages[@]} -gt 0 ]]; then
     if command -v apt-get >/dev/null 2>&1; then
@@ -172,15 +143,11 @@ generate-key)
   ;;
 
 status)
-  require_arg --smb-mount "$smb_mount"
-  require_arg --smb-server-fqdn "$smb_server_fqdn"
-  require_arg --smb-username "$smb_username"
+  require_arg --backup-path "$backup_path"
   echo "user=$(id -un) uid=$(id -u) gid=$(id -g)"
   command -v gpg >/dev/null && gpg --version | sed -n '1p'
   command -v pass >/dev/null && pass --version || echo "pass missing"
   test -x /usr/bin/pinentry-curses && echo "pinentry-curses present" || echo "pinentry-curses missing"
-  command -v mount.cifs >/dev/null && echo "mount.cifs present" || echo "mount.cifs missing"
-  getent ahosts "$smb_server_fqdn" || true
   gpg --list-secret-keys --fingerprint || true
   if [[ -f "$HOME/.password-store/.gpg-id" ]]; then
     printf 'password-store-gpg-id='
@@ -194,18 +161,12 @@ status)
   else
     echo "local export missing"
   fi
-  if [[ -e /etc/cifs-utils/credentials/camera-backup ]]; then
-    sudo stat -c 'credentials mode=%a owner=%U:%G path=%n' /etc/cifs-utils/credentials/camera-backup
+  if [[ -d "$backup_path" ]]; then
+    stat -c 'backup-path mode=%a owner=%U:%G path=%n' "$backup_path"
+    findmnt -rn -T "$backup_path" -o TARGET,SOURCE,FSTYPE,OPTIONS || true
   else
-    echo "credentials file missing"
+    echo "backup path missing; the backup location must already be mounted/created before running the runbook"
   fi
-  if [[ -d "$smb_mount" ]]; then
-    stat -c 'mountpoint mode=%a owner=%U:%G path=%n' "$smb_mount"
-  else
-    echo "mountpoint missing"
-  fi
-  findmnt -rn -T "$smb_mount" -o TARGET,SOURCE,FSTYPE,OPTIONS || true
-  findmnt -rn -t cifs -o TARGET,SOURCE,FSTYPE,OPTIONS || true
   ;;
 
 export-key)
@@ -239,106 +200,30 @@ init-store)
 
 insert-passwords)
   pass insert camera
-  pass insert smb
   echo "insert-passwords-ok"
   ;;
 
 verify-passwords)
   pass show camera >/dev/null
-  pass show smb >/dev/null
   find "$HOME/.password-store" -maxdepth 2 -type f -name '*.gpg' -print
   echo "verify-passwords-ok"
   ;;
 
-mount-smb)
-  require_arg --smb-mount "$smb_mount"
-  require_arg --smb-server-fqdn "$smb_server_fqdn"
-  require_arg --smb-username "$smb_username"
-  command -v mount.cifs >/dev/null || {
-    echo "mount.cifs missing; install cifs-utils" >&2
-    exit 1
-  }
-  getent ahosts "$smb_server_fqdn" >/dev/null
-  pass show smb >/dev/null
-  existing_fstypes="$(findmnt -rn -T "$smb_mount" -o FSTYPE 2>/dev/null || true)"
-  if [[ -n "$existing_fstypes" ]] && ! printf '%s\n' "$existing_fstypes" | grep -qxE 'cifs|autofs'; then
-    echo "$smb_mount is already mounted as a non-cifs filesystem; stop." >&2
-    exit 1
-  fi
-  if [[ ! -d "$smb_mount" ]]; then
-    sudo install -d -m 0700 "$smb_mount"
-  fi
-  umask 077
-  tmp_creds="$HOME/.smb-creds.$$"
-  {
-    printf 'username=%s\n' "$smb_username"
-    printf 'password='
-    pass show smb | {
-      IFS= read -r smb_password
-      printf '%s\n' "$smb_password"
-    }
-  } >"$tmp_creds"
-  sudo install -d -m 0700 /etc/cifs-utils/credentials
-  sudo install -o root -g root -m 0600 "$tmp_creds" /etc/cifs-utils/credentials/camera-backup
-  shred -u "$tmp_creds"
-  sudo test -s /etc/cifs-utils/credentials/camera-backup
-  uid="$(id -u "$local_user")"
-  gid="$(id -g "$local_user")"
-  fstab_line="//$smb_server_fqdn/camera-ca-private $smb_mount cifs credentials=/etc/cifs-utils/credentials/camera-backup,vers=3.1.1,uid=$uid,gid=$gid,file_mode=0600,dir_mode=0700,nosuid,nodev,noexec,_netdev,noauto,x-systemd.automount 0 0"
-  sudo python3 - "$smb_mount" "$fstab_line" <<'PY'
-import pathlib, sys
-mount = sys.argv[1]
-line = sys.argv[2]
-p = pathlib.Path('/etc/fstab')
-lines = p.read_text().splitlines()
-out = []
-replaced = False
-for existing in lines:
-    parts = existing.split()
-    if len(parts) >= 2 and parts[1] == mount:
-        if not replaced:
-            out.append(line)
-            replaced = True
-        continue
-    if existing.startswith('//') and '/camera-ca-private ' in existing and f' {mount} ' in existing:
-        if not replaced:
-            out.append(line)
-            replaced = True
-        continue
-    out.append(existing)
-if not replaced:
-    out.append(line)
-p.write_text('\n'.join(out) + '\n')
-PY
-  sudo findmnt --verify --fstab
-  sudo systemctl daemon-reload
-  mount_unit="$(mount_unit_for "$smb_mount")"
-  automount_unit="$(automount_unit_for "$smb_mount")"
-  sudo systemctl reset-failed "$mount_unit" || true
-  sudo systemctl start "$automount_unit"
-  # Trigger automount without printing share contents.
-  stat "$smb_mount" >/dev/null
-  if ! findmnt -rn -t cifs -o TARGET,SOURCE,FSTYPE,OPTIONS | awk -v target="$smb_mount" -v source="//$smb_server_fqdn/camera-ca-private" '$1 == target && $2 == source { found=1 } END { exit(found ? 0 : 1) }'; then
-    echo "CIFS mount did not appear for $smb_mount" >&2
-    sudo journalctl -b -u "$mount_unit" --no-pager -n 30 >&2 || true
-    exit 1
-  fi
-  install -d -m 0700 "$smb_mount/Camera-CA-Backups"
-  stat -c '%a %U:%G %n' "$smb_mount" "$smb_mount/Camera-CA-Backups"
-  echo "mount-smb-ok"
-  ;;
-
 backup)
-  require_arg --smb-mount "$smb_mount"
+  require_arg --backup-path "$backup_path"
   if [[ -z "$label" ]]; then
     label="$(date -u +%Y%m%d%H%M%SZ)-initial"
   fi
-  if ! findmnt -rn -t cifs -o TARGET | grep -Fx "$smb_mount" >/dev/null; then
-    echo "$smb_mount is not a mounted CIFS share; refusing to back up into a local directory." >&2
+  if [[ ! -d "$backup_path" ]]; then
+    echo "$backup_path does not exist; the backup location must already be mounted/created before running the runbook." >&2
+    exit 1
+  fi
+  if [[ ! -w "$backup_path" ]]; then
+    echo "$backup_path is not writable; stop and warn the user before backing up." >&2
     exit 1
   fi
   umask 077
-  backup_dir="$smb_mount/Camera-CA-Backups"
+  backup_dir="$backup_path/Camera-CA-Backups"
   local_export="$HOME/ca-vault-gpg.key.gpg"
   backup_export="$backup_dir/ca-vault-gpg.key.gpg"
   test -s "$local_export"
@@ -378,7 +263,6 @@ restore-store)
   mkdir -p "$HOME/.password-store"
   tar -xzf "$backup_file" -C "$HOME"
   pass show camera >/dev/null
-  pass show smb >/dev/null
   echo "restore-store-ok"
   ;;
 

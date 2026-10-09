@@ -17,27 +17,24 @@ a new machine.
 
 | Name | Description |
 |---|---|
-| `{{SMB_SERVER_FQDN}}` | SMB server Fully Qualified Domain Name |
-| `{{SMB_MOUNT}}` | Mounted SMB shared folder |
-| `{{SMB_USERNAME}}` | Samba username for the private camera CA backup share |
+| `{{BACKUP_PATH}}` | Pre-mounted backup location (SMB shared folder, mounted external drive, or any directory on the system drive) |
 | `{{REPO_PATH}}` | Full path to this repository on the camera host |
 | `{{GPG_FINGERPRINT}}` | Full fingerprint copied from the step 2 `sec` output |
 | `{{TIMESTAMP}}` | generated timestamp at capture time with `date -u +%Y%m%d%H%M%SZ` |
 
 The exported secret key is stored at
-`{{SMB_MOUNT}}/Camera-CA-Backups/ca-vault-gpg.key.gpg`. The `.gpg` extension is
+`{{BACKUP_PATH}}/Camera-CA-Backups/ca-vault-gpg.key.gpg`. The `.gpg` extension is
 the established backup filename; the file contents are ASCII armored OpenPGP.
 
 The password-store backup is stored at
-`{{SMB_MOUNT}}/Camera-CA-Backups/password-store-backup-{{TIMESTAMP}}.tar.gz`, where
+`{{BACKUP_PATH}}/Camera-CA-Backups/password-store-backup-{{TIMESTAMP}}.tar.gz`, where
 `{{TIMESTAMP}}` is the current timestamp. Never overwrite an older password-store
 backup; create a new timestamped copy after any password-store manipulation.
 
-The backup mount may not exist until the SMB client mount step is complete. Do not
-create backup files under an unmounted local directory by mistake; after step 7,
-`{{SMB_MOUNT}}` should resolve to the mounted private Samba share. If you are
-unable to mount or create the full backup path, stop and warn the user; do not
-continue with the runbook.
+The backup location must already be mounted or created before this runbook is
+executed; this runbook does not mount anything. Do not create backup files under
+an unmounted local directory by mistake. If `{{BACKUP_PATH}}` does not exist or
+is not writable, stop and warn the user; do not continue with the runbook.
 
 ## Agent Presentation Rules
 
@@ -46,7 +43,7 @@ copy-pasteable commands.
 
 Before presenting any USER-run command or executing any AGENT-run command, replace
 every double-curly placeholder with the real site value. Do not ask the user to
-type or edit placeholders such as `{{SMB_MOUNT}}`, `{{REPO_PATH}}`, or
+type or edit placeholders such as `{{BACKUP_PATH}}`, `{{REPO_PATH}}`, or
 `{{GPG_FINGERPRINT}}`. If a value is not known, ask for that value before showing
 or running the command.
 
@@ -71,15 +68,13 @@ including spaces, and quote it in shell commands.
       ```bash
       cd {{REPO_PATH}}
       scripts/GPG_KEY/gpg_key_runbook.sh agent-prep
-      scripts/GPG_KEY/gpg_key_runbook.sh status \
-        --smb-mount {{SMB_MOUNT}} \
-        --smb-server-fqdn {{SMB_SERVER_FQDN}} \
-        --smb-username {{SMB_USERNAME}}
+      scripts/GPG_KEY/gpg_key_runbook.sh status --backup-path {{BACKUP_PATH}}
       ```
 
       The `agent-prep` command installs missing Debian/Ubuntu packages when
       `apt-get` is available, configures terminal pinentry, and leaves secret
-      entry to the user. The `status` command prints non-secret state only. It is
+      entry to the user. The `status` command prints non-secret state only,
+      including whether `{{BACKUP_PATH}}` exists and is reachable. It is
       safe for the agent to run before the user creates the GPG key and again
       after each later stage. Do not replace the scripted workflow with ad hoc
       fragments.
@@ -128,10 +123,9 @@ including spaces, and quote it in shell commands.
 
       Then `{{GPG_FINGERPRINT}}` is "AC3C 1053 FEFE 526E 26BD  3895 7247 25B2 87EE 7E5D".
 
-      The SMB share cannot be mounted until the `smb` password is available in
-      step 6. Export the secret key to a protected local file now; copy it to SMB
-      after the client mount is configured in step 7. A failure must stop the
-      sequence rather than leaving a false backup.
+      Export the secret key to a protected local file now; copy it to
+      `{{BACKUP_PATH}}` in the backup step. A failure must stop the sequence
+      rather than leaving a false backup.
 
       GPG may ask for the key's passphrase through `pinentry-curses`. The exported
       file is sensitive even though the key is passphrase protected. Do not print,
@@ -161,8 +155,8 @@ including spaces, and quote it in shell commands.
       The packet listing must show a secret primary key and a secret subkey. Keep the
       GPG passphrase independently memorable or recoverable: losing both the live
       key and this export, or forgetting its passphrase, prevents recovery of the
-      future `pass` store. Once verified, initialize the password store, mount the
-      SMB share, and back up both the GPG export and password store.
+      future `pass` store. Once verified, initialize the password store and back up
+      both the GPG export and password store to `{{BACKUP_PATH}}`.
 
 5. ### Initialize the password store (USER-run)
 
@@ -176,10 +170,10 @@ including spaces, and quote it in shell commands.
       scripts/GPG_KEY/gpg_key_runbook.sh init-store --fingerprint "{{GPG_FINGERPRINT}}"
       ```
 
-6. ### Add camera and SMB passwords (USER-run)
+6. ### Add camera password (USER-run)
 
-      Add the operational passwords that other build procedures consume. These are
-      entered interactively in the terminal so they do not appear in shell history,
+      Add the operational password that other build procedures consume. It is
+      entered interactively in the terminal so it does not appear in shell history,
       an agent transcript, or a committed runbook.
 
       ```bash
@@ -188,12 +182,11 @@ including spaces, and quote it in shell commands.
       ```
 
       `camera` is the shared camera password used in RTSP/ONVIF camera access.
-      `smb` is the SMB password used by the camera-system backup/share workflow.
-      Use the first line of each entry as the password. If the entry needs notes,
-      use `pass edit <entry>` after the password is stored, keeping the password on
+      Use the first line of the entry as the password. If the entry needs notes,
+      use `pass edit camera` after the password is stored, keeping the password on
       line 1.
 
-      Verify only that the entries exist and decrypt; do not paste the password into
+      Verify only that the entry exists and decrypts; do not paste the password into
       the agent chat or logs:
 
       ```bash
@@ -201,97 +194,42 @@ including spaces, and quote it in shell commands.
       scripts/GPG_KEY/gpg_key_runbook.sh verify-passwords
       ```
 
-7. ### Mount the private SMB backup share on the camera host (USER-run)
+7. ### Back up the password store (USER-run)
 
-      The `smb` password is needed before the password store itself can be backed
-      up to the SMB share. After step 6, configure the camera host's separate CIFS
-      mount for the private CA backup share. This is the client-mount portion of
-      `SMB_SERVE.md`; the Samba server-side share must already exist on {{SMB_SERVER_FQDN}}.
-
-      Required values for this step:
-
-      | Name | Description |
-      |---|---|
-      | `{{SMB_SERVER_FQDN}}` | SMB host Fully Qualified Domain Name |
-      | `{{SMB_USERNAME}}` | Username as recognized on the SMB server |
-      | `pass show smb` | Password as recognized on the SMB server |
-
-      Confirm `{{SMB_MOUNT}}` and
-      `/etc/cifs-utils/credentials/camera-backup` are not already used for a
-      different purpose. For a partially completed setup, reuse and correct the
-      existing configuration instead of creating a duplicate.
-
-      Add `domain=...` to `/etc/cifs-utils/credentials/camera-backup` only if
-      this Samba server requires it. Do not copy the old mount's credentials
-      without confirming they belong to the new share account.
-
-      Require a `cifs` row for `{{SMB_MOUNT}}` naming
-      `//{{SMB_SERVER_FQDN}}/camera-ca-private`, with `rw`, the intended numeric
-      UID/GID, and `file_mode=0600,dir_mode=0700`. An `autofs` mount alone is not
-      success.
-
-      A `Password for root@...` prompt means the saved login is not being supplied.
-      Check that the credentials file has correctly formatted nonempty `username=`
-      and `password=` lines and that fstab references that file. If the intended
-      login gets permission denied, verify the Samba credentials and share access
-      on {{SMB_SERVER_FQDN}}.
-
-      Run the script for the full SMB client mount step after the `smb` password
-      has been inserted into `pass`. The script reads the SMB password from
-      `pass show smb`, writes `/etc/cifs-utils/credentials/camera-backup`, creates
-      or updates the single `/etc/fstab` entry for `{{SMB_MOUNT}}`, starts the
-      systemd automount, requires a real `cifs` mount, and creates
-      `{{SMB_MOUNT}}/Camera-CA-Backups`:
-
-      The agent must resolve the site-specific placeholders before presenting or
-      running this command. Do not ask the user to type the double-curly-brace
-      values literally.
-
-      ```bash
-      cd {{REPO_PATH}}
-      scripts/GPG_KEY/gpg_key_runbook.sh mount-smb \
-        --smb-mount {{SMB_MOUNT}} \
-        --smb-server-fqdn {{SMB_SERVER_FQDN}} \
-        --smb-username {{SMB_USERNAME}} \
-        --local-user "$USER"
-      ```
-
-8. ### Back up the password store (USER-run)
-
-      First copy the local GPG secret-key export to the mounted SMB share and
-      verify the copy. This is the first point where the SMB mount is available,
-      because the SMB password was only added to `pass` in step 6.
+      First copy the local GPG secret-key export to `{{BACKUP_PATH}}` and
+      verify the copy.
 
       Back up the whole password store immediately after adding or changing any
       password. This `pass` version stores per-entry `.gpg` files plus the hidden
       `.gpg-id`; the backup must include the entire store, not just one entry.
 
-      Any later `pass insert`, `pass edit`, `pass rm`, generated CA passphrase, SMB
-      password rotation, or camera password rotation must be followed by another
-      password-store backup with a new `{{TIMESTAMP}}`/label. Do not continue a build or
-      restore after changing the store until the new backup exists.
+      Any later `pass insert`, `pass edit`, `pass rm`, generated CA passphrase, or
+      camera password rotation must be followed by another password-store backup
+      with a new `{{TIMESTAMP}}`/label. Do not continue a build or restore after
+      changing the store until the new backup exists.
 
-      Run the script only after `{{SMB_MOUNT}}` is confirmed to be a mounted CIFS
-      share. Omit `--label` to let the script generate
+      Run the script only after `{{BACKUP_PATH}}` is confirmed to exist and be
+      writable (the backup location must already be mounted or created). Omit
+      `--label` to let the script generate
       `$(date -u +%Y%m%d%H%M%SZ)-initial`; pass a site-specific label for later
       backups such as `20260929021726Z-camera-rotation`:
 
-      The agent must resolve `{{SMB_MOUNT}}` before presenting or running this
+      The agent must resolve `{{BACKUP_PATH}}` before presenting or running this
       command. Do not ask the user to type the double-curly-brace value literally.
 
       ```bash
       cd {{REPO_PATH}}
-      scripts/GPG_KEY/gpg_key_runbook.sh backup --smb-mount {{SMB_MOUNT}}
+      scripts/GPG_KEY/gpg_key_runbook.sh backup --backup-path {{BACKUP_PATH}}
       ```
 
-      The backup command refuses to write into an unmounted local directory,
+      The backup command refuses to write into a missing or unwritable location,
       copies `ca-vault-gpg.key.gpg` without overwriting a different existing
       export, creates `password-store-backup-<label>.tar.gz`, writes
       `pass-gpg-id.txt`, and prints non-secret verification metadata.
 
 ## Recovery
 
-Copy `{{SMB_MOUNT}}/Camera-CA-Backups/ca-vault-gpg.key.gpg` unchanged to the new machine.
+Copy `{{BACKUP_PATH}}/Camera-CA-Backups/ca-vault-gpg.key.gpg` unchanged to the new machine.
 Configure terminal pinentry as in step 1, then import the key as the intended user.
 The agent must resolve `{{REPO_PATH}}` and any backup file path before presenting
 these commands:

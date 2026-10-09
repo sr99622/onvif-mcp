@@ -223,19 +223,25 @@ start_service() {
 
 test_mcp() {
   require_arg --server-fqdn "$server_fqdn"
-  local init session tools
-  init="$(curl -sD- -X POST -H 'Content-Type: application/json' -H 'Accept: text/event-stream, application/json' -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"curl-test","version":"1.0"}}}' "http://$server_fqdn/mcp")"
+  local init session tools base cacert
+  cacert="$HOME/Private-CA/camera-system-ca/certs/camera-system-root-ca.crt.pem"
+  if [[ -f "$cacert" ]]; then
+    base="https://$server_fqdn/mcp"
+  else
+    base="http://$server_fqdn/mcp"
+  fi
+  init="$(curl -sD- ${cacert:+--cacert "$cacert"} -X POST -H 'Content-Type: application/json' -H 'Accept: text/event-stream, application/json' -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"curl-test","version":"1.0"}}}' "$base")"
   session="$(printf '%s\n' "$init" | awk 'tolower($1)=="mcp-session-id:" {gsub("\r", "", $2); print $2; exit}')"
   if [[ -z "$session" ]]; then
     echo "$init" >&2
-    echo "No mcp-session-id received from http://$server_fqdn/mcp" >&2
+    echo "No mcp-session-id received from $base" >&2
     exit 1
   fi
-  curl -fsS -X POST -H 'Content-Type: application/json' -H 'Accept: text/event-stream, application/json' -H "mcp-session-id: $session" -d '{"jsonrpc":"2.0","method":"notifications/initialized"}' "http://$server_fqdn/mcp" >/dev/null || true
-  tools="$(curl -fsS -X POST -H 'Content-Type: application/json' -H 'Accept: text/event-stream, application/json' -H "mcp-session-id: $session" -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' "http://$server_fqdn/mcp")"
+  curl -fsS ${cacert:+--cacert "$cacert"} -X POST -H 'Content-Type: application/json' -H 'Accept: text/event-stream, application/json' -H "mcp-session-id: $session" -d '{"jsonrpc":"2.0","method":"notifications/initialized"}' "$base" >/dev/null || true
+  tools="$(curl -fsS ${cacert:+--cacert "$cacert"} -X POST -H 'Content-Type: application/json' -H 'Accept: text/event-stream, application/json' -H "mcp-session-id: $session" -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' "$base")"
   printf '%s\n' "$tools" | grep '"name":"get_cameras"' >/dev/null
   printf '%s\n' "$tools" | grep '"name":"get_adapters"' >/dev/null
-  adapters="$(curl -fsS -X POST -H 'Content-Type: application/json' -H 'Accept: text/event-stream, application/json' -H "mcp-session-id: $session" -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get_adapters","arguments":{}}}' "http://$server_fqdn/mcp")"
+  adapters="$(curl -fsS ${cacert:+--cacert "$cacert"} -X POST -H 'Content-Type: application/json' -H 'Accept: text/event-stream, application/json' -H "mcp-session-id: $session" -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get_adapters","arguments":{}}}' "$base")"
   printf '%s\n' "$adapters" | grep '10.2.2.1' >/dev/null
   echo "mcp-test-ok tools=get_cameras,get_adapters adapter=10.2.2.1"
 }

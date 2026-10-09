@@ -120,14 +120,12 @@ prime_gpg_cache() {
   export GPG_TTY="$tty_path"
   gpg-connect-agent updatestartuptty /bye >/dev/null || true
   pass show camera >/dev/null
-  pass show smb >/dev/null
   printf 'prime-gpg-cache-ok\n'
 }
 
 verify_pass_store_prereqs() {
   test -s "$HOME/.password-store/.gpg-id"
   pass show camera >/dev/null
-  pass show smb >/dev/null
   test -n "$(find "$HOME/.password-store" -maxdepth 2 -type f -name '*.gpg' -print -quit)"
   test -s "$(smb_backup_dir)/ca-vault-gpg.key.gpg"
   compgen -G "$(smb_backup_dir)/password-store-backup-*.tar.gz" >/dev/null

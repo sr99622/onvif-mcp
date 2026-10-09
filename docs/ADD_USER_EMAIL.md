@@ -18,6 +18,7 @@ existing realm password policy still applies.
 | `{{USER_EMAIL}}` | Real inbox controlled by the recipient |
 | `{{SERVER_FQDN}}` | Camera server hostname |
 | `{{BACKUP_PATH}}` | Existing backup folder |
+| `{{REPO_PATH}}` | Parent directory for this repository |
 
 No PASSWORD input is accepted. Do not invent an email address, create a temporary
 password, mark email verified manually, or run headless login drivers that would

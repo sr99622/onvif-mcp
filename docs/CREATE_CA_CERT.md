@@ -35,7 +35,7 @@ For the current implementation, the CA working directory is
 
 Complete `GPG_KEY.md` before starting this runbook. The backup share must already
 be a real mounted CIFS filesystem, not merely a local directory or an autofs
-placeholder, and the password store must already contain `camera` and `smb`.
+placeholder, and the password store must already contain `camera`.
 The SMB backup folder must already contain the GPG secret-key export created by
 `GPG_KEY.md`:
 
