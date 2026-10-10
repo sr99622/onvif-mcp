@@ -13,17 +13,21 @@ The system is designed such that it can be recovered from backup in the event of
     ```
     mkdir $HOME/camera-backup
     sudo chmod 700 $HOME/camera-backup
+    sudo chown $USER:$USER $HOME/camera-backup
     ```
 
   * Mounted external drive
 
     This backup storage provides good protection against a system crash, as it resides on a removable storage device that will be unaffected by a system crash. It has the added advantage that it can be stored off-site in the event of a catastrophic site event, the system can still be recovered. One disadvantage is that the drive must be mounted previous to making any system changes, such as adding a new user or a new camera so that the backup can be stored. An example of using a USB drive for this purpose, assuming you have previously formatted the drive with the appropriate file system, usually ext4.
 
+    Find the name of the mounted drive using `lsblk`, then run the following commands, replacing {{drive_name}} with the name of the mounted drive, e.g. `sdb1`
+
     ```
     sudo mkdir /mnt/usb
-    sudo mount /dev/sdb1 /mnt/usb
-    mkdir /mnt/usb/camera-backup
-    chmod 700 /mnt/usb/camera-backup
+    sudo mount /dev/{{drive_name}} /mnt/usb
+    sudo mkdir /mnt/usb/camera-backup
+    sudo chmod 700 /mnt/usb/camera-backup
+    sudo chown $USER:$USER /mnt/usb/camera-backup
 
   * SMB shared directory
 

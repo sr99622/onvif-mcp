@@ -15,7 +15,7 @@ Do not obsess over every camera detail. Many cameras have bugs that will cause t
 | `{{REPO_PATH}}`        | /home/stephen/onvif-mcp |
 | `{{SERVER_USER}}`      | stephen |
 | `{{CA_ROOT_PATH}}`     | /home/stephen/Private-CA |
-| `{{BACKUP_PATH}}`      | /home/stephen/camera-backup |
+| `{{BACKUP_PATH}}`      | /mnt/usb/camera-backup |
 | `{{SERVER_IP}}`        | 10.1.1.6 |
 | `{{RVRS_SRV_IP}}`      | 6.1.1.10 |
 | `{{UPSTREAM_DNS}}`     | 192.168.68.1 |
