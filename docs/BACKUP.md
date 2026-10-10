@@ -8,80 +8,79 @@ The system is designed such that it can be recovered from backup in the event of
 
   * Local file system path
 
-  This backup storage provides very little protection against a system crash, as it resides on the same file system as the installation itself. It is also very low effort to implement, involving only creating a folder in your file system to hold the backup files. 
+    This backup storage provides very little protection against a system crash, as it resides on the same file system as the installation itself. It is also very low effort to implement, involving only creating a folder in your file system to hold the backup files. 
 
-  ```
-  mkdir $HOME/camera-backup
-  sudo chmod 700 $HOME/camera-backup
-  ```
+    ```
+    mkdir $HOME/camera-backup
+    sudo chmod 700 $HOME/camera-backup
+    ```
 
   * Mounted external drive
 
-  This backup storage provides good protection against a system crash, as it resides on a removable storage device that will be unaffected by a system crash. It has the added advantage that it can be stored off-site in the event of a catastrophic site event, the system can still be recovered. One disadvantage is that the drive must be mounted previous to making any system changes, such as adding a new user or a new camera so that the backup can be stored. An example of using a USB drive for this purpose, assuming you have previously formatted the drive with the appropriate file system, usually ext4.
+    This backup storage provides good protection against a system crash, as it resides on a removable storage device that will be unaffected by a system crash. It has the added advantage that it can be stored off-site in the event of a catastrophic site event, the system can still be recovered. One disadvantage is that the drive must be mounted previous to making any system changes, such as adding a new user or a new camera so that the backup can be stored. An example of using a USB drive for this purpose, assuming you have previously formatted the drive with the appropriate file system, usually ext4.
 
-  ```
-  sudo mkdir /mnt/usb
-  sudo mount /dev/sdb1 /mnt/usb
-  mkdir /mnt/usb/camera-backup
-  chmod 700 /mnt/usb/camera-backup
-  ```
+    ```
+    sudo mkdir /mnt/usb
+    sudo mount /dev/sdb1 /mnt/usb
+    mkdir /mnt/usb/camera-backup
+    chmod 700 /mnt/usb/camera-backup
 
   * SMB shared directory
 
-  By far the most complex setup, but it has the advantage of being always on and available. Excellent protection from a server crash with instant accessibility for restoration. It will most likely reside on a local network within the same physical location, so a catastrophic site event poses a threat in the absence of physically removable media. This strategy requires configuration of a SMB server host in addition to the camera server. There are runbooks that will perform most of the configuration. Some preparatory work is required on the SMB server host before starting the runbooks.
+    By far the most complex setup, but it has the advantage of being always on and available. Excellent protection from a server crash with instant accessibility for restoration. It will most likely reside on a local network within the same physical location, so a catastrophic site event poses a threat in the absence of physically removable media. This strategy requires configuration of a SMB server host in addition to the camera server. There are runbooks that will perform most of the configuration. Some preparatory work is required on the SMB server host before starting the runbooks.
 
-  The system is designed to accommodate a SMB server on Ubuntu or Cachy OS. The SMB server must first enable SSH access.
+    The system is designed to accommodate a SMB server on Ubuntu or Cachy OS. The SMB server must first enable SSH access.
 
-  Ubuntu
-  ```
-  sudo apt install openssh-server -y
-  sudo systemctl enable --now ssh
-  ```
+    Ubuntu
+    ```
+    sudo apt install openssh-server -y
+    sudo systemctl enable --now ssh
+    ```
 
-  Cachy OS
-  ```
-  sudo pacman -S openssh
-  sudo systemctl enable --now sshd
-  ```
+    Cachy OS
+    ```
+    sudo pacman -S openssh
+    sudo systemctl enable --now sshd
+    ```
 
-  Enable passwordless sudo on the SMB server
-  ```
-  sudo env USER="$USER" bash -c '
-  set -euo pipefail
-  u="${USER:?USER environment variable is not set}"
-  [[ "$u" =~ ^[a-zA-Z_][a-zA-Z0-9_-]*$ ]] || { echo "Invalid USER value: $u" >&2; exit 1; }
-  f="$(mktemp)"
-  trap "rm -f \"$f\"" EXIT
-  printf "%s ALL=(ALL) NOPASSWD: ALL\n" "$u" > "$f"
-  chmod 0440 "$f"
-  visudo -cf "$f"
-  install -o root -g root -m 0440 "$f" "/etc/sudoers.d/${u}-nopasswd"
-  echo "Created /etc/sudoers.d/${u}-nopasswd"
-  '
-  ```
+    Enable passwordless sudo on the SMB server
+    ```
+    sudo env USER="$USER" bash -c '
+    set -euo pipefail
+    u="${USER:?USER environment variable is not set}"
+    [[ "$u" =~ ^[a-zA-Z_][a-zA-Z0-9_-]*$ ]] || { echo "Invalid USER value: $u" >&2; exit 1; }
+    f="$(mktemp)"
+    trap "rm -f \"$f\"" EXIT
+    printf "%s ALL=(ALL) NOPASSWD: ALL\n" "$u" > "$f"
+    chmod 0440 "$f"
+    visudo -cf "$f"
+    install -o root -g root -m 0440 "$f" "/etc/sudoers.d/${u}-nopasswd"
+    echo "Created /etc/sudoers.d/${u}-nopasswd"
+    '
+    ```
 
-  This permission can be revoked after the SMB share has been setup by deleting the file that is created in the `/etc/sudoers.d` folder named after the user as ${USER}-nopasswd.
+    This permission can be revoked after the SMB share has been setup by deleting the file that is created in the `/etc/sudoers.d` folder named after the user as ${USER}-nopasswd.
 
-  The rest of the configuration can be run from the camera host using Hermes. The agent will use SSH to log into the SMB server and configure the shared drive, then mount it from the camera host with proper permissions.
+    The rest of the configuration can be run from the camera host using Hermes. The agent will use SSH to log into the SMB server and configure the shared drive, then mount it from the camera host with proper permissions.
 
-  Required Values 
+    Required Values 
 
-  | Name | Description |
-  |---|---|
-  | `{{SSH_SERVER_FQDN}}` | FQDN of the machine being logged in to |
-  | `{{SSH_USERNAME}}` | User on that machine |
-  | `{{REPO_PATH}}` | Full path to this repository |
-  | `{{SMB_SERVER_FQDN}}` | FQDN of the machine hosting the Samba share |
-  | `{{SMB_USERNAME}}` | Existing Linux account on the SMB host that exclusively owns this share |
-  | `{{SMB_MOUNT}}` | Mount point on the camera host |
+    | Name | Description |
+    |---|---|
+    | `{{SSH_SERVER_FQDN}}` | FQDN of the machine being logged in to |
+    | `{{SSH_USERNAME}}` | User on that machine |
+    | `{{REPO_PATH}}` | Full path to this repository |
+    | `{{SMB_SERVER_FQDN}}` | FQDN of the machine hosting the Samba share |
+    | `{{SMB_USERNAME}}` | Existing Linux account on the SMB host that exclusively owns this share |
+    | `{{SMB_MOUNT}}` | Mount point on the camera host |
 
 
-  Runbooks
+    Runbooks
 
-  ```
-  [SSH_LOGIN.md](docs/SSH_LOGIN.md)
-  [SMB_SERVE.md](docs/SMB_SERVE.md)
-  ```
+    ```
+    [SSH_LOGIN.md](docs/SSH_LOGIN.md)
+    [SMB_SERVE.md](docs/SMB_SERVE.md)
+    ```
 
 ## Recovery Procedure
 
