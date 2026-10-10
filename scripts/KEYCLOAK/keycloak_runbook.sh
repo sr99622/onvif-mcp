@@ -578,7 +578,7 @@ apply() {
   configure_mcp_oauth
   test_dcr
   configure_hermes
-  headless_hermes_login
+  #headless_hermes_login
   install_backup_service
   restore_test
   echo "apply-ok keycloak $(issuer)"

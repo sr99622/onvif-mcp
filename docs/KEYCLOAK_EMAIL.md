@@ -12,6 +12,7 @@ does not require the Keycloak web administrator console.
 | `{{GMAIL_ADDRESS}}` | Dedicated Gmail sender address |
 | `{{SERVER_FQDN}}` | Camera server hostname used by clients |
 | `{{BACKUP_PATH}}` | Existing backup folder |
+| {{REPO_PATH}} | The full pathname for this repository |
 
 Deployment defaults from KEYCLOAK.md: realm `mcp`, administrator
 `keycloak-admin` in `master`, loopback URL `http://127.0.0.1:8080/auth`,
@@ -36,7 +37,12 @@ fragments that can drift from the script.
 The administrator creates a Google app password named Camera Keycloak for the
 dedicated Gmail account, then runs the script in their own interactive terminal
 on the camera server. Enter the Google app password at the hidden prompt. It is
-not the Gmail account's main password. Do not paste either password into Hermes.
+not the Gmail account's main password. Do not paste either password into Hermes.URL
+
+Prompt the user to run the script
+
+cd {{REPO_PATH}}
+scripts/KEYCLOAK_EMAIL/keycloak_email_runbook.sh user-store-password
 
 The script creates `/opt/keycloak/gmail-smtp.pass` as `0600 root:root` and never
 prints the secret. An existing file is not overwritten. To rotate the credential
