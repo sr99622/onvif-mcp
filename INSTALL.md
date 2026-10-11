@@ -20,8 +20,6 @@ A short wait of five seconds after completing each script can help to avoid race
 | `{{CA_ROOT_PATH}}`     | /home/stephen/Private-CA |
 | `{{BACKUP_PATH}}`      | /mnt/usb/camera-backup |
 | `{{SERVER_IP}}`        | 10.1.1.6 |
-| `{{RVRS_SRV_IP}}`      | 6.1.1.10 |
-| `{{UPSTREAM_DNS}}`     | 192.168.68.1 |
 | `{{GMAIL_ADDRESS}}`    | keycloak.admin.sample@gmail.com |
 
 **Runbooks**
@@ -29,6 +27,8 @@ A short wait of five seconds after completing each script can help to avoid race
 ### Phase 1
 
 [GPG_KEY.md](docs/GPG_KEY.md)
+
+[DNS.md](docs/DNS.md)
 
 [DHCP.md](docs/DHCP.md)
 
@@ -45,8 +45,6 @@ A short wait of five seconds after completing each script can help to avoid race
 [SITE_CERT.md](docs/SITE_CERT.md)
 
 [CA_DISTRIBUTE.md](docs/CA_DISTRIBUTE.md)
-
-[DNS.md](docs/DNS.md)
 
 [FIREWALL.md](docs/FIREWALL.md)
 

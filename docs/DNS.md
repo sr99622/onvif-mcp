@@ -20,9 +20,13 @@ it with ad hoc shell fragments from this document.
 |---|---|
 | `{{SERVER_FQDN}}` | Fully Qualified Domain Name of the server |
 | `{{SERVER_IP}}` | LAN IP address of the server |
-| `{{RVRS_SRV_IP}}` | Reverse IP address of the server for PTR lookup |
-| `{{UPSTREAM_DNS}}` | Upstream DNS resolver |
 | `{{BACKUP_PATH}}` | Backup location (SMB shared folder, mounted external drive, or local folder); must already exist and enforce the SMB-mount permission model (mode 0700 owner-only, no extra ACL entries) |
+
+## Derived Values
+| Symbol | Description |
+|---|---|
+| `{{UPSTREAM_DNS}}` | Upstream DNS resolver; derived from the current DNS setting of the primary ethernet adapter (step 0), not typed by the user |
+| `{{RVRS_SRV_IP}}` | Reverse IP address of the server for PTR lookup, derived from the `{{SERVER_IP}}` by reversing the order of the dot notation address, e.g. SERVER_IP=10.1.1.5 -> RVRS_SRV_IP=5.1.1.10 |
 
 ## Design decisions
 
@@ -32,6 +36,11 @@ it with ad hoc shell fragments from this document.
   interface, wildcard address, or loopback.
 - `systemd-resolved` remains the Ubuntu host resolver on `127.0.0.53` and
   `127.0.0.54`.
+- The primary ethernet adapter is the ethernet adapter carrying the default route.
+  Private/isolated adapters (the camera subnet) have no DNS scope and are ignored by
+  every adapter-facing step.
+- After the DNS service verifies, the primary ethernet adapter is pointed at the
+  local DNS server (`{{SERVER_IP}}`) so the host itself resolves through dnsmasq.
 - Backups and rollback copies must live outside all dnsmasq include directories.
 
 ## DNS backup checkpoint
@@ -59,6 +68,22 @@ configuration changes.
 
 Before presenting or executing any command, replace every double-curly placeholder
 with the real site value. Do not ask the user to type or edit placeholders.
+
+## 0. Detect the upstream DNS from the primary adapter (AGENT-run)
+
+Query the primary ethernet adapter for its current DNS setting;
+that value is `{{UPSTREAM_DNS}}` for the rest of the runbook.
+
+```bash
+cd {{REPO_PATH}}
+scripts/DNS/dns_runbook.sh detect-upstream-dns --server-ip {{SERVER_IP}}
+```
+
+Output is `primary_iface=<adapter> current_dns=<resolver>` and `upstream_dns=<resolver>`.
+The adapter is identified as the ethernet adapter carrying the default route; the
+private camera adapter has no DNS scope and is ignored. The detected value is recorded
+in `/var/lib/dns-runbook/upstream_dns` so re-runs on an already-configured machine can
+still report the original upstream once the adapter points at the local server itself.
 
 ## 1. Configure and verify DNS (AGENT-run)
 
@@ -127,6 +152,23 @@ Verification requires:
 - `nonexistent-test.home.arpa` returns NXDOMAIN.
 - reverse lookup for `{{SERVER_IP}}` returns `{{SERVER_FQDN}}.`.
 - resolver-registration hooks are disabled and `IGNORE_RESOLVCONF=yes` is set.
+
+## 3. Point the primary adapter at the local DNS server (AGENT-run)
+
+Run after step 2 verifies:
+
+```bash
+cd {{REPO_PATH}}
+scripts/DNS/dns_runbook.sh apply-client-config --server-ip {{SERVER_IP}}
+```
+
+Sets `ipv4.dns` on the NetworkManager connection bound to the primary ethernet adapter
+to `{{SERVER_IP}}` and reapplies the connection. Idempotent: it reports `no-change` when
+the adapter already uses `{{SERVER_IP}}`, and it fails unless the effective per-link DNS
+reads back as `{{SERVER_IP}}`.
+
+Keep a single DNS entry on this adapter. Adding a public resolver as a secondary would
+let the host bypass the private resolver and fail to resolve `{{SERVER_FQDN}}`.
 
 ## Client configurations
 
