@@ -72,39 +72,39 @@ Be mindful of model context size when running the configurations shown below. St
 
   Enter Required Values into the tables in [INSTALL.md](INSTALL.md), including users and allowed machine IP addresses.
 
-  `{{SERVER_IP}}`
+  * `{{SERVER_IP}}`
 
     The static IP address of the server set during the server preparation step.
 
-  `{{SERVER_FQDN}}` 
+  * `{{SERVER_FQDN}}` 
 
     The Fully Qualified Domain Name of the server. It should end in .home.arpa, which is the reserved domain name for private servers. An example might be `camera.home.arpa`.
 
-  `{{PRVT_NET_EN_NAME}}`
+  * `{{PRVT_NET_EN_NAME}}`
 
     The name of the ethernet adapter used for hosting the provate camera subnet. The adapter should first be connected to the switch, then run the `nmcli dev show` command to look for the unconnected ethernet adapter. There should be one connected adapter that has the static IP address set earlier during server preparation, which should be left undisturbed.
 
-  `{{CAMERA_USERNAME}}`
+  * `{{CAMERA_USERNAME}}`
 
     The common ONVIF username used by the cameras. Typically this will be `admin`.
 
-  `{{REPO_PATH}}`
+  * `{{REPO_PATH}}`
 
     The full pathname of the onvif-mcp repository, which will be $HOME/onvif-mcp as configured during server preparation. Use the actual pathname rather than the environment variable.
 
-  `{{SERVER_USER}}`
+  * `{{SERVER_USER}}`
 
     The actual name of the user account in which the server is installed, it corresponds to the environment variable $USER.
 
-  `{{CA_ROOT_PATH}}`
+  * `{{CA_ROOT_PATH}}`
 
     A storage location for the CA certifcate artifacts. A good choice is $HOME/Private-CA, where the actual path name is used rather than the environment variable.
 
-  `{{BACKUP_PATH}}`
+  * `{{BACKUP_PATH}}`
 
     The backup path as determined from [BACKUP.md](docs/BACKUP.md)
 
-  `{{GMAIL_ADDRESS}}`
+  * `{{GMAIL_ADDRESS}}`
 
     A Gmail address that can be used by the server to send out subscription emails for system users to sign up for a password to allow access. Please refer to [KEYCLOAK_EMAIL.md](docs/KEYCLOAK_EMAIL.md) for more details. The salient point here is that the google email account needs an App Password set that allows the script to automatically send the subscription email. Note that the App Password setting will require two factor authentication for the google account. Sign up for a gmail account and follow the instructions at [Google app passwords](https://support.google.com/accounts/answer/185833) and [Gmail SMTP settings](https://support.google.com/mail/answer/7104828).
 
