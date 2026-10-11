@@ -114,10 +114,27 @@ Be mindful of model context size when running the configurations shown below. St
   Execute the runbook onvif-mcp/INSTALL.md
 ```
 
-  The installation will require you to perform several actions in a separate terminal to initialize and manage the passwords used by the system.
+  The installation will require you to perform several actions in a separate terminal to initialize and manage the passwords used by the system. Watch for prompts from the agent and copy the commands it generates for you into your terminal and then copy paste the results back to the agent. One of the things it will ask you to do is to generate a gpg key password using the PinEntry program which is a text interface. There are a number of variable selections for which you should accept the default choice by pressing the Enter key. After the certificate expiration is set to Never, the application will ask you to confirm, and the default choice is No, so type y to accept the choice.  After creating the encrypted key certificate, it will ask you to create a password. Enter the password once, then press the Tab key to advance to the second password entry, then press the Enter key to finish.
 
-## Configuring the Client
+  After the Phase 1 actions are completed, the agent will prompt you to check the available context. In most cases, the context will have been used to a significant degree and should be cleared for the next phase, which again requires significant context. Type `/new` in the hermes promppt window to clear the context, then prompt it to continue configuration.
 
-Clients are configured using the [CLIENT.md](docs/CLIENT.md) doc. Configurations have been mapped for major Linux distros, Windows and MacOS. Limited configuration for Android mobile devices gives access to the camera web apps.
+```
+Continue executing the runbook onvif-mcp/INSTALL.md starting with Phase 2
+```
 
-Upon completion of user configuration and successful login, prompt the agent to backup the Keycloak authorization server.
+  Upon completion of Phase 2, the system is ready for client access. The agent will prompt you to check the available context again, it can be safely cleared as before using the `/new` directive in the agent prompt. Assuming that the user information has been filled out in the Required Values table, prompt the agent
+
+```
+Execute Phase 3 of the runbook onvif-mcp/INSTALL.md
+```
+
+  This will send an email to the user. They should configure the client as described in [CLIENT.md](docs/CLIENT.md), most importantly the browser configuration to trust the Camera System CA certificate. The user should then click the link in the email to set up an account password on the camera server. At that point the camera apps should be available to the user at https://{{SERVER_FQDN}}/cameras.
+
+  Upon completion of user configuration and successful login, prompt the agent to backup the Keycloak authorization server.
+
+  If a user wants to access the camera MCP server to use advanced features and recording playback, a further configuration step is required. The system must register the IP address of the client to allow access. Verify the client machine IP address as described in the [CLIENT.md](docs/CLIENT.md#Get-client-IP-address-for-MCP-access) document and enter that value into the Required Value table for Phase 4 then prompt the agent
+
+```
+Execute Phase 4 of the runbook onvif-mcp/INSTALL.md
+```
+
