@@ -89,6 +89,7 @@ EOF
 curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
 echo "The camera server preparation is complete. Press the enter key to exit the terminal. Open a new terminal and follow the instructions in the INSTALL.md runbook."
 read </dev/tty
+exit
 ```
 
 &nbsp;

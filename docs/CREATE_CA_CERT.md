@@ -84,7 +84,22 @@ using the scripted command in step 2.
    be writable by the runbook user, and enforce the SMB-mount permission model
    (mode 0700 owner-only, no extra ACL entries).
 
-## 1. Prepare the CA workstation (AGENT-run)
+## 1. Prime the GPG cache
+
+The agent-side `apply` command cannot decrypt or write password-store entries
+because GPG needs a pinentry prompt, stop and show the user this exact resolved
+copy-paste block:
+
+```bash
+cd {{REPO_PATH}}
+scripts/CREATE_CA_CERT/create_ca_cert_runbook.sh prime-gpg-cache
+```
+
+Tell the user to enter the GPG passphrase in their terminal if prompted, and to
+report when the command prints `prime-gpg-cache-ok`. Do not ask the user to paste
+any passphrase or password into chat.
+
+## 2. Prepare the CA workstation (AGENT-run)
 
 Install required packages, configure safe GPG-agent cache settings, and print
 non-secret state:
@@ -100,21 +115,6 @@ scripts/CREATE_CA_CERT/create_ca_cert_runbook.sh status \
 `agent-prep` may install `openssl`, `pass`, `gnupg`, `age`, and `util-linux` on
 Debian/Ubuntu hosts. It also removes the invalid `cache-ttl` GPG-agent directive
 if present and sets `default-cache-ttl 7200` plus `max-cache-ttl 7200`.
-
-## 2. Prime the GPG cache if interactive unlock is required (USER-run)
-
-If the agent-side `apply` command cannot decrypt or write password-store entries
-because GPG needs a pinentry prompt, stop and show the user this exact resolved
-copy-paste block:
-
-```bash
-cd {{REPO_PATH}}
-scripts/CREATE_CA_CERT/create_ca_cert_runbook.sh prime-gpg-cache
-```
-
-Tell the user to enter the GPG passphrase in their terminal if prompted, and to
-report when the command prints `prime-gpg-cache-ok`. Do not ask the user to paste
-any passphrase or password into chat.
 
 ## 3. Create and back up the CA (AGENT-run)
 

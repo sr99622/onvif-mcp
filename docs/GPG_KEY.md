@@ -58,6 +58,10 @@ After step 2, extract the full fingerprint from the `sec` block and use it to
 replace `{{GPG_FINGERPRINT}}` in later commands. Preserve the fingerprint exactly,
 including spaces, and quote it in shell commands.
 
+Steps 3 - 7 are USER-run, and can be presented to the user as a single block of 
+commands that can be entered into their terminal at the same time. The user 
+can execute those commands and return the result to the agent for evaluation.
+
 ## Key Generation
 
 1. ### Configure terminal pinentry (AGENT-run)
@@ -228,19 +232,6 @@ including spaces, and quote it in shell commands.
   copies `ca-vault-gpg.key.gpg` without overwriting a different existing
   export, creates `password-store-backup-<label>.tar.gz`, writes
   `pass-gpg-id.txt`, and prints non-secret verification metadata.
-
-8. ### Prime the GPG cache for later steps (USER-run)
-
-  Stop and show the user this exact resolved copy-paste block:
-
-  ```bash
-  cd {{REPO_PATH}}
-  scripts/CREATE_CA_CERT/create_ca_cert_runbook.sh prime-gpg-cache
-  ```
-
-  Tell the user to enter the GPG passphrase in their terminal if prompted, and to
-  report when the command prints `prime-gpg-cache-ok`. Do not ask the user to paste
-  any passphrase or password into chat.
 
 # Recovery
 

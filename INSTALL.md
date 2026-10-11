@@ -1,9 +1,12 @@
 # System Installation Template
 
-These are the full instructions to build the camera system. The table of Required Values are used throughout the Runbooks listed below. Execute the runbooks in order to completion starting with Phase 1, then stop and prompt the user to check for available context. In many cases, the user will need to reset the context before continuing with Phase 2. The runbooks can be found in the docs/ folder.
+These are the full instructions to build the camera system. The table of Required Values are used throughout the Runbooks listed below. Execute the runbooks in order to completion starting with Phase 1, then stop and prompt the user to check for available context. In many cases, the user will need to reset the context before continuing with Phase 2. The runbooks can be found in the docs/ folder. Upon completion of Phase 2 stop and prompt the user to check for available context again. Users can then be added to the system by executing Phase 3. Allowed machine IP addresses can be configured in Phase 4. 
+
+This computer has been configured so that you have passwordless sudo privileges as $USER.
 
 Do not obsess over every camera detail. Many cameras have bugs that will cause them to behave poorly in response to commands. If a camera feature is not working after a couple of attempts, assume that the camera does not implement the feature properly and continue configuration without that feature. If a camera advertises several streams or snapshot endpoints and some do not work, just use existing streams or endpoints that are known to work.
 
+A short wait of five seconds after completing each script can help to avoid race conditions during the execution of the runbooks.
 
 **Required Values**
 
