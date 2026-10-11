@@ -56,9 +56,7 @@ A complex system in a production environment requires a robust backup strategy t
 
 ## Building the Server
 
-The server is built in stages as listed below. Server host preparation sets up the baseline operating system configuration, Plain HTTP sets up the services without encryption, HTTPS creates the certificate and maps the endpoints for protection, and Authentication implements the Keycloak server for login credential requirements. A firewall can be added at the conclusion of the configuration for additional protection.
-
- The Hermes agent is used to perform the configuration and can be prompted to follow this document and implement the steps as described in the runbooks referenced below. Values required for each step of the implementation are listed in the tables, Prompt Hermes with your own site specific variables and Hermes can implement the configuration autonomously.
+The Hermes agent is used to perform the configuration by running the plan set in the INSTALL.md runbook. Required Values needed for the installation are set in the tables prior to asking Hermes to configure the system.
 
 Be mindful of model context size when running the configurations shown below. Starting a fresh context after it reaches 50 percent is advised. Runbooks can be executed individually on systems with modest context if necessary. The runbooks can be found in the `{{REPO_PATH}}/docs` directory. The runbooks are intended to be executed in the order listed.
 
@@ -73,6 +71,42 @@ Be mindful of model context size when running the configurations shown below. St
 3. ### Supply Required Values and install
 
   Enter Required Values into the tables in [INSTALL.md](INSTALL.md), including users and allowed machine IP addresses.
+
+  `{{SERVER_IP}}`
+
+    The static IP address of the server set during the server preparation step.
+
+  `{{SERVER_FQDN}}` 
+
+    The Fully Qualified Domain Name of the server. It should end in .home.arpa, which is the reserved domain name for private servers. An example might be `camera.home.arpa`.
+
+  `{{PRVT_NET_EN_NAME}}`
+
+    The name of the ethernet adapter used for hosting the provate camera subnet. The adapter should first be connected to the switch, then run the `nmcli dev show` command to look for the unconnected ethernet adapter. There should be one connected adapter that has the static IP address set earlier during server preparation, which should be left undisturbed.
+
+  `{{CAMERA_USERNAME}}`
+
+    The common ONVIF username used by the cameras. Typically this will be `admin`.
+
+  `{{REPO_PATH}}`
+
+    The full pathname of the onvif-mcp repository, which will be $HOME/onvif-mcp as configured during server preparation. Use the actual pathname rather than the environment variable.
+
+  `{{SERVER_USER}}`
+
+    The actual name of the user account in which the server is installed, it corresponds to the environment variable $USER.
+
+  `{{CA_ROOT_PATH}}`
+
+    A storage location for the CA certifcate artifacts. A good choice is $HOME/Private-CA, where the actual path name is used rather than the environment variable.
+
+  `{{BACKUP_PATH}}`
+
+    The backup path as determined from [BACKUP.md](docs/BACKUP.md)
+
+  `{{GMAIL_ADDRESS}}`
+
+    A Gmail address that can be used by the server to send out subscription emails for system users to sign up for a password to allow access. Please refer to [KEYCLOAK_EMAIL.md](docs/KEYCLOAK_EMAIL.md) for more details. The salient point here is that the google email account needs an App Password set that allows the script to automatically send the subscription email. Note that the App Password setting will require two factor authentication for the google account. Sign up for a gmail account and follow the instructions at [Google app passwords](https://support.google.com/accounts/answer/185833) and [Gmail SMTP settings](https://support.google.com/mail/answer/7104828).
 
   Start the hermes agent and prompt it
 

@@ -2,7 +2,18 @@
 
 This document describes how to configure clients to use the camera server. The top portion of the document shows instructions unique to each operating system, followed by common Hermes instructions used by all operating systems.
 
-Hermes has a built in Chrome browser MCP controller that is used by the system and requires the installation of the Chrome browser if not installed. Windows default Edge browser is Chrome compatible and can be used instead, so Chrome installation is not required for Windows.
+## Hostname Resolution
+
+HTTPS operation requires that the server host name matches the certificate. This requires that the client resolves the host name rather than post the IP address directly. There are two ways to do this, DNS or hosts file configuration. Resolution by DNS server is preferable as a single authoritative source of addresses. This configuration requires that the LAN DHCP server assign the DNS address to clients whose addresses are assigned by DHCP. This is a setting on your router and will be specific to that device. In the event that this is impractical, clients can edit a hosts file to resolve the name locally. Each operating system has its own location for the hosts file. Clients with fixed IP can have the DNS server set manually along with the IP address.
+
+Hosts file location (elevated privileges required to edit)
+
+| Operating System | Location |
+|---|---|
+| Linux | /etc/hosts |
+| MacOS | /private/etc/hosts |
+| Windows | C:\Windows\system32\drivers\etc\hosts |
+| Android | Set a static IP |
 
 ## Operating System Specific Client Preparation Instructions
 * [Fedora](#fedora)
@@ -244,24 +255,7 @@ Once the client has been prepared with the rerequisite software, follow the inst
 
 &nbsp;
 
-# Common Configuration Instructions
-
-## DNS
-
-HTTPS operation requires that the server host name matches the certificate. This implies that the client resolves the host name rather than post the IP address directly. There are two ways to do this, DNS or hosts file configuration. Resolution by DNS server is preferable as a single authoritative source of addresses. This configuration requires that the LAN DHCP server assign the DNS address to clients whose addresses are assigned by DHCP. This is a setting on your router and will be specific to that device. In the event that this is impractical, clients can edit a hosts file to resolve the name locally. Each operating system has its own location for the hosts file. Clients with fixed IP can have the DNS server set manually along with the IP address.
-
-Hosts file location (elevated privileges required to edit)
-
-| Operating System | Location |
-|---|---|
-| Linux | /etc/hosts |
-| MacOS | /private/etc/hosts |
-| Windows | C:\Windows\system32\drivers\etc\hosts |
-| Android | Set a static IP (see above) |
-
-&nbsp;
-
-## Hermes
+# Hermes Common Configuration Instructions
 
 ### Sign on to the camera system
 
@@ -376,6 +370,7 @@ If the client is using MCP services, you can optimize performance with the follo
 ```
 When using camera MCP server tools, it is not necessary to verify that any of the commands have completed successfully beyond checking the return code from the tool call. The camera communications library is very reliable and will pretty much always work properly. If something has gone wrong, the user will ask explicitly for you to check. This may go against your training to always verify things, but it is important that we optimize the system to be as responsive as possible, and post tool call checking slows things down considerably. If the tool call returns a success message, assume that the call succeeded and do not re-query the cameras or take a snapshot without being explicitly asked by the user. One important exception here is the appearance of the 500 error message in the browser when viewing a camera stream. The tool call will return success, but the server may show 500 due to auth token timeout. You should check for the 500 message in the title of the browser when asked to view a camera stream, and if it appears, all you need to do is refresh the browser.
 ```
+
 ## Configure Hermes Desktop
 
 The Hermes desktop application is a convenient way to integrate the camera streams into your desktop. The enmbedded browser within the desktop app can be controlled directly by prompt. To configure this feature, you need to remove the desktop_ui from the agent.disabled_toolsets. The command is kind of backwards in that you specify a list of tools to disable, on which desktop_ui is absent. Make note to read through the list and remove any toolsets that you may have previously enabled.
