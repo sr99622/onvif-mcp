@@ -115,7 +115,7 @@ Required outcomes before handing back to the client:
 
 - Keycloak loopback discovery returns HTTP 200.
 - Exactly one anonymous `trusted-hosts` component exists in realm `mcp`.
-- Trusted hosts include `10.1.1.4` plus the pre-existing hosts.
+- Trusted hosts includes the pre-existing hosts.
 - `host-sending-registration-request-must-match` is `["true"]`.
 - `client-uris-must-match` is `["true"]`.
 - No `.kctmp.*`, `.kctok.*`, `kc-components.json`, `kc-cid.txt`, or `kc-th-*`
