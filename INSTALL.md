@@ -57,7 +57,7 @@ At the completion of Phase 1, pause and allow the user to check for available co
 
 [KEYCLOAK_EMAIL.md](docs/KEYCLOAK_EMAIL.md)
 
-The system is now installed, add users by adding entries to the table below. Pause and allow the user to check for available context.
+The system is now installed, pause and allow the user to check for available context. Continue with Phase 3 to add users by adding entries to the table below. 
 
 ### Phase 3.
 

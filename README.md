@@ -72,7 +72,7 @@ Be mindful of model context size when running the configurations shown below. St
 
 3. ### Supply Required Values and install
 
-  Enter Required Values into the tables in [INSTALL.md](docs/INSTALL.md), including users and allowed machine IP addresses.
+  Enter Required Values into the tables in [INSTALL.md](INSTALL.md), including users and allowed machine IP addresses.
 
   Start the hermes agent and prompt it
 
