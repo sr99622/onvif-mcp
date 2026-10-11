@@ -56,3 +56,35 @@ At the completion of Phase 1, pause and allow the user to check for available co
 [STREAM_AUTH.md](docs/STREAM_AUTH.md)
 
 [KEYCLOAK_EMAIL.md](docs/KEYCLOAK_EMAIL.md)
+
+The system is now installed, add users by adding entries to the table below. Pause and allow the user to check for available context.
+
+### Phase 3.
+
+Required Values 
+
+| Name | Description |
+|---|---|
+| `{{NEW_USER_LOGIN}}` | stephen |
+| `{{FIRST_NAME}}` | Stephen |
+| `{{LAST_NAME}}` | Rhodes |
+| `{{USER_EMAIL}}` | sr99622@gmail.com |
+
+Runbook
+
+[ADD_USER_EMAIL](docs/ADD_USER_EMAIL)
+
+### Phase 4.
+
+Required Values
+
+| Name | Description |
+|---|---|
+| `{{CLIENT_SOURCE_IP}}` | 192.168.68.57 |
+
+Runbook
+
+[ADD_CLIENT_ON_SERVER](docs/ADD_CLIENT_ON_SERVER)
+
+
+

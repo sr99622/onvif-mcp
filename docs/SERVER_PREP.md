@@ -49,12 +49,6 @@ done
 printf "Font cache update failed after 3 attempts.\n" >&2
 exit 1
 '
-exit
-```
-
-## Part 2. Install LazyVim and Hermes
-
-```
 curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.tar.gz
 sudo rm -rf /opt/nvim-linux-x86_64
 sudo tar -C /opt -xzf nvim-linux-x86_64.tar.gz
@@ -93,6 +87,8 @@ return {
 }
 EOF
 curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
+echo "The camera server preparation is complete. Press the enter key to exit the terminal. Open a new terminal and follow the instructions in the INSTALL.md runbook."
+read </dev/tty
 ```
 
 &nbsp;
