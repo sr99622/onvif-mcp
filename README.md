@@ -2,7 +2,7 @@
 
 This project builds a secure IP camera network with enterprise grade OAuth authentication and isolated private network ONVIF cameras. Cameras can be configured such that there is no direct access between the cameras and the local network or wider internet. All camera network traffic is proxied by a single secure server. The system includes web based switchboard apps that can select single camera views or multi-camera views of live streams. Streams are continuously recorded and available for immediate playback.
 
-The system employs a Hermes Agent with elevated privileges to build and manage the system. The configurations described here have been tested using a locally hosted instance of Qwen3.8 27B inference model as the source of intelligence. If inference is locally hosted, the system is fully autonomous and does not require any external internet connection to function once it has been set up.
+The system employs a Hermes Agent with elevated privileges to build and manage the system. The configurations described here have been tested using a locally hosted instance of Qwen3.8-Flash-Next inference model as the source of intelligence. If inference is locally hosted, the system is fully autonomous and does not require any external internet connection to function once it has been set up.
 
 Clients can connect to the camera web apps without further configuration beyond importing the CA certificate and entering authorization credentials. Hermes can be configured on the client side to give the agent full control over camera operation including PTZ functions with additional security safeguards.
 
@@ -10,15 +10,19 @@ Clients can connect to the camera web apps without further configuration beyond 
 
 * Server
 
-    The system requires a server with dual network interface adapters. A LAN facing adapter connects to the local network and is accessible by other computers on the LAN. A second interface is configured as the DHCP controller providing a private isolated network hosting the cameras. The documentation has been developed and tested against an Ubuntu 26.04 Operating System installed on the server. A freshly installed, dedicated bare metal server is recommended. Computing requirements for the server are modest, a reasonably powered mini pc is ideal for the application. Reference SERVER_PREP.md in the docs folder for the recommended server setup.
+    The system requires a server with dual network interface adapters. A LAN facing adapter connects to the local network and is accessible by other computers on the LAN. A second interface is configured as the DHCP controller providing a private isolated network hosting the cameras. The documentation has been developed and tested against an Ubuntu 26.04 Operating System installed on the server. A freshly installed, dedicated bare metal server is recommended. Computing requirements for the server are modest, a reasonably powered mini pc is ideal for the application.
+
+* Cameras
+
+    ONVIF compatible cameras are required for the system. Cameras manufactured by Hikvision, Dahua, Amcrest, Axis, Speco, Trendnet, Tapo, Lorex have been tested with this system. Many other cameras that support the ONVIF standard and can be expected to work. The level of compliance may vary across different brands, but most will follow the spec in general terms. Some configuration of the camera may be required to enable ONVIF compatibility, please consult the camera documentation for details.
 
 * AI Provider
 
-    A source of intelligence is required for the system. This configuration was developed and tested using Qwen3.8 27B model running on a NVIDIA 4500 with 32GB VRAM. This arrangement provides sufficient compute to efficiently build and run the system. A full build out will require about three hours for the agent to complete. Run time operation is sufficiently responsive that the system provides operational characteristics on par with legacy deterministic camera management systems. Lower powered compute arrangements can provide acceptable performance as well in accordance with their capability. Cloud based AI works as well, use a lower tier model to conserve token usage.
+    A source of intelligence is required for the system. Excellent results have been achieved using the [Strata](https://github.com/Niko1221/Strata) project hosting the Qwen3.8-Flash-Next model locally. This arrangement provides sufficient compute to efficiently build and run the system. Run time operation is sufficiently responsive that the system provides operational characteristics on par with legacy deterministic camera management systems. Strata can support lower powered compute arrangements and provide acceptable performance. Cloud based AI works as well, use a lower tier model to conserve token usage.
 
 * Agent 
 
-    This system is designed and tested around the Hermes Agent. This agent has many characteristics that make it ideal for this application. Hermes implements the full OAuth stack for MCP security and does not require any cloud access to operate. The MCP server is hosted locally and therefore not fully  compatible with ChatGPT and Claude Agents, both of which require connection to their cloud servers for MCP operation. OpenClaw was found to be less capable than Hermes in this scenario, and is not recommended. The Hermes Agent will require sudo privileges to build the server.
+    This system is designed and tested around the Hermes Agent. This agent has many characteristics that make it ideal for this application. Hermes implements the full OAuth stack for MCP security and does not require any cloud access to operate. The MCP server is hosted locally and therefore not fully compatible with ChatGPT and Claude Agents, both of which require connection to their cloud servers for MCP operation. OpenClaw was found to be less capable than Hermes in this scenario, and is not recommended. The Hermes Agent will require sudo privileges to build the server, the configuration includes passwordless sudo.
 
 * Clients
 
@@ -82,7 +86,7 @@ Be mindful of model context size when running the configurations shown below. St
 
   * `{{PRVT_NET_EN_NAME}}`
 
-    The name of the ethernet adapter used for hosting the provate camera subnet. The adapter should first be connected to the switch, then run the `nmcli dev show` command to look for the unconnected ethernet adapter. There should be one connected adapter that has the static IP address set earlier during server preparation, which should be left undisturbed.
+    The name of the ethernet adapter used for hosting the private camera subnet. The adapter should first be connected to the switch, then run the `nmcli dev show` command to look for the unconnected ethernet adapter. There should be one connected adapter that has the static IP address set earlier during server preparation, which should be left undisturbed.
 
   * `{{CAMERA_USERNAME}}`
 
@@ -98,7 +102,7 @@ Be mindful of model context size when running the configurations shown below. St
 
   * `{{CA_ROOT_PATH}}`
 
-    A storage location for the CA certifcate artifacts. A good choice is $HOME/Private-CA, where the actual path name is used rather than the environment variable.
+    A storage location for the CA certificate artifacts. A good choice is $HOME/Private-CA, where the actual path name is used rather than the environment variable.
 
   * `{{BACKUP_PATH}}`
 
@@ -116,7 +120,7 @@ Be mindful of model context size when running the configurations shown below. St
 
   The installation will require you to perform several actions in a separate terminal to initialize and manage the passwords used by the system. Watch for prompts from the agent and copy the commands it generates for you into your terminal and then copy paste the results back to the agent. One of the things it will ask you to do is to generate a gpg key password using the PinEntry program which is a text interface. There are a number of variable selections for which you should accept the default choice by pressing the Enter key. After the certificate expiration is set to Never, the application will ask you to confirm, and the default choice is No, so type y to accept the choice.  After creating the encrypted key certificate, it will ask you to create a password. Enter the password once, then press the Tab key to advance to the second password entry, then press the Enter key to finish.
 
-  After the Phase 1 actions are completed, the agent will prompt you to check the available context. In most cases, the context will have been used to a significant degree and should be cleared for the next phase, which again requires significant context. Type `/new` in the hermes promppt window to clear the context, then prompt it to continue configuration.
+  After the Phase 1 actions are completed, the agent will prompt you to check the available context. In most cases, the context will have been used to a significant degree and should be cleared for the next phase, which again requires significant context. Type `/new` in the hermes prompt window to clear the context, then prompt it to continue configuration.
 
 ```
 Continue executing the runbook onvif-mcp/INSTALL.md starting with Phase 2

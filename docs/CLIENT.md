@@ -16,6 +16,7 @@ Hosts file location (elevated privileges required to edit)
 | Android | Set a static IP |
 
 ## Operating System Specific Client Preparation Instructions
+
 * [Fedora](#fedora)
 * [Ubuntu](#ubuntu)
 * [CachyOS](#cachyos)
@@ -23,7 +24,7 @@ Hosts file location (elevated privileges required to edit)
 * [Windows](#windows)
 * [Android](#android)
 
-Once the client has been prepared with the rerequisite software, follow the instructions in the [Common Configuration Instructions](#common-configuration-instructions) to complete the configuration.
+Once the client has been prepared with the requisite software and the certificate is trusted, follow the [Hermes Common Configuration Instructions](#Hermes-Common-Configuration-Instructions) to complete the configuration.
 
 ## Fedora
 
@@ -151,7 +152,7 @@ Once the client has been prepared with the rerequisite software, follow the inst
 
   * Open Spotlight by pressing Command + Space, type Keychain Access, and press Return.
 
-  * Select the System keychain in the left-hand sidebar.
+  * Select the System Keychain in the left-hand sidebar.
 
   * Drag and drop your certificate file (.pem) directly into the Keychain Access window.
 
@@ -251,7 +252,7 @@ Once the client has been prepared with the rerequisite software, follow the inst
 
   Settings -> Security and privacy -> more security settings -> Install from device storage -> CA Certificate
 
-  Install the trusted certifcate. Open the cameras app in the web browser by visiting {{SERVER_FQDN}}/cameras
+  Install the trusted certificate. Open the cameras app in the web browser by visiting {{SERVER_FQDN}}/cameras
 
 &nbsp;
 
@@ -259,7 +260,7 @@ Once the client has been prepared with the rerequisite software, follow the inst
 
 ### Sign on to the camera system
 
-You will recieve an email from the keycloak admin inviting you to create a password for your account on the system. Follow the link in the email create a password. Make sure to keep it in a safe place.
+You will receive an email from the keycloak admin inviting you to create a password for your account on the system. Follow the link in the email create a password. Make sure to keep it in a safe place.
 
 ### Open the camera app
 
@@ -331,7 +332,7 @@ execute $HOME/onvif-mcp/docs/ADD_CLIENT_ON_SERVER.md using {{CLIENT_SOURCE_IP}} 
 
 This will register your IP address with the server to allow access. You should see confirmation that the IP address attempted to access.
 
-### Succcessful Hermes MCP login
+### Successful Hermes MCP login
 
 Back on the client machine, run the login command again, this time it should launch your default browser and ask you to authenticate. Enter your username and password, then confirm authorization for the Hermes agent.
 
@@ -365,7 +366,7 @@ You can show the live stream from a camera in the browser
 show the {{CAMERA}} main stream in the chrome browser
 ```
 
-If the client is using MCP services, you can optimize performance with the following prompt, which should be applied after testing the client in situ.
+If the client is using MCP services, you can optimize performance with the following prompt, which should be applied after testing the client in place.
 
 ```
 When using camera MCP server tools, it is not necessary to verify that any of the commands have completed successfully beyond checking the return code from the tool call. The camera communications library is very reliable and will pretty much always work properly. If something has gone wrong, the user will ask explicitly for you to check. This may go against your training to always verify things, but it is important that we optimize the system to be as responsive as possible, and post tool call checking slows things down considerably. If the tool call returns a success message, assume that the call succeeded and do not re-query the cameras or take a snapshot without being explicitly asked by the user. One important exception here is the appearance of the 500 error message in the browser when viewing a camera stream. The tool call will return success, but the server may show 500 due to auth token timeout. You should check for the 500 message in the title of the browser when asked to view a camera stream, and if it appears, all you need to do is refresh the browser.
@@ -373,7 +374,7 @@ When using camera MCP server tools, it is not necessary to verify that any of th
 
 ## Configure Hermes Desktop
 
-The Hermes desktop application is a convenient way to integrate the camera streams into your desktop. The enmbedded browser within the desktop app can be controlled directly by prompt. To configure this feature, you need to remove the desktop_ui from the agent.disabled_toolsets. The command is kind of backwards in that you specify a list of tools to disable, on which desktop_ui is absent. Make note to read through the list and remove any toolsets that you may have previously enabled.
+The Hermes desktop application is a convenient way to integrate the camera streams into your desktop. The embedded browser within the desktop app can be controlled directly by prompt. To configure this feature, you need to remove the desktop_ui from the agent.disabled_toolsets. The command is kind of backwards in that you specify a list of tools to disable, on which desktop_ui is absent. Make note to read through the list and remove any toolsets that you may have previously enabled.
 
 ```
 hermes config set agent.disabled_toolsets '["a2a","bot_room","clarify","code_execution","computer_use","connections","context_engine","cronjob","delegation","discord","discord_admin","feishu_doc","feishu_drive","homeassistant","image_gen","kanban","memory","project","search","session_search","setup","spotify","stt","todo","tts","video_gen","web","x_search","yuanbao"]'
