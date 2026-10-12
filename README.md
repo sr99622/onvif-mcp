@@ -18,7 +18,7 @@ Clients can connect to the camera web apps without further configuration beyond 
 
 * AI Provider
 
-    A source of intelligence is required for the system. Excellent results have been achieved using the [Strata](https://github.com/Niko1221/Strata) project hosting the Qwen3.8-Flash-Next model locally. This arrangement provides sufficient compute to efficiently build and run the system. Run time operation is sufficiently responsive that the system provides operational characteristics on par with legacy deterministic camera management systems. Strata can support lower powered compute arrangements and provide acceptable performance. Cloud based AI works as well, use a lower tier model to conserve token usage.
+    A source of intelligence is required for the system. Excellent results have been achieved using the [Strata](https://github.com/Niko1221/Strata) project hosting the Qwen3.8-Flash-Next model locally. This arrangement provides sufficient compute to efficiently build and run the system. Run time operation is responsive and provides operational characteristics on par with legacy deterministic camera management systems. Strata can support lower powered compute arrangements and provide acceptable performance. Cloud based AI works as well, use a lower tier model to conserve token usage.
 
 * Agent 
 
@@ -30,7 +30,7 @@ Clients can connect to the camera web apps without further configuration beyond 
 
 ## Security Features
 
-The documentation includes instructions for creating and maintaining a private Certificate Authority in order to provide certificates for HTTPS encrytption. Keycloak is used for the OAuth server and provides short-lived JWT token authentication for both the camera MCP server and the camera m apps. Cameras are isolated on a private network accessible only by proxy behind the protected server. Per-user credentials are securely stored and can be revoked at any time.
+The documentation includes instructions for creating and maintaining a private Certificate Authority in order to provide certificates for HTTPS encryption. Keycloak is used for the OAuth server and provides short-lived JWT token authentication for both the camera MCP server and the camera m apps. Cameras are isolated on a private network accessible only by proxy through the protected server. Per-user credentials are securely stored and can be revoked at any time.
 
 Clients using only the camera apps do not require any additional configuration. Clients that intend to use MCP services need to be registered with the server by IP address, which implies that they will need to have a static IP. If this requirement is overly strict, the authentication can be set to looser restriction by IP subnet, allowing a range of device IPs from the designated subnet.
 
@@ -44,7 +44,7 @@ To revoke access, simply delete the file in the /etc/sudoers.d folder.
 
 ## Backup Strategies
 
-A complex system in a production environment requires a robust backup strategy to avoid excessive downtime in the event of a server failure. The system is designed to support incremental backups as it is installed and maintained. Backup data can be held in a shared SMB folder, a mounted external drive, or a local filesystem folder. Whichever storage type is chosen, the backup location must enforce the same permission model the SMB mount enforced: mode 0700 owned by the runbook user, files 0600, no extra ACL entries.
+A complex system in a production environment requires a robust backup strategy to avoid excessive downtime in the event of a server failure. The system is designed to support incremental backups as it is installed and maintained. Backup data can be held in a shared SMB folder, a mounted external drive, or a local filesystem folder. Whichever storage type is chosen, the backup location must enforce the same permission model the SMB mount enforced: mode 0700 owned by the runbook user, files 0600, no extra ACL entries. Please refer to the [BACKUP.md](docs/BACKUP.md) document for further details on the strategies.
 
 * Shared SMB folder
 
@@ -56,11 +56,11 @@ A complex system in a production environment requires a robust backup strategy t
 
 * Local filesystem folder
 
-    A folder on the local filesystem is also accepted as `{{BACKUP_PATH}}`, provided it enforces the permission model above. Note that a local folder does not provide off-host redundancy; it is intended for staging, testing, or single-machine arrangements.
+    A folder on the local filesystem is also accepted as `{{BACKUP_PATH}}`, provided it enforces the permission model above. Note that a local folder does not provide off-host redundancy, it is intended for staging, testing, or single-machine arrangements.
 
 ## Building the Server
 
-The Hermes agent is used to perform the configuration by running the plan set in the INSTALL.md runbook. Required Values needed for the installation are set in the tables prior to asking Hermes to configure the system.
+The Hermes agent is used to perform the configuration by running the plan set in the [INSTALL.md](docs/INSTALL.md) runbook. Required Values needed for the installation are set in the tables prior to asking Hermes to configure the system.
 
 Be mindful of model context size when running the configurations shown below. Starting a fresh context after it reaches 50 percent is advised. Runbooks can be executed individually on systems with modest context if necessary. The runbooks can be found in the `{{REPO_PATH}}/docs` directory. The runbooks are intended to be executed in the order listed.
 
@@ -110,7 +110,7 @@ Be mindful of model context size when running the configurations shown below. St
 
   * `{{GMAIL_ADDRESS}}`
 
-    A Gmail address that can be used by the server to send out subscription emails for system users to sign up for a password to allow access. Please refer to [KEYCLOAK_EMAIL.md](docs/KEYCLOAK_EMAIL.md) for more details. The salient point here is that the google email account needs an App Password set that allows the script to automatically send the subscription email. Note that the App Password setting will require two factor authentication for the google account. Sign up for a gmail account and follow the instructions at [Google app passwords](https://support.google.com/accounts/answer/185833) and [Gmail SMTP settings](https://support.google.com/mail/answer/7104828).
+    A Gmail address that can be used by the server to send out subscription emails for system users to sign up for a password to allow access. Please refer to [KEYCLOAK_EMAIL.md](docs/KEYCLOAK_EMAIL.md) for more details. The salient point here is that the google email account needs an App Password set that allows the script to automatically send the subscription email. Note that the App Password setting will require two factor authentication for the google account. To set this up, sign up for a gmail account and follow the instructions at [Google app passwords](https://support.google.com/accounts/answer/185833) and [Gmail SMTP settings](https://support.google.com/mail/answer/7104828).
 
   Start the hermes agent and prompt it
 
@@ -142,3 +142,4 @@ Execute Phase 3 of the runbook onvif-mcp/INSTALL.md
 Execute Phase 4 of the runbook onvif-mcp/INSTALL.md
 ```
 
+Following successful login to the MCP server, prompt the agent again to backup the Keycloak authentication server.
