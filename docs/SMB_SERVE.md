@@ -8,7 +8,11 @@ This is the SMB storage option; a mounted external drive or a local folder may
 be used as `{{BACKUP_PATH}}` instead, provided it enforces the same permission
 model this runbook establishes (0700/0600 owner-only, no extra ACL entries).
 Access to the SMB host runs through the automated SSH login established by
-`SSH_LOGIN.md`.
+`SSH_LOGIN.md`. 
+
+When the server side is already configured (by this runbook or
+an equivalent enforcement), the `mount` command performs the client mount only,
+without touching the server. The user will explicitly request this.
 
 The executable workflow lives in:
 
@@ -26,6 +30,11 @@ replace it with ad hoc shell fragments from this document.
 | `{{SMB_SERVER_FQDN}}` | FQDN of the machine hosting the Samba share |
 | `{{SMB_USERNAME}}` | Existing Linux account on the SMB host that exclusively owns this share |
 | `{{SMB_MOUNT}}` | Mount point on the camera host |
+
+## Non-echo value entered at runtime
+
+| Symbol | Required value |
+|---|---|
 | `{{SMB_PASSWORD}}` | Samba password, entered at the script's no-echo prompt (`read -s`) |
 
 Runbook defaults used by the script:
@@ -47,9 +56,9 @@ Runbook defaults used by the script:
    Idempotent reruns re-verify instead of recreating.
 2. The Samba password is prompted interactively without echo (`read -s`)
    inside the script only. It is never printed, logged, written to a file,
-   or placed on a command line. `apply` and `verify` must run in a terminal
-   so the prompt can read from the TTY; the script fails cleanly if no TTY
-   is available or the entered password is empty.
+   or placed on a command line. `apply`, `mount`, and `verify` must run in a
+   terminal so the prompt can read from the TTY; the script fails cleanly if
+   no TTY is available or the entered password is empty.
 3. The share must enforce `0600` files and `0700` directories on the
    **server's filesystem**. Client mode alone is insufficient: without
    negotiated POSIX extensions, `file_mode`/`dir_mode` are display settings
@@ -62,8 +71,14 @@ Runbook defaults used by the script:
    unrelated account exists, the script records the test as incomplete.
 5. The script never changes the pre-existing `storage` share or any parent
    directory permissions.
+6. `mount` performs the client stage only. It makes no server-side changes;
+   the client-stage guards (credentials file, fstab line) still apply, and it
+   fails cleanly if the share block is not already present on the server. The
+   probe test still checks server-side `stat` and ACLs, so a server configured
+   with weaker enforcement fails the probe rather than passing on the client
+   display alone.
 
-## Workflow (AGENT-run)
+## Full Server Configuration Workflow (AGENT-run)
 
 ```bash
 cd {{REPO_PATH}}
@@ -98,6 +113,29 @@ Expected final output:
 apply-ok server=<fqdn> share=camera-ca-private mount=<mount> user=<user>
 ```
 
+Continue to the Acceptance criteria step.
+
+## Mount Only Configuration Workflow (AGENT-run)
+
+Client mount only (server already configured by this runbook or an equivalent
+enforcement; runs the client stage, the probe test, and the negative test, and
+changes nothing on the server):
+
+```bash
+cd {{REPO_PATH}}
+scripts/SMB_SERVE/smb_serve_runbook.sh mount \
+  --server-fqdn {{SMB_SERVER_FQDN}} \
+  --username {{SMB_USERNAME}} \
+  --mount {{SMB_MOUNT}} \
+  [--test-account NAME]
+```
+
+Expected final output:
+
+```text
+mount-ok server=<fqdn> share=camera-ca-private mount=<mount> user=<user>
+```
+
 Non-mutating inspection:
 
 ```bash
@@ -125,14 +163,16 @@ Expected: `verify-ok`.
 ## Acceptance criteria
 
 After `apply`: the server share directory is `0700 {{SMB_USERNAME}}`, the
-effective `testparm` share block matches the required enforcement exactly,
-the prompted password authenticates against the live share, the client shows a live
+effective `testparm` share block matches the required enforcement exactly, the
+prompted password authenticates against the live share, the client shows a live
 `cifs` row for `{{SMB_MOUNT}}` with `rw`, the intended numeric UID/GID, and
 `file_mode=0600,dir_mode=0700`, the probe test reports `0700`/`0600` on
 **both** hosts with owner-only ACLs, and the probe is removed at exit. The
 negative test either denies access or is explicitly recorded as incomplete.
-Results must persist after a reboot; re-run `verify` after reboot before
-copying any secrets.
+After `mount`, the same criteria hold for the client side and the probe test;
+the server-side configuration is assumed already present and is not re-checked
+beyond the probe test's server `stat`/ACL verification. Results must persist
+after a reboot; re-run `verify` after reboot before copying any secrets.
 
 ## Pitfalls and notes
 

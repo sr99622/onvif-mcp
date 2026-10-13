@@ -5,6 +5,7 @@ usage() {
   cat <<'USAGE'
 Usage:
   smb_serve_runbook.sh apply  --server-fqdn HOST --username USER --mount PATH [--test-account NAME] [--allow-install]
+  smb_serve_runbook.sh mount  --server-fqdn HOST --username USER --mount PATH [--test-account NAME]
   smb_serve_runbook.sh verify --server-fqdn HOST --username USER --mount PATH [--test-account NAME]
   smb_serve_runbook.sh status --server-fqdn HOST --username USER --mount PATH
 
@@ -15,6 +16,10 @@ apply  : runs the server-side stage (private directory, Samba password, share
          block, reload) and the client-side stage (credentials file, fstab
          entry, automount), then the harmless-file probe test. Refuses to
          overwrite existing state; reruns re-verify instead of recreating.
+mount  : client-mount-only operation for a server already configured by this
+         runbook (or an equivalent enforcement). Runs the client stage and the
+         probe test only; makes no changes on the server. The share block must
+         already exist on the server, otherwise it fails cleanly.
 verify : checks both sides against the acceptance criteria without changing
          anything, including the negative access test when --test-account is
          given.
@@ -22,7 +27,7 @@ status : prints current server and client state without changing anything.
 
 The Samba password is prompted interactively without echo (`read -s`)
 inside the script only; it is never printed, logged, or written to disk.
-apply and verify must run in a terminal (TTY) so the prompt can read the
+apply, mount, and verify must run in a terminal (TTY) so the prompt can read the
 password; they fail cleanly if no TTY is available.
 USAGE
 }
@@ -318,6 +323,19 @@ case "$cmd" in
     probe_test
     negative_test
     echo "apply-ok server=$server_fqdn share=$share_name mount=$mount user=$username"
+    ;;
+  mount)
+    require_all
+    pw="$(get_password)"
+    # Mount-only assumes the server stage is already in place; prove the share
+    # block exists before touching the client, then let the probe test prove
+    # server-side enforcement through the live mount.
+    rssh "sudo grep -q '^\[$share_name\]' /etc/samba/smb.conf" \
+      || { echo "FAIL: share block [$share_name] not found on $server_fqdn; mount-only requires an already-configured server. Run apply instead." >&2; exit 1; }
+    client_stage "$pw"
+    probe_test
+    negative_test
+    echo "mount-ok server=$server_fqdn share=$share_name mount=$mount user=$username"
     ;;
   verify)
     require_all

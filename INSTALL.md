@@ -12,14 +12,14 @@ A short wait of five seconds after completing each script can help to avoid race
 
 | Name | Value |
 |---|---|
-| `{{PRVT_NET_EN_NAME}}` | enx50a0300e6cb1 |
-| `{{SERVER_FQDN}}`      | nuc.home.arpa |
+| `{{PRVT_NET_EN_NAME}}` | enp2s0 |
+| `{{SERVER_FQDN}}`      | trigkey.home.arpa |
 | `{{CAMERA_USERNAME}}`  | admin |
 | `{{REPO_PATH}}`        | /home/stephen/onvif-mcp |
 | `{{SERVER_USER}}`      | stephen |
 | `{{CA_ROOT_PATH}}`     | /home/stephen/Private-CA |
-| `{{BACKUP_PATH}}`      | /mnt/usb/camera-backup |
-| `{{SERVER_IP}}`        | 10.1.1.6 |
+| `{{BACKUP_PATH}}`      | /mnt/camera-backup |
+| `{{SERVER_IP}}`        | 10.1.1.3 |
 | `{{GMAIL_ADDRESS}}`    | keycloak.admin.sample@gmail.com |
 
 **Runbooks**

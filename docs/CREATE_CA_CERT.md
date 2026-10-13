@@ -84,7 +84,7 @@ using the scripted command in step 2.
    be writable by the runbook user, and enforce the SMB-mount permission model
    (mode 0700 owner-only, no extra ACL entries).
 
-## 1. Prime the GPG cache
+## 1. Prime the GPG cache (USER-run)
 
 The agent-side `apply` command cannot decrypt or write password-store entries
 because GPG needs a pinentry prompt, stop and show the user this exact resolved

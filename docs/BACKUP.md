@@ -81,10 +81,8 @@ The system is designed such that it can be recovered from backup in the event of
 
     Runbooks
 
-    ```
     [SSH_LOGIN.md](docs/SSH_LOGIN.md)
     [SMB_SERVE.md](docs/SMB_SERVE.md)
-    ```
 
 ## Recovery Procedure
 
