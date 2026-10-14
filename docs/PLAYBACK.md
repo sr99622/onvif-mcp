@@ -53,10 +53,11 @@ URL-encode the whole path when using it as a query parameter:
 
 ## Browser display procedure
 
-Use Hermes browser tools to drive an authenticated session. Do not use curl cookies from the shell for browser playback, and do not print session cookies. Trust tool return codes: a successful `open`/navigation call is assumed to have worked — verify with at most one read or page-state check, not repeated probing. Two display paths exist; pick based on how the user asked:
+Use Hermes browser tools to drive an authenticated session. Do not use curl cookies from the shell for browser playback, and do not print session cookies. Trust tool return codes: a successful `open`/navigation call is assumed to have worked — verify with at most one read or page-state check, not repeated probing. Three paths exist; pick based on how the user asked:
 
 - **Path A — embedded preview pane** (default): the pane beside the chat, driven by `desktop_preview` (open/read/close) and `drive_preview` (elements/click/type/press/reload). Use it unless the user explicitly asks for their own browser.
 - **Path B — external Chrome via CDP** (`browser_exec`): ONLY when the user explicitly requests their own browser — never auto-substitute it. Work in ONE tab: navigate the existing tab with `goto_url` (never pile up new tabs), and confirm state with `js(...)`.
+- **Path C — headless Chrome** (file retrieval without a window): see below.
 
 ### A. Embedded preview pane (default)
 
@@ -176,6 +177,26 @@ Then test a shorter duration and `format=fmp4` if needed:
 ```text
 &duration=30&format=fmp4
 ```
+
+### C. Headless Chrome (file retrieval without a window)
+
+When the goal is to save the recording file to disk rather than display it, headless Chromium can carry the authenticated session with no GUI window. This only works when the profile already holds a live session — headless cannot complete an interactive Keycloak login, so if the session has expired, complete the browser-vault workflow via path A or B first.
+
+1. Close any running normal Chromium instance first (the profile is locked while an instance is running; a headless launch against a locked profile gets a fresh, unauthenticated profile). Then launch headless against the existing profile:
+
+```bash
+chromium --headless=new --user-data-dir="$HOME/.config/chromium" --remote-debugging-port=9222 --remote-allow-origins=* 'https://{{SERVER_FQDN}}/playback/list?path=4B0013BPAABE264%2FMediaProfile000'
+```
+
+Health-check with `curl -s http://127.0.0.1:9222/json` before scripting. Confirm the session carried over by dumping the list page — it must return the JSON directly, not the Keycloak sign-in page:
+
+```bash
+chromium --headless=new --user-data-dir="$HOME/.config/chromium" --dump-dom 'https://{{SERVER_FQDN}}/playback/list?path=4B0013BPAABE264%2FMediaProfile000'
+```
+
+2. Binary responses cannot be saved from `--dump-dom`. Fetch them in the page context over CDP (`Runtime.evaluate` with `awaitPromise` + `returnByValue`), store the bytes on `window`, and read them out as base64 chunks (~1 MB per call). Filter CDP responses by `id` so stray event messages don't break the read loop. Playwright's persistent-context download API is an equivalent alternative.
+
+3. Once the file is on disk, remux it into a seekable static MP4 (`-c copy -movflags +faststart`, see the static workflow below) and display it in the preview pane with a player HTML page pointing at the local file.
 
 ## Selecting recordings
 
