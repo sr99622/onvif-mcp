@@ -18,7 +18,7 @@ A short wait of five seconds after completing each script can help to avoid race
 | `{{REPO_PATH}}`        | /home/stephen/onvif-mcp |
 | `{{SERVER_USER}}`      | stephen |
 | `{{CA_ROOT_PATH}}`     | /home/stephen/Private-CA |
-| `{{BACKUP_PATH}}`      | /mnt/camera-backup |
+| `{{BACKUP_PATH}}`      | /home/stephen/camera-backup |
 | `{{SERVER_IP}}`        | 10.1.1.3 |
 | `{{GMAIL_ADDRESS}}`    | keycloak.admin.sample@gmail.com |
 
