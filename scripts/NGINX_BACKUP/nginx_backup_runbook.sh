@@ -190,6 +190,7 @@ create_checkpoint() {
   install -d -m 700 "$staging"
   build_manifest "$staging"
   sudo tar --owner=0 --group=0 --preserve-permissions --acls --xattrs -cf "$staging/nginx.tar" -C / --files-from "$staging/manifest.txt"
+  sudo chmod 644 "$staging/nginx.tar"
   sudo tar -tf "$staging/nginx.tar" | sort > "$staging/archive-members.txt"
   sudo sort "$staging/manifest.txt" > "$staging/manifest.sorted"
   diff -u "$staging/manifest.sorted" "$staging/archive-members.txt"
