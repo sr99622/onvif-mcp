@@ -436,29 +436,44 @@ PY
 verify_unauth() {
   # Playback test paths derive from the resolved --snapshot-path route; no
   # site-specific camera IDs or dates are hardcoded in this script.
+  # Bounded retry per check: within ~1s of `systemctl reload nginx` a worker
+  # can still hold the pre-auth_request config and answer 200 instead of the
+  # login redirect (see stream_auth_runbook.log, 2026-10-14 timing artifact).
+  # Each check retries until it matches and fails only after the timeout.
+  local attempts=10
+  check() {
+    local label="$1" expected="$2"
+    shift 2
+    local out=""
+    for _ in $(seq 1 "$attempts"); do
+      out="$("$@" || true)"
+      [[ "$out" == $expected ]] && break
+      sleep 1
+    done
+    echo "$label: $out"
+    [[ "$out" == $expected ]] || {
+      echo "expected $expected for $label after $attempts attempts" >&2
+      exit 1
+    }
+  }
+
   local route="${snapshot_path#/snapshot/}"
   local enc_route="${route//\//%2F}"
   local start
   start="$(date -u -d 'yesterday' +%Y-%m-%dT09:00:00Z)"
   local paths=(/cameras/ /multiview/ /outputs/ /webrtc/ /playback/ "/playback/list?path=${enc_route}" "/playback/get?path=${enc_route}&start=${start}&duration=60&format=mp4" /playback-cache/ /snapshot/ "$snapshot_path")
   for path in "${paths[@]}"; do
-    out="$(curl -sS -o /dev/null -w "%{http_code} %{redirect_url}" "https://$server_fqdn${path}")"
-    echo "$path HTTP $out"
-    [[ "$out" == 302*oauth2/start* ]] || {
-      echo "expected login redirect for $path" >&2
-      exit 1
-    }
+    check "$path" '302*oauth2/start*' \
+      curl -sS -o /dev/null -w '%{http_code} %{redirect_url}' "https://$server_fqdn${path}"
   done
-  out="$(curl -sS -o /dev/null -w '%{http_code} %{redirect_url}' "http://$server_fqdn${snapshot_path}")"
-  echo "Snapshot HTTP: $out"
-  [[ "$out" == 301*"https://$server_fqdn${snapshot_path}"* || "$out" == 302*"https://$server_fqdn${snapshot_path}"* ]] || {
-    echo "HTTP snapshot did not redirect to HTTPS" >&2
-    exit 1
-  }
-  curl -sS -o /dev/null -w 'start: HTTP %{http_code} redirect=%{redirect_url}\n' "https://$server_fqdn/oauth2/start?rd=/cameras/" | grep -E 'HTTP 302 redirect=.*/auth/realms/.*/protocol/openid-connect/auth' >/dev/null
-  curl -sS -o /dev/null -w 'discovery: HTTP %{http_code}\n' "$(issuer)/.well-known/openid-configuration" | grep -F 'HTTP 200'
-  curl -sS -D /tmp/stream-auth-mcp.headers -o /dev/null "$(resource_url)"
-  grep -E '^HTTP/.* 401' /tmp/stream-auth-mcp.headers >/dev/null
+  check 'Snapshot HTTP' "30[12]*https://$server_fqdn${snapshot_path}*" \
+    curl -sS -o /dev/null -w '%{http_code} %{redirect_url}' "http://$server_fqdn${snapshot_path}"
+  check 'oauth2 start' '302*/auth/realms/*/protocol/openid-connect/auth*' \
+    curl -sS -o /dev/null -w '%{http_code} %{redirect_url}' "https://$server_fqdn/oauth2/start?rd=/cameras/"
+  check 'discovery' '200' \
+    curl -sS -o /dev/null -w '%{http_code}' "$(issuer)/.well-known/openid-configuration"
+  check 'mcp unauth' '401' \
+    curl -sS -D /tmp/stream-auth-mcp.headers -o /dev/null -w '%{http_code}' "$(resource_url)"
 }
 
 verify_browser() {

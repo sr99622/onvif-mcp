@@ -100,7 +100,30 @@ The `apply` command performs the full workflow:
   `/srv/camera-pki/public/`, directory listing stays disabled, and all other
   HTTP paths redirect to HTTPS;
 - runs `nginx -t`, reloads nginx, verifies the distribution files, and tests all
-  HTTP endpoints with explicit `--resolve`.
+  HTTP endpoints with explicit `--resolve`;
+- installs the certificate into the server's own trust stores (see Local trust
+  installation below).
+
+### Local trust installation
+
+The `apply` command mirrors the Ubuntu client steps from `docs/CLIENT.md` so the
+server trusts the root CA on itself at install time, without any manual client
+steps:
+
+1. Installs `libnss3-tools` if `certutil` is not already available.
+2. Copies the public CA to `/usr/local/share/ca-certificates/` and runs
+   `update-ca-certificates` (system-wide trust).
+3. Creates `$HOME/.pki/nssdb` (mode `700`) and initializes a clean NSS database
+   with a blank password. The blank password is supplied non-interactively via
+   `certutil -N --empty-password` — the scripted equivalent of pressing Enter
+   twice at the password prompt — with a fallback that pipes two blank lines on
+   older NSS builds. If the database already exists, initialization is skipped.
+4. Imports the certificate into the NSS database as `Camera CA Certificate` with
+   trust attributes `CP,CP,` for Chrome. The import is skipped if the nickname
+   already exists, so reruns are safe.
+
+These steps are idempotent and run on every `apply`, including maintenance
+reruns after the root CA changes.
 
 ## 2. Verify final state (AGENT-run)
 

@@ -33,6 +33,9 @@ sudo onvif-mcp/scripts/static-ip.sh
 curl -LsSf https://astral.sh/uv/install.sh | sh
 source ~/.bashrc
 uv
+wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+sudo apt install ./google-chrome-stable_current_amd64.deb
+xdg-settings set default-web-browser google-chrome.desktop
 wget -P ~/.local/share/fonts https://github.com/ryanoasis/nerd-fonts/releases/download/v3.0.2/JetBrainsMono.zip && cd ~/.local/share/fonts && unzip JetBrainsMono.zip && rm JetBrainsMono.zip
 cd
 bash -c '

@@ -88,7 +88,7 @@ ensure_defaults() {
     if [[ "$status_line" == *"$want"* ]]; then
       echo "default ok: $want"
     else
-      sudo ufw default "$set"
+      sudo ufw default $set
       echo "default set: $set"
     fi
   done < <(expected_defaults)
@@ -101,8 +101,10 @@ ensure_rules() {
     if grep -qF "$desc" <<< "$status_out"; then
       echo "rule present: $desc"
     else
-      # shellcheck disable=SC2086
-      sudo ufw allow $args
+      # Parse args into an array so the quoted comment stays one argument.
+      local -a argv
+      eval "argv=($args)"
+      sudo ufw allow "${argv[@]}"
       echo "rule added: $desc"
     fi
   done < <(expected_rules)

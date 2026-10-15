@@ -134,6 +134,31 @@ EOF
   rm -f "$tmp"
 }
 
+install_local_trust() {
+  # Mirrors the Ubuntu client steps in docs/CLIENT.md so the server itself
+  # trusts the CA system-wide and in Chrome's NSS database during apply.
+  command -v certutil >/dev/null 2>&1 || {
+    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y libnss3-tools
+  }
+
+  sudo install -o root -g root -m 0644 "$source_ca" /usr/local/share/ca-certificates/camera-system-root-ca.crt.pem
+  sudo update-ca-certificates
+
+  nssdb="$HOME/.pki/nssdb"
+  mkdir -p "$nssdb"
+  chmod 700 "$nssdb"
+  if [[ ! -f "$nssdb/cert9.db" ]]; then
+    # Blank password without an interactive prompt: --empty-password is the
+    # non-interactive equivalent of pressing Enter twice at the certutil -N
+    # password prompt. Fall back to piping two blank lines on older NSS builds.
+    certutil -d "sql:$nssdb" -N --empty-password 2>/dev/null || printf '\n\n' | certutil -d "sql:$nssdb" -N
+  fi
+
+  if ! certutil -d "sql:$nssdb" -L | grep -q "Camera CA Certificate"; then
+    certutil -d "sql:$nssdb" -A -t "CP,CP," -n "Camera CA Certificate" -i /usr/local/share/ca-certificates/camera-system-root-ca.crt.pem
+  fi
+}
+
 configure_nginx_http_ca_endpoint() {
   local today; today="$(date +%F)"
   local ca_access_directives; ca_access_directives="$(nginx_ca_access_directives)"
@@ -205,7 +230,7 @@ print_status() {
 
 case "$cmd" in
   apply)
-    require_all; install_packages; install_distribution_files; configure_nginx_http_ca_endpoint; verify_distribution_files; test_http_endpoints; echo "apply-ok" ;;
+    require_all; install_packages; install_distribution_files; configure_nginx_http_ca_endpoint; verify_distribution_files; test_http_endpoints; install_local_trust; echo "apply-ok" ;;
   verify)
     require_all; verify_distribution_files; sudo nginx -t; test_http_endpoints; echo "verify-ok" ;;
   test)

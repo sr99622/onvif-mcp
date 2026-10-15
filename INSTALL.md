@@ -8,6 +8,8 @@ Do not obsess over every camera detail. Many cameras have bugs that will cause t
 
 A short wait of five seconds after completing each script can help to avoid race conditions during the execution of the runbooks.
 
+As you work through the scripts, keep an audit log in the folder that holds the script. Record any files that are downloaded with the exact url used to download the file. Any programs that are installed, record the name and the version of the program. If errors or issues are encountered, record the error and the steps used to overcome it. The log should have the same name root as the script with a .log extension.
+
 **Required Values**
 
 | Name | Value |
