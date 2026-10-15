@@ -14,26 +14,60 @@ If --allowed-subnets is omitted or empty, /ca/ is reachable from any subnet.
 USAGE
 }
 
-cmd="${1:-}"; [[ -n "$cmd" ]] || { usage; exit 64; }
-[[ "$cmd" == "-h" || "$cmd" == "--help" ]] && { usage; exit 0; }
+cmd="${1:-}"
+[[ -n "$cmd" ]] || {
+  usage
+  exit 64
+}
+[[ "$cmd" == "-h" || "$cmd" == "--help" ]] && {
+  usage
+  exit 0
+}
 shift || true
-server_fqdn=""; server_ip=""; allowed_subnets=""
+server_fqdn=""
+server_ip=""
+allowed_subnets=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --server-fqdn) server_fqdn="${2:?missing --server-fqdn value}"; shift 2 ;;
-    --server-ip) server_ip="${2:?missing --server-ip value}"; shift 2 ;;
-    --allowed-subnets)
-      [[ $# -ge 2 ]] || { echo "missing --allowed-subnets value" >&2; exit 64; }
-      allowed_subnets="$2"
-      shift 2
-      ;;
-    -h|--help) usage; exit 0 ;;
-    *) echo "Unknown argument: $1" >&2; usage >&2; exit 64 ;;
+  --server-fqdn)
+    server_fqdn="${2:?missing --server-fqdn value}"
+    shift 2
+    ;;
+  --server-ip)
+    server_ip="${2:?missing --server-ip value}"
+    shift 2
+    ;;
+  --allowed-subnets)
+    [[ $# -ge 2 ]] || {
+      echo "missing --allowed-subnets value" >&2
+      exit 64
+    }
+    allowed_subnets="$2"
+    shift 2
+    ;;
+  -h | --help)
+    usage
+    exit 0
+    ;;
+  *)
+    echo "Unknown argument: $1" >&2
+    usage >&2
+    exit 64
+    ;;
   esac
 done
 
-require_arg() { local name="$1" value="$2"; [[ -n "$value" ]] || { echo "Missing required argument: $name" >&2; exit 64; }; }
-require_all() { require_arg --server-fqdn "$server_fqdn"; require_arg --server-ip "$server_ip"; }
+require_arg() {
+  local name="$1" value="$2"
+  [[ -n "$value" ]] || {
+    echo "Missing required argument: $name" >&2
+    exit 64
+  }
+}
+require_all() {
+  require_arg --server-fqdn "$server_fqdn"
+  require_arg --server-ip "$server_ip"
+}
 dist_dir=/srv/camera-pki/public
 source_ca=/etc/nginx/tls/camera-system-root-ca.crt.pem
 
@@ -49,7 +83,7 @@ nginx_ca_access_directives() {
   local -a subnets
   [[ -n "$(trim "$allowed_subnets")" ]] || return 0
 
-  IFS=',' read -r -a subnets <<< "$allowed_subnets"
+  IFS=',' read -r -a subnets <<<"$allowed_subnets"
   for subnet in "${subnets[@]}"; do
     trimmed="$(trim "$subnet")"
     if [[ ! "$trimmed" =~ ^[0-9A-Fa-f:.]+/[0-9]{1,3}$ ]]; then
@@ -86,7 +120,7 @@ install_distribution_files() {
   file_sha="$(sha256sum "$dist_dir/camera-system-root-ca.crt.pem" | awk '{print $1}')"
   cert_fp="$(openssl x509 -in "$dist_dir/camera-system-root-ca.crt.pem" -noout -fingerprint -sha256 | sed 's/^sha256 Fingerprint=//;s/^SHA256 Fingerprint=//')"
   tmp="$(mktemp "${TMPDIR:-/tmp}/ca-readme.XXXXXX")"
-  cat > "$tmp" <<EOF
+  cat >"$tmp" <<EOF
 Camera System Root CA
 =====================
 
@@ -135,8 +169,6 @@ EOF
 }
 
 install_local_trust() {
-  # Mirrors the Ubuntu client steps in docs/CLIENT.md so the server itself
-  # trusts the CA system-wide and in Chrome's NSS database during apply.
   command -v certutil >/dev/null 2>&1 || {
     sudo DEBIAN_FRONTEND=noninteractive apt-get install -y libnss3-tools
   }
@@ -160,8 +192,10 @@ install_local_trust() {
 }
 
 configure_nginx_http_ca_endpoint() {
-  local today; today="$(date +%F)"
-  local ca_access_directives; ca_access_directives="$(nginx_ca_access_directives)"
+  local today
+  today="$(date +%F)"
+  local ca_access_directives
+  ca_access_directives="$(nginx_ca_access_directives)"
   sudo test -f /etc/nginx/sites-available/camera
   sudo cp --update=none /etc/nginx/sites-available/camera "/etc/nginx/sites-available/camera.backup-ca-dist-$today" || true
   sudo tee /etc/nginx/sites-available/camera >/dev/null <<EOF
@@ -229,13 +263,34 @@ print_status() {
 }
 
 case "$cmd" in
-  apply)
-    require_all; install_packages; install_distribution_files; configure_nginx_http_ca_endpoint; verify_distribution_files; test_http_endpoints; install_local_trust; echo "apply-ok" ;;
-  verify)
-    require_all; verify_distribution_files; sudo nginx -t; test_http_endpoints; echo "verify-ok" ;;
-  test)
-    require_all; test_http_endpoints ;;
-  status)
-    require_all; print_status ;;
-  *) echo "Unknown command: $cmd" >&2; usage >&2; exit 64 ;;
+apply)
+  require_all
+  install_packages
+  install_distribution_files
+  configure_nginx_http_ca_endpoint
+  verify_distribution_files
+  test_http_endpoints
+  install_local_trust
+  echo "apply-ok"
+  ;;
+verify)
+  require_all
+  verify_distribution_files
+  sudo nginx -t
+  test_http_endpoints
+  echo "verify-ok"
+  ;;
+test)
+  require_all
+  test_http_endpoints
+  ;;
+status)
+  require_all
+  print_status
+  ;;
+*)
+  echo "Unknown command: $cmd" >&2
+  usage >&2
+  exit 64
+  ;;
 esac
