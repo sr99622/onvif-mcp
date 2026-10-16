@@ -73,8 +73,8 @@ Once the client has been prepared with the requisite software and the certificat
 * ### Install certificate
 
   ```bash
-  curl -O http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt.pem
-  sudo mv camera-system-root-ca.crt.pem /usr/local/share/ca-certificates/
+  curl -O http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt
+  sudo mv camera-system-root-ca.crt /usr/local/share/ca-certificates/
   sudo update-ca-certificates
   ```
 
@@ -98,7 +98,7 @@ Once the client has been prepared with the requisite software and the certificat
 
   #### 4. Import the certificate
   ```
-  certutil -d "sql:$HOME/.pki/nssdb" -A -t "CP,CP," -n "Camera CA Certificate" -i /usr/local/share/ca-certificates/camera-system-root-ca.crt.pem
+  certutil -d "sql:$HOME/.pki/nssdb" -A -t "CP,CP," -n "Camera CA Certificate" -i /usr/local/share/ca-certificates/camera-system-root-ca.crt
   ```
 
   ### Alternate manual certificate configuration

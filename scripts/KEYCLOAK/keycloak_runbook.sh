@@ -341,6 +341,29 @@ trust_ca_and_verify_public() {
   curl -sS "$(issuer)/.well-known/openid-configuration" | python3 -c 'import json,sys; d=json.load(sys.stdin); print("issuer:",d.get("issuer")); print("registration_endpoint:",d.get("registration_endpoint")); print("S256:", "S256" in d.get("code_challenge_methods_supported", [])); print("scope:", "mcp:tools" in d.get("scopes_supported", []))'
 }
 
+wait_mcp_ready() {
+  local code="" error_file attempt
+  error_file="$(mktemp "${TMPDIR:-/tmp}/kc-mcp-readiness.XXXXXX")"
+  # Probe the backend directly: do not send traffic through nginx until it is
+  # accepting requests with OAuth enabled. Connection failures are expected
+  # during startup; retain only the last diagnostic for a bounded failure.
+  for attempt in $(seq 1 20); do
+    code="$(curl -sS --connect-timeout 1 --max-time 2 -o /dev/null \
+      -w '%{http_code}' http://127.0.0.1:8001/mcp 2>"$error_file")" || true
+    if [[ "$code" == "401" ]]; then
+      rm -f "$error_file"
+      echo "mcp-ready HTTP 401"
+      return 0
+    fi
+    if [[ "$attempt" -lt 20 ]]; then sleep 1; fi
+  done
+  echo "MCP did not become ready after 20 probes; last HTTP $code (expected 401)" >&2
+  if [[ -s "$error_file" ]]; then cat "$error_file" >&2; fi
+  rm -f "$error_file"
+  systemctl show onvif-mcp-http.service -p ActiveState -p SubState -p Result -p ExecMainStatus >&2 || true
+  return 1
+}
+
 configure_mcp_oauth() {
   sudo install -d -m 755 /etc/systemd/system/onvif-mcp-http.service.d
   sudo tee /etc/systemd/system/onvif-mcp-http.service.d/oauth.conf >/dev/null <<EOF
@@ -355,12 +378,9 @@ EOF
   sudo systemctl daemon-reload
   sudo systemctl restart onvif-mcp-http.service
   systemctl is-active onvif-mcp-http.service
-  for _ in $(seq 1 20); do
-    curl -sS -D - -o /dev/null "$(resource_url)" | tee /tmp/keycloak-mcp-unauth.headers
-    if grep -E '^HTTP/.* 401' /tmp/keycloak-mcp-unauth.headers >/dev/null; then break; fi
-    sleep 1
-  done
-  grep -E '^HTTP/.* 401' /tmp/keycloak-mcp-unauth.headers
+  wait_mcp_ready
+  curl -sS --connect-timeout 2 --max-time 5 -D - -o /dev/null "$(resource_url)" | tee "${TMPDIR:-/tmp}/keycloak-mcp-unauth.headers"
+  grep -E '^HTTP/.* 401' "${TMPDIR:-/tmp}/keycloak-mcp-unauth.headers"
   curl -sS "https://$server_fqdn/.well-known/oauth-protected-resource/mcp" | python3 -m json.tool
 }
 
@@ -506,7 +526,8 @@ headless_hermes_login() {
   local real_home="${HOME}/.hermes" isolated_home login_log auth_url login_pid token_dir
   isolated_home="${hermes_home%/}-login"
   login_log="$(mktemp)"
-  trap "rm -f '$login_log'" RETURN
+  login_fifo="$(mktemp -u "${TMPDIR:-/tmp}/kc-login-stdin.XXXXXX")"
+  trap "rm -f '$login_log' '$login_fifo'" RETURN
 
   rm -rf "$isolated_home"
   configure_hermes >/dev/null
@@ -514,7 +535,15 @@ headless_hermes_login() {
   ln -s "$real_home/tools" "$isolated_home/tools"
   set_hermes_entry_enabled "$isolated_home" true
 
-  BROWSER=/bin/false HERMES_HOME="$isolated_home" hermes mcp login "$mcp_name" >"$login_log" 2>&1 &
+  # The login process serves the loopback callback only while it is waiting on
+  # stdin; a stdin that reaches EOF makes the listener drop and the driver's
+  # callback redirect is refused. Hold the FIFO open read-write for the run.
+  mkfifo "$login_fifo"
+  exec 9<>"$login_fifo"
+  # BROWSER=/bin/false alone still falls back to desktop browsers. Hide both
+  # display backends from Hermes so its OAuth launcher skips webbrowser.open;
+  # the separate CDP driver below launches its own headless Chrome explicitly.
+  env -u DISPLAY -u WAYLAND_DISPLAY BROWSER=/bin/false HERMES_HOME="$isolated_home" hermes mcp login "$mcp_name" <&9 >"$login_log" 2>&1 &
   login_pid=$!
 
   for _ in $(seq 1 600); do

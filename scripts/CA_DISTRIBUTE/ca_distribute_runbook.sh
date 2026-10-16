@@ -173,7 +173,7 @@ install_local_trust() {
     sudo DEBIAN_FRONTEND=noninteractive apt-get install -y libnss3-tools
   }
 
-  sudo install -o root -g root -m 0644 "$source_ca" /usr/local/share/ca-certificates/camera-system-root-ca.crt.pem
+  sudo install -o root -g root -m 0644 "$source_ca" /usr/local/share/ca-certificates/camera-system-root-ca.crt
   sudo update-ca-certificates
 
   nssdb="$HOME/.pki/nssdb"
@@ -187,7 +187,7 @@ install_local_trust() {
   fi
 
   if ! certutil -d "sql:$nssdb" -L | grep -q "Camera CA Certificate"; then
-    certutil -d "sql:$nssdb" -A -t "CP,CP," -n "Camera CA Certificate" -i /usr/local/share/ca-certificates/camera-system-root-ca.crt.pem
+    certutil -d "sql:$nssdb" -A -t "CP,CP," -n "Camera CA Certificate" -i /usr/local/share/ca-certificates/camera-system-root-ca.crt
   fi
 }
 

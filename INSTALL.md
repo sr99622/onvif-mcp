@@ -8,7 +8,7 @@ Do not obsess over every camera detail. Many cameras have bugs that will cause t
 
 A short wait of five seconds after completing each script can help to avoid race conditions during the execution of the runbooks.
 
-As you work through the scripts, keep an audit log in the folder that holds the script. Record any files that are downloaded with the exact url used to download the file. Any programs that are installed, record the name and the version of the program. If errors or issues are encountered, record the error and the steps used to overcome it. The log should have the same name root as the script with a .log extension.
+As you work through the scripts, keep an audit log in the folder that holds the script. Record any files that are downloaded with the exact url used to download the file. Any programs that are installed, record the name and the version of the program. If errors or issues are encountered, record the error and the steps used to overcome it. The log should  be written to the same folder in the scripts/ directory as the script itself and have the same name root as the script with a .log extension, e.g. onvif-mcp/scripts/GPG_KEY/gpg_key_runbook.log. Please suppress the echo to terminal when writing the logs so that the file edits do not display in the user interface, which is very distracting to the user.
 
 **Required Values**
 
