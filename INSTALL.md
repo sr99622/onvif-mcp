@@ -6,21 +6,19 @@ This computer has been configured so that you have passwordless sudo privileges 
 
 Do not obsess over every camera detail. Many cameras have bugs that will cause them to behave poorly in response to commands. If a camera feature is not working after a couple of attempts, assume that the camera does not implement the feature properly and continue configuration without that feature. If a camera advertises several streams or snapshot endpoints and some do not work, just use existing streams or endpoints that are known to work.
 
-A short wait of five seconds after completing each script can help to avoid race conditions during the execution of the runbooks.
-
-As you work through the scripts, keep an audit log in the folder that holds the script. Record any files that are downloaded with the exact url used to download the file. Any programs that are installed, record the name and the version of the program. If errors or issues are encountered, record the error and the steps used to overcome it. The log should  be written to the same folder in the scripts/ directory as the script itself and have the same name root as the script with a .log extension, e.g. onvif-mcp/scripts/GPG_KEY/gpg_key_runbook.log. Please suppress the echo to terminal when writing the logs so that the file edits do not display in the user interface, which is very distracting to the user.
+As you work through the scripts, keep an audit log in the folder that holds the script. Please suppress the echo to terminal when writing the logs so that the file edits do not display in the user interface, which is very distracting to the user. Record any files that are downloaded with the exact url used to download the file. Any programs that are installed, record the name and the version of the program. If errors or issues are encountered, record the error and the steps used to overcome it. The log should  be written to the same folder in the scripts/ directory as the script itself and have the same name root as the script with a .log extension, e.g. onvif-mcp/scripts/GPG_KEY/gpg_key_runbook.log.
 
 **Required Values**
 
 | Name | Value |
 |---|---|
 | `{{PRVT_NET_EN_NAME}}` | enp2s0 |
-| `{{SERVER_FQDN}}`      | trigkey.home.arpa |
+| `{{SERVER_FQDN}}`      | $HOSTNAME.home.arpa |
 | `{{CAMERA_USERNAME}}`  | admin |
-| `{{REPO_PATH}}`        | /home/stephen/onvif-mcp |
-| `{{SERVER_USER}}`      | stephen |
-| `{{CA_ROOT_PATH}}`     | /home/stephen/Private-CA |
-| `{{BACKUP_PATH}}`      | /home/stephen/camera-backup |
+| `{{REPO_PATH}}`        | $HOME/onvif-mcp |
+| `{{SERVER_USER}}`      | $USER |
+| `{{CA_ROOT_PATH}}`     | $HOME/Private-CA |
+| `{{BACKUP_PATH}}`      | $HOME/camera-backup |
 | `{{SERVER_IP}}`        | 10.1.1.3 |
 | `{{GMAIL_ADDRESS}}`    | keycloak.admin.sample@gmail.com |
 

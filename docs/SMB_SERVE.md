@@ -97,7 +97,9 @@ The `apply` command:
   **effective** `testparm` output against the required enforcement, reloads
   or starts the Samba daemon, and confirms the prompted password
   authenticates against the live share;
-- client stage: verifies `cifs-utils` and hostname resolution, creates the
+- client stage: verifies `cifs-utils` and `smbclient`, installing either when
+  missing (fails cleanly if no package manager is available), verifies hostname
+  resolution, creates the
   credentials file from the prompted password only if absent (mode `0600 root:root`),
   creates the mount point, adds the fstab automount entry only if absent,
   validates fstab, activates the automount, and requires a live `cifs` row

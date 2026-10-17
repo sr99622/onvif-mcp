@@ -13,9 +13,10 @@ Implements docs/SMB_SERVE.md. Creates a private Samba share on the SMB server
 and mounts it on the camera host with enforced 0600/0700 server-side modes.
 
 apply  : runs the server-side stage (private directory, Samba password, share
-         block, reload) and the client-side stage (credentials file, fstab
-         entry, automount), then the harmless-file probe test. Refuses to
-         overwrite existing state; reruns re-verify instead of recreating.
+         block, reload) and the client-side stage (cifs-utils/smbclient
+         install-if-missing, credentials file, fstab entry, automount), then
+         the harmless-file probe test. Refuses to overwrite existing state;
+         reruns re-verify instead of recreating.
 mount  : client-mount-only operation for a server already configured by this
          runbook (or an equivalent enforcement). Runs the client stage and the
          probe test only; makes no changes on the server. The share block must
@@ -192,9 +193,25 @@ EOF
 
 # ---------- client-side stage ----------
 
+# Client prerequisites: cifs-utils is required for the mount itself and
+# smbclient for the negative access test. Check both before touching any
+# client state and install them when missing; fail cleanly only when no
+# supported package manager is available.
+ensure_client_tools() {
+  local missing=()
+  command -v mount.cifs >/dev/null || missing+=(cifs-utils)
+  command -v smbclient >/dev/null || missing+=(smbclient)
+  [[ "${#missing[@]}" -gt 0 ]] || return 0
+  command -v apt-get >/dev/null || { echo "Guard: ${missing[*]} missing on the camera host and no apt-get found; install manually (sudo apt install ${missing[*]})." >&2; exit 1; }
+  echo "Installing client tools on the camera host: ${missing[*]}"
+  sudo apt-get update >/dev/null && sudo apt-get install -y "${missing[@]}"
+  command -v mount.cifs >/dev/null || { echo "FAIL: mount.cifs still unavailable after installing cifs-utils." >&2; exit 1; }
+  command -v smbclient >/dev/null || { echo "FAIL: smbclient still unavailable after installing smbclient." >&2; exit 1; }
+}
+
 client_stage() {
   local pw="$1"
-  command -v mount.cifs >/dev/null || { echo "Guard: cifs-utils (mount.cifs) is not installed on the camera host. Install it first (sudo apt install cifs-utils)." >&2; exit 1; }
+  ensure_client_tools
 
   getent ahosts "$server_fqdn" >/dev/null || { echo "FAIL: $server_fqdn does not resolve on the camera host." >&2; exit 1; }
 
