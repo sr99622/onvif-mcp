@@ -386,8 +386,8 @@ print_status() {
 
 case "$cmd" in
   agent-prep)
-    install_packages
     configure_gpg_agent_cache
+    install_packages
     echo "agent-prep-ok"
     ;;
   check-gpg-cache)

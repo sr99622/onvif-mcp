@@ -111,22 +111,11 @@ require_backup_location() {
 
 case "$cmd" in
 agent-prep)
-  missing_packages=()
-  command -v gpg >/dev/null 2>&1 || missing_packages+=(gnupg)
-  command -v pass >/dev/null 2>&1 || missing_packages+=(pass)
-  [[ -x /usr/bin/pinentry-curses ]] || missing_packages+=(pinentry-curses)
-  if [[ ${#missing_packages[@]} -gt 0 ]]; then
-    if command -v apt-get >/dev/null 2>&1; then
-      sudo apt-get update
-      sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "${missing_packages[@]}"
-    else
-      printf 'Missing required packages: %s\n' "${missing_packages[*]}" >&2
-      echo "Install them with the host package manager, then rerun agent-prep." >&2
-      exit 1
-    fi
-  fi
-  gpg --version >/dev/null
-  test -x /usr/bin/pinentry-curses
+  # Write the agent conf first: the conf, pinentry, and TTL settings do not
+  # depend on any package being installed, so they must be applied even when
+  # the package check below fails on hosts without apt-get. Previously the
+  # package check ran first and exited, leaving the conf unwritten and the
+  # agent on its 600s default cache TTL.
   install -d -m 0700 "$HOME/.gnupg"
   conf="$HOME/.gnupg/gpg-agent.conf"
   touch "$conf"
@@ -172,6 +161,22 @@ PY
   gpgconf --reload gpg-agent
   grep -Fx 'pinentry-program /usr/bin/pinentry-curses' "$conf" >/dev/null
   grep -Fx 'default-cache-ttl 7200' "$conf" >/dev/null
+  missing_packages=()
+  command -v gpg >/dev/null 2>&1 || missing_packages+=(gnupg)
+  command -v pass >/dev/null 2>&1 || missing_packages+=(pass)
+  [[ -x /usr/bin/pinentry-curses ]] || missing_packages+=(pinentry-curses)
+  if [[ ${#missing_packages[@]} -gt 0 ]]; then
+    if command -v apt-get >/dev/null 2>&1; then
+      sudo apt-get update
+      sudo DEBIAN_FRONTEND=noninteractive apt-get install -y "${missing_packages[@]}"
+    else
+      printf 'Missing required packages: %s\n' "${missing_packages[*]}" >&2
+      echo "Install them with the host package manager, then rerun agent-prep." >&2
+      exit 1
+    fi
+  fi
+  gpg --version >/dev/null
+  test -x /usr/bin/pinentry-curses
   echo "agent-prep-ok"
   ;;
 
