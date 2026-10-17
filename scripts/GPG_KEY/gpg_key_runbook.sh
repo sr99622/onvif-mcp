@@ -148,8 +148,30 @@ PY
   else
     printf '%s\n' 'pinentry-program /usr/bin/pinentry-curses' >>"$conf"
   fi
+  # Set the cache TTL here, at first agent-prep, so the cache stays warm across
+  # later runbooks (MCP_HTTP, MEDIAMTX, SNAPSHOT, CREATE_CA_CERT) without the
+  # user re-priming it. Same enforcement as CREATE_CA_CERT's agent-prep: drop
+  # the invalid 'cache-ttl' directive and any duplicate TTL lines, then set
+  # 7200. The gpgconf reload below applies it to the running agent.
+  python3 - "$conf" <<'PY'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1])
+lines = p.read_text().splitlines() if p.exists() else []
+out = []
+for line in lines:
+    if line.startswith('cache-ttl'):
+        continue
+    key = line.split(maxsplit=1)[0] if line.strip() and not line.lstrip().startswith('#') else None
+    if key in {'default-cache-ttl', 'max-cache-ttl'}:
+        continue
+    out.append(line)
+out.append('default-cache-ttl 7200')
+out.append('max-cache-ttl 7200')
+p.write_text('\n'.join(out) + ('\n' if out else ''))
+PY
   gpgconf --reload gpg-agent
   grep -Fx 'pinentry-program /usr/bin/pinentry-curses' "$conf" >/dev/null
+  grep -Fx 'default-cache-ttl 7200' "$conf" >/dev/null
   echo "agent-prep-ok"
   ;;
 

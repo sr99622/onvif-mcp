@@ -78,12 +78,16 @@ can execute those commands and return the result to the agent for evaluation.
   ```
 
   The `agent-prep` command installs missing Debian/Ubuntu packages when
-  `apt-get` is available, configures terminal pinentry, and leaves secret
-  entry to the user. The `status` command prints non-secret state only,
-  including whether `{{BACKUP_PATH}}` exists and is reachable. It is
-  safe for the agent to run before the user creates the GPG key and again
-  after each later stage. Do not replace the scripted workflow with ad hoc
-  fragments.
+  `apt-get` is available, configures terminal pinentry, sets the gpg-agent
+  cache TTL (`default-cache-ttl 7200` / `max-cache-ttl 7200`) and reloads the
+  agent so the TTL applies to the running daemon, and leaves secret entry to
+  the user. Setting the TTL at first agent-prep keeps the cache warm across
+  later runbooks that read the store headlessly, so the user primes the cache
+  once rather than again mid-installation. The `status` command prints
+  non-secret state only, including whether `{{BACKUP_PATH}}` exists and is
+  reachable. It is safe for the agent to run before the user creates the GPG
+  key and again after each later stage. Do not replace the scripted workflow
+  with ad hoc fragments.
 
   Do not run `gpg --full-gen-key` or enter a passphrase in the agent session.
   The user performs the next step in their own terminal.
