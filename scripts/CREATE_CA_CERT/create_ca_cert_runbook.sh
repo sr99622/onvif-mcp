@@ -5,14 +5,16 @@ usage() {
   cat <<'USAGE'
 Usage:
   create_ca_cert_runbook.sh agent-prep
+  create_ca_cert_runbook.sh check-gpg-cache
   create_ca_cert_runbook.sh prime-gpg-cache
   create_ca_cert_runbook.sh apply --ca-root PATH --backup-path PATH [--timestamp TS]
   create_ca_cert_runbook.sh status --ca-root PATH --backup-path PATH [--timestamp TS]
   create_ca_cert_runbook.sh verify --ca-root PATH --backup-path PATH --timestamp TS
 
 Implements docs/CREATE_CA_CERT.md. Site-specific paths are passed as arguments.
-The script never prints CA or archive passphrases. If GPG requires interactive
-unlocking, run prime-gpg-cache in a real terminal before apply.
+The script never prints CA or archive passphrases. Run check-gpg-cache first;
+if it reports gpg-cache-cold, run prime-gpg-cache in a real terminal before
+apply.
 USAGE
 }
 
@@ -121,6 +123,26 @@ out.append('max-cache-ttl 7200')
 p.write_text('\n'.join(out) + '\n')
 PY
   gpgconf --reload gpg-agent || true
+}
+
+check_gpg_cache() {
+  local gpg_id warm recipient
+  gpg_id="$(cat "$HOME/.password-store/.gpg-id" 2>/dev/null || true)"
+  [[ -n "$gpg_id" ]] || { echo "password-store .gpg-id missing; return to GPG_KEY.md." >&2; exit 1; }
+  warm=0
+  for recipient in $gpg_id; do
+    # gpg -t checks whether the passphrase is cached in gpg-agent; in batch
+    # mode it never prompts, so a cold cache fails instead of blocking.
+    if gpg --batch -t --default-key "$recipient" >/dev/null 2>&1; then
+      warm=1
+      break
+    fi
+  done
+  if [[ "$warm" == 1 ]]; then
+    echo "gpg-cache-warm"
+  else
+    echo "gpg-cache-cold"
+  fi
 }
 
 prime_gpg_cache() {
@@ -367,6 +389,9 @@ case "$cmd" in
     install_packages
     configure_gpg_agent_cache
     echo "agent-prep-ok"
+    ;;
+  check-gpg-cache)
+    check_gpg_cache
     ;;
   prime-gpg-cache)
     prime_gpg_cache

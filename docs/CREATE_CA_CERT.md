@@ -67,7 +67,8 @@ be able to copy and paste the prompt without modification.
 
 The script never accepts passwords or passphrases as command-line arguments.
 If GPG needs a passphrase, the user primes the GPG agent from their own terminal
-using the scripted command in step 2.
+using the scripted command in step 1, but only after `check-gpg-cache` reports a
+cold cache.
 
 ## Security model and hard rules
 
@@ -84,11 +85,21 @@ using the scripted command in step 2.
    be writable by the runbook user, and enforce the SMB-mount permission model
    (mode 0700 owner-only, no extra ACL entries).
 
-## 1. Prime the GPG cache (USER-run)
+## 1. Check the GPG cache; prime only if cold (AGENT-run check, USER-run prime)
 
-The agent-side `apply` command cannot decrypt or write password-store entries
-because GPG needs a pinentry prompt, stop and show the user this exact resolved
-copy-paste block:
+First test whether the GPG agent already has the passphrase cached:
+
+```bash
+cd {{REPO_PATH}}
+scripts/CREATE_CA_CERT/create_ca_cert_runbook.sh check-gpg-cache
+```
+
+In most cases the cache is already warm. If the command prints `gpg-cache-warm`,
+the cache is primed; skip the prime step and continue to step 2.
+
+If it prints `gpg-cache-cold`, the agent-side `apply` command cannot decrypt or
+write password-store entries because GPG needs a pinentry prompt, stop and show
+the user this exact resolved copy-paste block:
 
 ```bash
 cd {{REPO_PATH}}
@@ -97,7 +108,8 @@ scripts/CREATE_CA_CERT/create_ca_cert_runbook.sh prime-gpg-cache
 
 Tell the user to enter the GPG passphrase in their terminal if prompted, and to
 report when the command prints `prime-gpg-cache-ok`. Do not ask the user to paste
-any passphrase or password into chat.
+any passphrase or password into chat. After priming, re-run `check-gpg-cache` to
+confirm `gpg-cache-warm` before continuing to step 2.
 
 ## 2. Prepare the CA workstation (AGENT-run)
 
@@ -226,8 +238,10 @@ commands.
   folder), but the permission model is not: the script refuses `{{BACKUP_PATH}}`
   unless it is mode 0700 owned by the runbook user with no extra ACL entries,
   the same enforcement the SMB mount provided.
-- GPG-agent cache expiry can block headless `pass` operations. Use the scripted
-  USER-run `prime-gpg-cache` command, not ad hoc `pass show` fragments.
+- GPG-agent cache expiry can block headless `pass` operations. Run the scripted
+  `check-gpg-cache` first and only ask the user to run the USER-run
+  `prime-gpg-cache` command when it reports `gpg-cache-cold`; do not use ad hoc
+  `pass show` fragments.
 - `age -p` and encrypted OpenSSL key generation need PTY handling on this host;
   the script contains the verified `script -qec` patterns. Do not duplicate or
   alter those patterns in the runbook.

@@ -36,6 +36,7 @@ uv
 wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
 sudo apt install ./google-chrome-stable_current_amd64.deb
 xdg-settings set default-web-browser google-chrome.desktop
+rm google-chrome-stable_current_amd64.deb
 wget -P ~/.local/share/fonts https://github.com/ryanoasis/nerd-fonts/releases/download/v3.0.2/JetBrainsMono.zip && cd ~/.local/share/fonts && unzip JetBrainsMono.zip && rm JetBrainsMono.zip
 cd
 bash -c '
@@ -89,6 +90,7 @@ return {
   },
 }
 EOF
+nvim --headless "+Lazy! sync" +qa > /dev/null 2>&1
 curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
 echo "The camera server preparation is complete. Press the enter key to exit the terminal. Open a new terminal and follow the instructions in the INSTALL.md runbook."
 read </dev/tty

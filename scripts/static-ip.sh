@@ -4,13 +4,25 @@
 # IPv6 is preserved. Reserve/exclude the new address on your DHCP server:
 # ARP probing cannot detect offline devices or future DHCP allocations.
 set -euo pipefail
-[[ $EUID -eq 0 ]] || { echo 'Run with sudo from a local terminal.' >&2; exit 1; }
-[[ -z ${SSH_CONNECTION:-} ]] || { echo 'Run locally: Ethernet will disconnect during replacement.' >&2; exit 1; }
+[[ $EUID -eq 0 ]] || {
+  echo 'Run with sudo from a local terminal.' >&2
+  exit 1
+}
+[[ -z ${SSH_CONNECTION:-} ]] || {
+  echo 'Run locally: Ethernet will disconnect during replacement.' >&2
+  exit 1
+}
 for tool in nmcli ip flock python3; do
-    command -v "$tool" >/dev/null || { echo "Missing required command: $tool" >&2; exit 1; }
+  command -v "$tool" >/dev/null || {
+    echo "Missing required command: $tool" >&2
+    exit 1
+  }
 done
 exec 9>/run/lock/static-ip.lock
-flock -n 9 || { echo 'Another static-ip script is running.' >&2; exit 1; }
+flock -n 9 || {
+  echo 'Another static-ip script is running.' >&2
+  exit 1
+}
 # Python code arrives via heredoc; prompts read directly from the terminal.
 python3 - <<'PYTHON'
 import ipaddress
@@ -145,7 +157,8 @@ def main():
     if not gateway or not dns:
         raise RuntimeError('DHCP gateway or DNS is missing')
     print(f'Adapter: {iface}\nDHCP profile: {old_name} ({old})\nCurrent lease: {current}\nGateway: {gateway}\nDNS: {", ".join(dns)}', flush=True)
-    print('Choose an IP reserved/excluded from your DHCP pool. ARP cannot detect offline devices.', flush=True)
+    print('\n\nSet a static IP address for this machine\n\n')
+    print('Choose an IP reserved/excluded from your DHCP pool. ARP cannot detect offline devices.\n', flush=True)
     with open('/dev/tty', 'r') as tty_in, open('/dev/tty', 'w') as tty_out:
         while True:
             tty_out.write('Enter the new static IPv4 address (without /prefix): ')
