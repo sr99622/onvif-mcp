@@ -8,7 +8,12 @@ This is the SMB storage option; a mounted external drive or a local folder may
 be used as `{{BACKUP_PATH}}` instead, provided it enforces the same permission
 model this runbook establishes (0700/0600 owner-only, no extra ACL entries).
 Access to the SMB host runs through the automated SSH login established by
-`SSH_LOGIN.md`. 
+`SSH_LOGIN.md` for the server-side verification steps. When that login is not
+available — or the server is already configured to this runbook's enforcement
+by other means — `mount` and `verify` can run with `--no-ssh-verify`, which
+performs the client mount without contacting the server; see "Mount without SSH
+verification" below. In that mode server-side enforcement is assumed, recorded
+as deferred, and flagged later by the backup procedure at write time.
 
 When the server side is already configured (by this runbook or
 an equivalent enforcement), the `mount` command performs the client mount only,
@@ -64,11 +69,19 @@ Runbook defaults used by the script:
    negotiated POSIX extensions, `file_mode`/`dir_mode` are display settings
    and `chmod` can appear to succeed without changing server permissions.
    `apply` and `verify` check server-side `stat` and ACLs, not just the
-   client view.
+   client view. With `--no-ssh-verify` those server-side checks cannot run,
+   so they are reported as **deferred, not passed**: the run records the
+   client view only and states that enforcement is assumed from the existing
+   server configuration. A deferred run is not an accepted runbook — the
+   permission model is proven later, when the backup procedure writes to the
+   share and fails on improper permissions. `--no-ssh-verify` is never
+   accepted with `apply`, which cannot create server state without the login.
 4. The negative access test requires an unrelated Samba account. The script
    can only prove denial via a null session; the full test with the account's
    real password is USER-run interactively (`smbclient` prompts). If no
-   unrelated account exists, the script records the test as incomplete.
+   unrelated account exists, the script records the test as incomplete. Under
+   `--no-ssh-verify` the account's existence on the server cannot be checked,
+   so only the null-session denial runs and the test is recorded as partial.
 5. The script never changes the pre-existing `storage` share or any parent
    directory permissions.
 6. `mount` performs the client stage only. It makes no server-side changes;
@@ -76,7 +89,9 @@ Runbook defaults used by the script:
    fails cleanly if the share block is not already present on the server. The
    probe test still checks server-side `stat` and ACLs, so a server configured
    with weaker enforcement fails the probe rather than passing on the client
-   display alone.
+   display alone. With `--no-ssh-verify` the share-block pre-check and the
+   server half of the probe test are skipped and printed as deferred; the
+   client stage and the client half of the probe test are unchanged.
 
 ## Full Server Configuration Workflow (AGENT-run)
 
@@ -138,6 +153,34 @@ Expected final output:
 mount-ok server=<fqdn> share=camera-ca-private mount=<mount> user=<user>
 ```
 
+### Mount without SSH verification (AGENT-run)
+
+When the server is already configured to this runbook's enforcement by other
+means, or the automated SSH login is not available, the client mount can run
+without contacting the server:
+
+```bash
+cd {{REPO_PATH}}
+scripts/SMB_SERVE/smb_serve_runbook.sh mount --no-ssh-verify \
+  --server-fqdn {{SMB_SERVER_FQDN}} \
+  --username {{SMB_USERNAME}} \
+  --mount {{SMB_MOUNT}} \
+  [--test-account NAME]
+```
+
+This runs the client stage and the client half of the probe test only. The
+share-block pre-check, the server-side `stat`, and the server ACL check are
+skipped and printed as `deferred (--no-ssh-verify; not verified)`, and the run
+prints a note that enforcement is assumed. The final line is the same
+`mount-ok` line, which here means "mounted", not "verified": the audit log must
+record the server-side criteria as deferred rather than met.
+
+The trade-off is explicit: a server configured more permissively than this
+runbook will mount successfully and only be detected when the backup procedure
+writes to `{{BACKUP_PATH}}` and fails on permissions. Use this mode when the
+mount is needed before the login exists; run `verify` without `--no-ssh-verify`
+once the login is available to close the deferred items.
+
 Non-mutating inspection:
 
 ```bash
@@ -173,8 +216,12 @@ prompted password authenticates against the live share, the client shows a live
 negative test either denies access or is explicitly recorded as incomplete.
 After `mount`, the same criteria hold for the client side and the probe test;
 the server-side configuration is assumed already present and is not re-checked
-beyond the probe test's server `stat`/ACL verification. Results must persist
-after a reboot; re-run `verify` after reboot before copying any secrets.
+beyond the probe test's server `stat`/ACL verification. Under `--no-ssh-verify`
+only the client-side criteria can be met; the server `stat`, ACL, and share-block
+criteria are recorded as deferred in the audit log and the runbook is not marked
+complete until they are closed by a later `verify` or by the backup procedure's
+permission failure. Results must persist after a reboot; re-run `verify` after
+reboot before copying any secrets.
 
 ## Pitfalls and notes
 
@@ -191,6 +238,14 @@ after a reboot; re-run `verify` after reboot before copying any secrets.
   reliably trigger it; reading the directory contents does. The automount
   upcall is asynchronous, so the script retries the trigger-and-check pair
   before declaring failure.
+- The automount must be active before a read can trigger the mount. When it is
+  not, the read hits the plain mount point directory, and a `0700 root:root`
+  mount point denies the mounting user with `Permission denied` — the run then
+  ends with "no live cifs mount row" even though the credentials, fstab entry,
+  resolution, and share are all correct. The script creates the mount point
+  owned by the mounting user and reports a failed
+  `systemctl start <unit>.automount` instead of swallowing it, so the two causes
+  can be told apart.
 - `systemctl is-active` exits 3 for inactive units; under `set -euo pipefail`
   that aborts a command substitution, so unit detection uses `if` form.
 - The Samba daemon unit name varies by distribution (`smbd.service` on
@@ -209,10 +264,13 @@ after a reboot; re-run `verify` after reboot before copying any secrets.
 - `umask` is a shell builtin, not an executable, so `sudo umask` always
   fails ("command not found"); the credentials file mode is enforced by an
   explicit `chmod 0600` instead.
-- systemd mount/automount unit names escape `-` inside a path element as
-  `\x2d` (`/mnt/camera-backup` → `mnt-camera\x2dbackup.automount`); a plain
-  dash substitution produces an invalid unit name that `systemctl start`
-  silently fails, so the automount never fires.
+- systemd mount/automount unit names escape `-` inside a path element as `\x2d`
+  (`/mnt/camera-backup` → `mnt-camera\x2dbackup.automount`); a plain dash
+  substitution produces an invalid unit name that `systemctl start` silently
+  fails on, so the automount never fires. The path itself supplies the leading
+  element, so the unit name is the whole escaped path — do not prefix an extra
+  `mnt-` (`/mnt/taurus` → `mnt-taurus.automount`, not
+  `mnt-mnt\x2dtaurus.automount`).
 - A `Password for root@...` prompt means the saved credentials file is not
   being supplied: check the file has both correctly formatted, nonempty
   entries and that fstab references it. Do not use `install -m 0600 /dev/null`
@@ -221,4 +279,11 @@ after a reboot; re-run `verify` after reboot before copying any secrets.
   of server-side enforcement. Stop before copying secrets if the CIFS row is
   absent or read-only, credentials are exposed, creation fails, server files
   are broader than `0600`/`0700`, an ACL grants unexpected access, or an
-  unrelated account can open the share.
+  unrelated account can open the share. `--no-ssh-verify` does not change this
+  rule; it only moves the proof to the backup procedure, so secrets must not be
+  copied into `{{BACKUP_PATH}}` while the server-side criteria are still
+  deferred.
+- `--no-ssh-verify` does not remove the interactive password prompt: the
+  credentials file still needs the Samba password, and `mount`, `verify`, and
+  `apply` still require a TTY. The mode removes the SSH verification steps, not
+  the USER-run requirement.

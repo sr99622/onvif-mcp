@@ -5,8 +5,8 @@ usage() {
   cat <<'USAGE'
 Usage:
   smb_serve_runbook.sh apply  --server-fqdn HOST --username USER --mount PATH [--test-account NAME] [--allow-install]
-  smb_serve_runbook.sh mount  --server-fqdn HOST --username USER --mount PATH [--test-account NAME]
-  smb_serve_runbook.sh verify --server-fqdn HOST --username USER --mount PATH [--test-account NAME]
+  smb_serve_runbook.sh mount  --server-fqdn HOST --username USER --mount PATH [--test-account NAME] [--no-ssh-verify]
+  smb_serve_runbook.sh verify --server-fqdn HOST --username USER --mount PATH [--test-account NAME] [--no-ssh-verify]
   smb_serve_runbook.sh status --server-fqdn HOST --username USER --mount PATH
 
 Implements docs/SMB_SERVE.md. Creates a private Samba share on the SMB server
@@ -26,6 +26,14 @@ verify : checks both sides against the acceptance criteria without changing
          given.
 status : prints current server and client state without changing anything.
 
+--no-ssh-verify : mount/verify without the automated SSH login. Only the client
+         stage and the client-side half of the probe test run; the server-side
+         stat/ACL checks and the share-block pre-check are skipped and reported
+         as deferred, not as passed. Use only when the server is already
+         configured to this runbook's enforcement by other means; improper
+         permissions are then flagged later by the backup procedure rather than
+         here. Never implies the server is compliant.
+
 The Samba password is prompted interactively without echo (`read -s`)
 inside the script only; it is never printed, logged, or written to disk.
 apply, mount, and verify must run in a terminal (TTY) so the prompt can read the
@@ -37,7 +45,7 @@ cmd="${1:-}"; [[ -n "$cmd" ]] || { usage; exit 64; }
 [[ "$cmd" == "-h" || "$cmd" == "--help" ]] && { usage; exit 0; }
 shift || true
 
-server_fqdn=""; username=""; mount=""; test_account=""; allow_install=0
+server_fqdn=""; username=""; mount=""; test_account=""; allow_install=0; no_ssh_verify=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --server-fqdn) server_fqdn="${2:?missing --server-fqdn value}"; shift 2 ;;
@@ -45,6 +53,7 @@ while [[ $# -gt 0 ]]; do
     --mount) mount="${2:?missing --mount value}"; shift 2 ;;
     --test-account) test_account="${2:?missing --test-account value}"; shift 2 ;;
     --allow-install) allow_install=1; shift ;;
+    --no-ssh-verify) no_ssh_verify=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; usage >&2; exit 64 ;;
   esac
@@ -55,6 +64,10 @@ require_all() {
   require_arg --server-fqdn "$server_fqdn"
   require_arg --username "$username"
   require_arg --mount "$mount"
+  if [[ "$no_ssh_verify" == "1" && "$cmd" == "apply" ]]; then
+    echo "Guard: --no-ssh-verify cannot be used with apply; the server stage needs the automated SSH login. Use mount --no-ssh-verify." >&2
+    exit 64
+  fi
   [[ "$server_fqdn" =~ ^[A-Za-z0-9.-]+$ ]] || { echo "Invalid --server-fqdn: $server_fqdn" >&2; exit 64; }
   [[ "$username" =~ ^[A-Za-z_][A-Za-z0-9_-]*$ ]] || { echo "Invalid --username: $username" >&2; exit 64; }
   [[ "$mount" =~ ^/[A-Za-z0-9._/-]+$ ]] || { echo "Invalid --mount: $mount" >&2; exit 64; }
@@ -68,7 +81,16 @@ share_name="camera-ca-private"
 server_dir="/srv/samba/$share_name"
 creds_file="/etc/cifs-utils/credentials/camera-backup"
 alias_name="${server_fqdn%%.*}"
-mount_unit="${mount#/}"; mount_unit="${mount_unit//\//-}"; mount_unit="${mount_unit//-/\\x2d}"
+# systemd unit name for a mount path: '/' becomes a literal '-' separator and a
+# '-' inside a path ELEMENT is escaped as \x2d. The path already supplies the
+# leading "mnt" element, so the unit name is the whole escaped path — prefixing
+# another "mnt-" produces an invalid name (mnt-mnt\x2dtaurus.automount) that
+# systemctl start fails on.
+mount_unit=""
+IFS='/' read -ra mount_parts <<< "${mount#/}"
+for part in "${mount_parts[@]}"; do
+  mount_unit="${mount_unit:+$mount_unit-}${part//-/\\x2d}"
+done
 
 rssh() {
   # Remote login shell is fish on some hosts; force POSIX sh for every remote
@@ -235,12 +257,14 @@ password=$pw" ]] \
     echo "client: credentials file created from the prompted password (mode 0600 root:root)"
   fi
 
-  # Mount point.
+  # Mount point. Owned by the mounting user, not root: a root-owned 0700 mount
+  # point denies the user's read, so the automount upcall never fires and the
+  # trigger below fails with EACCES before any cifs row can appear.
   if [[ -d "$mount" ]]; then
     echo "client: mount point $mount already exists, left as-is"
   else
-    sudo install -d -m 0700 "$mount"
-    echo "client: mount point $mount created (mode 0700)"
+    sudo install -d -o "$USER" -g "$USER" -m 0700 "$mount"
+    echo "client: mount point $mount created (mode 0700, owner $USER)"
   fi
 
   # fstab entry: add only if absent; never duplicate.
@@ -260,17 +284,29 @@ password=$pw" ]] \
   # Automount activation. daemon-reload may fail in non-interactive sessions;
   # treat that as a warning when the mount is already live.
   sudo systemctl daemon-reload 2>/dev/null || echo "Note: daemon-reload failed (non-interactive auth); continuing." >&2
-  sudo systemctl reset-failed "mnt-$mount_unit.mount" 2>/dev/null || true
-  sudo systemctl start "mnt-$mount_unit.automount" 2>/dev/null || true
+  sudo systemctl reset-failed "$mount_unit.mount" 2>/dev/null || true
+  # Do not swallow the automount start: a failed start is the usual reason the
+  # loop below never sees a cifs row, and reporting it as a silent `|| true`
+  # turns a diagnosable failure into a bare "no live cifs mount row".
+  automount_unit="$mount_unit.automount"
+  if ! sudo systemctl start "$automount_unit" 2>/dev/null; then
+    echo "Note: could not start $automount_unit; the mount will not fire until it is active." >&2
+  fi
   # Reading contents triggers the CIFS mount; the automount upcall is async, so
   # retry the trigger and the check together before declaring failure.
-  local ok=0
+  local ok=0 trigger_err=""
   for _ in 1 2 3 4 5 6 7 8 9 10; do
-    ls -la "$mount/" >/dev/null 2>&1 || true
+    trigger_err="$(ls -la "$mount/" 2>&1 >/dev/null || true)"
+    [[ -z "$trigger_err" ]] || echo "Note: trigger read failed: $trigger_err" >&2
     findmnt -rn -t cifs -o TARGET,SOURCE,FSTYPE,OPTIONS | grep -q "^$mount " && { ok=1; break; }
     sleep 1
   done
-  [[ "$ok" == "1" ]] || { echo "FAIL: no live cifs mount row for $mount (an autofs row alone is not success)." >&2; exit 1; }
+  [[ "$ok" == "1" ]] || {
+    echo "FAIL: no live cifs mount row for $mount (an autofs row alone is not success)." >&2
+    echo "  automount unit $automount_unit: $(systemctl is-active "$automount_unit" 2>/dev/null || echo inactive)" >&2
+    echo "  mount point: $(stat -c '%a %U:%G' "$mount") (a root-owned 0700 point denies the trigger read)" >&2
+    exit 1
+  }
   echo "client: cifs mount live for $mount"
 }
 
@@ -293,16 +329,28 @@ probe_test() {
   local client_dir client_file server_dir_mode server_file_mode
   client_dir="$(stat -c '%a %U:%G' "$backup_dir")"
   client_file="$(stat -c '%a %U:%G' "$probe")"
-  server_dir_mode="$(rssh "sudo stat -c '%a %U:%G' $server_dir/Camera-CA-Backups")"
-  server_file_mode="$(rssh "sudo stat -c '%a %U:%G' $server_dir/Camera-CA-Backups/$base")"
 
   echo "probe: client dir   $client_dir"
   echo "probe: client file  $client_file"
+  [[ "$client_dir" == "700 $USER:$USER" && "$client_file" == "600 $USER:$USER" ]] \
+    || { echo "FAIL: client-side modes are not 0700/0600 as $USER." >&2; exit 1; }
+
+  if [[ "$no_ssh_verify" == "1" ]]; then
+    # Deferred, not passed: the client view is a display setting until the
+    # server's own stat and ACLs are read. The backup procedure flags it then.
+    echo "probe: server dir   deferred (--no-ssh-verify; not verified)"
+    echo "probe: server file  deferred (--no-ssh-verify; not verified)"
+    echo "probe: server ACLs  deferred (--no-ssh-verify; not verified)"
+    echo "note: server-side enforcement assumed from an existing configuration; the backup procedure will flag improper permissions at write time." >&2
+    return 0
+  fi
+
+  server_dir_mode="$(rssh "sudo stat -c '%a %U:%G' $server_dir/Camera-CA-Backups")"
+  server_file_mode="$(rssh "sudo stat -c '%a %U:%G' $server_dir/Camera-CA-Backups/$base")"
+
   echo "probe: server dir   $server_dir_mode"
   echo "probe: server file  $server_file_mode"
 
-  [[ "$client_dir" == "700 $USER:$USER" && "$client_file" == "600 $USER:$USER" ]] \
-    || { echo "FAIL: client-side modes are not 0700/0600 as $USER." >&2; exit 1; }
   [[ "$server_dir_mode" == "700 $username:$username" && "$server_file_mode" == "600 $username:$username" ]] \
     || { echo "FAIL: server-side modes are broader than 0700/0600 — client display alone is not enforcement." >&2; exit 1; }
 
@@ -320,7 +368,11 @@ negative_test() {
     return 0
   fi
   command -v smbclient >/dev/null || { echo "note: smbclient not installed on the camera host; remote access test incomplete." >&2; return 0; }
-  rssh "getent passwd $test_account >/dev/null" || { echo "note: test account $test_account does not exist on $server_fqdn; remote access test incomplete." >&2; return 0; }
+  if [[ "$no_ssh_verify" == "1" ]]; then
+    echo "note: test account $test_account existence not checked (--no-ssh-verify); null-session denial only." >&2
+  else
+    rssh "getent passwd $test_account >/dev/null" || { echo "note: test account $test_account does not exist on $server_fqdn; remote access test incomplete." >&2; return 0; }
+  fi
   # The test account's password is not known to the script, so denial can
   # only be proven via a null session here. A full negative test with the
   # account's real password is USER-run interactively (smbclient prompts).
@@ -346,9 +398,15 @@ case "$cmd" in
     pw="$(get_password)"
     # Mount-only assumes the server stage is already in place; prove the share
     # block exists before touching the client, then let the probe test prove
-    # server-side enforcement through the live mount.
-    rssh "sudo grep -q '^\[$share_name\]' /etc/samba/smb.conf" \
-      || { echo "FAIL: share block [$share_name] not found on $server_fqdn; mount-only requires an already-configured server. Run apply instead." >&2; exit 1; }
+    # server-side enforcement through the live mount. With --no-ssh-verify the
+    # server is taken as already configured and every server-side check is
+    # reported as deferred instead of passed.
+    if [[ "$no_ssh_verify" == "1" ]]; then
+      echo "note: server-side checks deferred (--no-ssh-verify); share block assumed present." >&2
+    else
+      rssh "sudo grep -q '^\[$share_name\]' /etc/samba/smb.conf" \
+        || { echo "FAIL: share block [$share_name] not found on $server_fqdn; mount-only requires an already-configured server. Run apply instead." >&2; exit 1; }
+    fi
     client_stage "$pw"
     probe_test
     negative_test
@@ -357,9 +415,13 @@ case "$cmd" in
   verify)
     require_all
     pw="$(get_password)"
-    rssh "sudo test \"\$(sudo stat -c '%a %U:%G' $server_dir)\" = '700 $username:$username'" || { echo "FAIL: server share directory is not 0700 $username:$username" >&2; exit 1; }
-    rssh "sudo grep -q '^\[$share_name\]' /etc/samba/smb.conf" || { echo "FAIL: share block missing on server" >&2; exit 1; }
-    rssh "pgrep -x smbd >/dev/null" || { echo "FAIL: smbd not running on server" >&2; exit 1; }
+    if [[ "$no_ssh_verify" == "1" ]]; then
+      echo "note: server-side checks deferred (--no-ssh-verify); client-side checks only." >&2
+    else
+      rssh "sudo test \"\$(sudo stat -c '%a %U:%G' $server_dir)\" = '700 $username:$username'" || { echo "FAIL: server share directory is not 0700 $username:$username" >&2; exit 1; }
+      rssh "sudo grep -q '^\[$share_name\]' /etc/samba/smb.conf" || { echo "FAIL: share block missing on server" >&2; exit 1; }
+      rssh "pgrep -x smbd >/dev/null" || { echo "FAIL: smbd not running on server" >&2; exit 1; }
+    fi
     [[ "$(sudo stat -c '%a %U:%G' "$creds_file")" == "600 root:root" ]] || { echo "FAIL: credentials file permissions are not 0600 root:root" >&2; exit 1; }
     grep -q "^[^ ]* $mount " /etc/fstab || { echo "FAIL: no fstab entry for $mount" >&2; exit 1; }
     findmnt -rn -t cifs -o TARGET,SOURCE,FSTYPE,OPTIONS | grep -q "^$mount " || { echo "FAIL: $mount is not a live cifs mount (autofs row alone is not success)" >&2; exit 1; }
@@ -371,9 +433,13 @@ case "$cmd" in
   status)
     require_all
     echo "== Server ($server_fqdn) =="
-    rssh "sudo stat -c '%a %U:%G %n' $server_dir" 2>/dev/null || echo "share directory absent"
-    rssh "sudo test -f /etc/samba/smb.conf && sudo grep -A9 '^\[$share_name\]' /etc/samba/smb.conf" 2>/dev/null || echo "share block absent"
-    rssh 'pgrep -x smbd >/dev/null && echo "smbd running" || echo "smbd not running"' 2>/dev/null || true
+    if [[ "$no_ssh_verify" == "1" ]]; then
+      echo "not inspected (--no-ssh-verify: no automated SSH login used)"
+    else
+      rssh "sudo stat -c '%a %U:%G %n' $server_dir" 2>/dev/null || echo "share directory absent"
+      rssh "sudo test -f /etc/samba/smb.conf && sudo grep -A9 '^\[$share_name\]' /etc/samba/smb.conf" 2>/dev/null || echo "share block absent"
+      rssh 'pgrep -x smbd >/dev/null && echo "smbd running" || echo "smbd not running"' 2>/dev/null || true
+    fi
     echo "== Client =="
     echo "credentials: $(sudo stat -c '%a %U:%G %n' "$creds_file" 2>/dev/null || echo 'absent')"
     grep "^[^ ]* $mount " /etc/fstab || echo "no fstab entry for $mount"
