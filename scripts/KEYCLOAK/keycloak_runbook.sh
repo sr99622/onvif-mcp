@@ -558,8 +558,11 @@ headless_hermes_login() {
   login_fifo="$(mktemp -u "${TMPDIR:-/tmp}/kc-login-stdin.XXXXXX")"
   trap "rm -f '$login_log' '$login_fifo'" RETURN
 
+  # Do NOT write the entry to the active profile before login: a live Hermes
+  # session watching config.yaml would load the entry, get 401, and launch a
+  # second concurrent OAuth flow (visible browser + callback-port conflict).
+  # The active-profile entry is written only after login and test pass.
   rm -rf "$isolated_home"
-  configure_hermes >/dev/null
   hermes_home="$isolated_home" configure_hermes >/dev/null
   ln -s "$real_home/tools" "$isolated_home/tools"
   set_hermes_entry_enabled "$isolated_home" true
@@ -616,6 +619,8 @@ PY
   install -m 600 "$token_dir/$mcp_name.json" "$real_home/mcp-tokens/$mcp_name.json"
   install -m 600 "$token_dir/$mcp_name.client.json" "$real_home/mcp-tokens/$mcp_name.client.json"
   install -m 600 "$token_dir/$mcp_name.meta.json" "$real_home/mcp-tokens/$mcp_name.meta.json"
+  # Entry is written to the active profile only now, after tokens exist.
+  hermes_home="$real_home" configure_hermes >/dev/null
   set_hermes_entry_enabled "$real_home" true
   HERMES_HOME="$real_home" hermes mcp test "$mcp_name"
   echo "login-hermes-ok entry=$mcp_name tokens=$real_home/mcp-tokens"
@@ -635,7 +640,6 @@ apply() {
   trust_ca_and_verify_public
   configure_mcp_oauth
   test_dcr
-  configure_hermes
   headless_hermes_login
   install_backup_service
   restore_test

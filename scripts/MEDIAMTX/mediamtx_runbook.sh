@@ -89,7 +89,7 @@ import json, sys, urllib.parse, urllib.request
 server, username, password = sys.argv[1:4]
 
 def mcp_call(name, args=None):
-    url=f'http://{server}/mcp'
+    url=f'https://{server}/mcp'
     init={"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"mediamtx-runbook","version":"1"}}}
     req=urllib.request.Request(url, data=json.dumps(init).encode(), headers={'Content-Type':'application/json','Accept':'text/event-stream, application/json'}, method='POST')
     with urllib.request.urlopen(req, timeout=60) as r:

@@ -108,13 +108,15 @@ The script performs these executable stages:
 12. Installs the Keycloak PostgreSQL one-shot backup service, runs it, verifies
     a readable dump catalog, and performs an isolated restore test into a throwaway
     database.
-13. Writes the Hermes MCP server entry with `auth: oauth`, explicit private-CA
-    `ssl_verify`, and `auto_reload_on_config_change: false`.
-14. Runs the real Hermes OAuth login non-interactively in an isolated Hermes
+13. Performs the Hermes OAuth login non-interactively in an isolated Hermes
     home, drives the Keycloak login and consent pages with
-    `scripts/kc-headless-login-driver.py`, copies only the resulting token files
-    into the active Hermes profile, enables the `camera` MCP entry, and verifies
-    it with `hermes mcp test camera`.
+    `scripts/kc-headless-login-driver.py`, waits for the callback to complete,
+    copies only the resulting token files into the active Hermes profile, then
+    writes the Hermes MCP server entry with `auth: oauth`, explicit private-CA
+    `ssl_verify`, and `auto_reload_on_config_change: false`, enables it, and
+    verifies it with `hermes mcp test camera`. The active-profile entry is
+    written only after login and test pass — never before, so no live Hermes
+    session can load it and launch a second concurrent OAuth flow.
 
 The script intentionally does not print generated secret values. It writes
 passwords only to root-owned files under `/opt/keycloak`.
@@ -253,6 +255,13 @@ display associated token files.
 
 ## Known pitfalls
 
+- `OAuth callback port 27890 already in use` / visible browser popup: a live
+  Hermes session loaded the entry mid-run. `mcp.auto_reload_on_config_change:
+  false` only protects processes that read it at startup — a session started
+  with the default `true` picks up an entry written during the run and opens a
+  visible browser whenever `DISPLAY`/`WAYLAND_DISPLAY` is present. Run Phase 2
+  from a session that has no camera entry loaded, and launch that session with
+  `env -u DISPLAY -u WAYLAND_DISPLAY BROWSER=/bin/false hermes` as a backstop.
 - `client-registration-policy/anonymous` returns 404 on Keycloak 26.7. Use realm
   components and select policies with `subType: anonymous`.
 - Component UUIDs change on every realm installation. Never reuse example UUIDs.
