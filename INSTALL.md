@@ -12,14 +12,14 @@ As you work through the scripts, keep an audit log in the folder that holds the 
 
 | Name | Value |
 |---|---|
-| `{{PRVT_NET_EN_NAME}}` | enp2s0 |
+| `{{PRVT_NET_EN_NAME}}` | enp171s0 |
 | `{{SERVER_FQDN}}`      | $HOSTNAME.home.arpa |
 | `{{CAMERA_USERNAME}}`  | admin |
 | `{{REPO_PATH}}`        | $HOME/onvif-mcp |
 | `{{SERVER_USER}}`      | $USER |
 | `{{CA_ROOT_PATH}}`     | $HOME/Private-CA |
 | `{{BACKUP_PATH}}`      | $HOME/camera-backup |
-| `{{SERVER_IP}}`        | 10.1.1.3 |
+| `{{SERVER_IP}}`        | 10.1.1.5 |
 | `{{GMAIL_ADDRESS}}`    | keycloak.admin.sample@gmail.com |
 
 **Runbooks**
