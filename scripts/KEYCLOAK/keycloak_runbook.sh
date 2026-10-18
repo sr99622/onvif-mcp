@@ -537,7 +537,13 @@ prepare_chrome_nss_trust() {
   if certutil -L -d "$nssdb" | grep -qF 'Camera System Root CA'; then
     echo "nss-trust-ok cert=Camera System Root CA already trusted"
   else
-    certutil -a -c 'Camera System Root CA' -t 'C,,' -i "$ca" -d "$nssdb"
+    # The CA file is root-only readable; certutil runs as the user, so work
+    # from a private readable copy rather than loosening permissions on /etc/nginx/tls.
+    local ca_copy
+    ca_copy="$(mktemp)"
+    sudo cat "$ca" > "$ca_copy"
+    certutil -A -n 'Camera System Root CA' -t 'C,,' -i "$ca_copy" -d "$nssdb"
+    rm -f "$ca_copy"
     echo "nss-trust-ok cert=Camera System Root CA added"
   fi
 }

@@ -215,6 +215,12 @@ EOF
   sudo ln -sfn /etc/nginx/sites-available/camera /etc/nginx/sites-enabled/camera
   sudo nginx -t
   sudo systemctl reload nginx.service
+  # Stabilization: a reload is asynchronous, and an endpoint test that runs
+  # immediately can still hit the pre-reload worker (observed 2026-10-18: /ca/
+  # cert files returned 403/404 against the old worker while the new config
+  # aliased /srv/camera-pki/public). Wait for the reloaded workers to serve the
+  # new config before any verification runs.
+  sleep 3
   systemctl is-active nginx.service
 }
 
