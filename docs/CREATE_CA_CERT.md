@@ -113,8 +113,7 @@ confirm `gpg-cache-warm` before continuing to step 2.
 
 ## 2. Prepare the CA workstation (AGENT-run)
 
-Install required packages, configure safe GPG-agent cache settings, and print
-non-secret state:
+Install required packages and print non-secret state:
 
 ```bash
 cd {{REPO_PATH}}
@@ -125,8 +124,8 @@ scripts/CREATE_CA_CERT/create_ca_cert_runbook.sh status \
 ```
 
 `agent-prep` may install `openssl`, `pass`, `gnupg`, `age`, and `util-linux` on
-Debian/Ubuntu hosts. It also removes the invalid `cache-ttl` GPG-agent directive
-if present and sets `default-cache-ttl 7200` plus `max-cache-ttl 7200`.
+Debian/Ubuntu hosts. GPG-agent cache settings are not modified by this script;
+manage them yourself (see the GPG_KEY runbook) if the agent TTL needs adjusting.
 
 ## 3. Create and back up the CA (AGENT-run)
 

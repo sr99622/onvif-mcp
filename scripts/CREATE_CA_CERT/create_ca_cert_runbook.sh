@@ -100,31 +100,6 @@ install_packages() {
   fi
 }
 
-configure_gpg_agent_cache() {
-  install -d -m 0700 "$HOME/.gnupg"
-  local conf="$HOME/.gnupg/gpg-agent.conf"
-  touch "$conf"
-  chmod 600 "$conf"
-  python3 - "$conf" <<'PY'
-import pathlib, sys
-p = pathlib.Path(sys.argv[1])
-lines = p.read_text().splitlines() if p.exists() else []
-out = []
-seen = set()
-for line in lines:
-    if line.startswith('cache-ttl'):
-        continue
-    key = line.split(maxsplit=1)[0] if line.strip() and not line.lstrip().startswith('#') else None
-    if key in {'default-cache-ttl', 'max-cache-ttl'}:
-        continue
-    out.append(line)
-out.append('default-cache-ttl 7200')
-out.append('max-cache-ttl 7200')
-p.write_text('\n'.join(out) + '\n')
-PY
-  gpgconf --reload gpg-agent || true
-}
-
 check_gpg_cache() {
   local gpg_id warm recipient
   gpg_id="$(cat "$HOME/.password-store/.gpg-id" 2>/dev/null || true)"
@@ -390,7 +365,6 @@ print_status() {
 
 case "$cmd" in
   agent-prep)
-    configure_gpg_agent_cache
     install_packages
     echo "agent-prep-ok"
     ;;
