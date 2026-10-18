@@ -130,14 +130,18 @@ check_gpg_cache() {
   gpg_id="$(cat "$HOME/.password-store/.gpg-id" 2>/dev/null || true)"
   [[ -n "$gpg_id" ]] || { echo "password-store .gpg-id missing; return to GPG_KEY.md." >&2; exit 1; }
   warm=0
-  for recipient in $gpg_id; do
-    # gpg -t checks whether the passphrase is cached in gpg-agent; in batch
-    # mode it never prompts, so a cold cache fails instead of blocking.
-    if gpg --batch -t --default-key "$recipient" >/dev/null 2>&1; then
+  # gpg -t is --textmode, not a cache test. In batch mode gpg never prompts,
+  # so a headless decrypt of an existing store entry fails on a cold cache
+  # instead of blocking; success proves the passphrase is cached. Recipients
+  # are read line-by-line so spaced fingerprints are not word-split.
+  entry="$(find "$HOME/.password-store" -name '*.gpg' -type f | head -1)"
+  while IFS= read -r recipient; do
+    [[ -n "$recipient" ]] || continue
+    if [[ -n "$entry" ]] && gpg --batch --quiet --default-key "$recipient" -d "$entry" >/dev/null 2>&1; then
       warm=1
       break
     fi
-  done
+  done <<< "$gpg_id"
   if [[ "$warm" == 1 ]]; then
     echo "gpg-cache-warm"
   else
