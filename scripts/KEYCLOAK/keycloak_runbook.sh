@@ -520,9 +520,32 @@ p.write_text(''.join(out))
 PY
 }
 
+prepare_chrome_nss_trust() {
+  # Headless Chrome uses its own NSS trust store (~/.pki/nssdb), not the system
+  # store. Without the CA in that store the driver's navigation lands on
+  # Chrome's error page instead of the login form. Ensure the store exists and
+  # trusts the Camera System Root CA before any login attempt (idempotent).
+  command -v certutil >/dev/null || sudo DEBIAN_FRONTEND=noninteractive apt-get install -y libnss3-tools
+  local nssdb="${HOME}/.pki/nssdb"
+  if [[ ! -d "$nssdb" ]]; then
+    install -d -m 700 "$nssdb"
+    certutil -N -d "$nssdb" --empty-password
+    echo "nssdb-initialized $nssdb"
+  fi
+  local ca="/etc/nginx/tls/camera-system-root-ca.crt.pem"
+  sudo test -s "$ca"
+  if certutil -L -d "$nssdb" | grep -qF 'Camera System Root CA'; then
+    echo "nss-trust-ok cert=Camera System Root CA already trusted"
+  else
+    certutil -a -c 'Camera System Root CA' -t 'C,,' -i "$ca" -d "$nssdb"
+    echo "nss-trust-ok cert=Camera System Root CA added"
+  fi
+}
+
 headless_hermes_login() {
   require_arg --server-fqdn "$server_fqdn"
   require_arg --repo-path "$repo_path"
+  prepare_chrome_nss_trust
   local real_home="${HOME}/.hermes" isolated_home login_log auth_url login_pid token_dir
   isolated_home="${hermes_home%/}-login"
   login_log="$(mktemp)"

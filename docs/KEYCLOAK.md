@@ -139,6 +139,13 @@ complete, and then verifies the active profile. The driver reads
 `/opt/keycloak/mcp-user.pass` via `sudo cat` and never prints credentials or
 token values.
 
+Before the login attempt, `login-hermes` ensures headless Chrome trusts the
+Camera System Root CA. Headless Chrome uses its own NSS trust store
+(`~/.pki/nssdb`), not the system store, so the script initializes that store if
+missing and adds the CA (idempotent). Without this the driver's navigation
+lands on Chrome's error page, which must never be treated as the login form;
+the driver fails fast with a clear message if it reaches an error page.
+
 If you need to rerun only the Hermes OAuth login step, use the subcommand below;
 it is non-interactive and must not be replaced with a manual browser flow:
 

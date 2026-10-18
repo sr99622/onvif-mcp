@@ -137,6 +137,10 @@ def main():
         for step in range(8):
             url = evaluate(sock, mid + 1, "location.href") or ""
             parsed = urllib.parse.urlparse(url)
+            if url.startswith("chrome-error://"):
+                print("chrome error page: navigation failed (certificate not trusted? "
+                      "check the NSS trust store ~/.pki/nssdb); not treated as a login form")
+                return 5
             if parsed.hostname in ("127.0.0.1", "localhost"):
                 keys = list(urllib.parse.parse_qs(parsed.query))  # values never printed
                 print("callback delivered:", parsed.netloc + parsed.path, "| params:", keys)
@@ -148,7 +152,7 @@ def main():
                 evaluate(sock, mid + 1,
                          "(function(){var b=document.querySelector('input[name=accept]')"
                          "||document.querySelector('button[type=submit]');b.click();})()")
-            elif 'name="username"' in html or "password" in html:
+            elif evaluate(sock, mid + 1, "!!document.querySelector('input[name=username]')"):
                 print(f"step {step}: login form")
                 expr = ("(function(){var u=document.querySelector('input[name=username]');"
                         "var p=document.querySelector('input[name=password]');"
