@@ -72,6 +72,14 @@ scripts/KEYCLOAK_BACKUP/keycloak_backup_runbook.sh create-checkpoint \
   --host-unit-checkpoint not-recorded
 ```
 
+The value must be a path the nginx script has already published, captured from its
+`create-checkpoint-ok <path>` line. A checkpoint cannot reference a partner that
+does not exist yet, so the pair is recorded only in whichever checkpoint is created
+second; the earlier one keeps `not recorded`. The two checkpoints normally have
+different timestamps — the pair is identified by this metadata reference, not by
+matching directory names, and a timestamped checkpoint directory must never be
+pre-created.
+
 The script performs the checkpoint workflow:
 
 - verifies Docker, Keycloak/PostgreSQL, `/opt/keycloak` modes, and the one-shot
@@ -147,3 +155,8 @@ principles:
   after the service.
 - Do not mutate a completed checkpoint to add compatible nginx or host-unit
   references. Create a newer checkpoint instead.
+- `--trigger` is required and is provenance metadata only; nothing in the script
+  logic uses it. Because the history is shared across runbooks and directories are
+  named only by timestamp, the Trigger line is the sole record of which runbook and
+  which state produced a recovery point, and restore selection depends on it. Never
+  rely on a default trigger value.

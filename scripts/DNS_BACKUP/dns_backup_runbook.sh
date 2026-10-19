@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  dns_backup_runbook.sh create-checkpoint --server-fqdn HOST --server-ip IP --rvrs-srv-ip REVERSED_IP --upstream-dns IP --backup-path PATH [--trigger NAME]
+  dns_backup_runbook.sh create-checkpoint --server-fqdn HOST --server-ip IP --rvrs-srv-ip REVERSED_IP --upstream-dns IP --backup-path PATH --trigger NAME
   dns_backup_runbook.sh status --backup-path PATH
 
 Implements the "Create a checkpoint" section of docs/DNS_BACKUP.md.
@@ -14,7 +14,7 @@ USAGE
 cmd="${1:-}"; [[ -n "$cmd" ]] || { usage; exit 64; }
 [[ "$cmd" == "-h" || "$cmd" == "--help" ]] && { usage; exit 0; }
 shift || true
-server_fqdn=""; server_ip=""; rvrs_srv_ip=""; upstream_dns=""; backup_path=""; trigger="DNS.md"
+server_fqdn=""; server_ip=""; rvrs_srv_ip=""; upstream_dns=""; backup_path=""; trigger=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --server-fqdn) server_fqdn="${2:?missing --server-fqdn value}"; shift 2 ;;
@@ -29,7 +29,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 require_arg() { local name="$1" value="$2"; [[ -n "$value" ]] || { echo "Missing required argument: $name" >&2; exit 64; }; }
-require_all() { require_arg --server-fqdn "$server_fqdn"; require_arg --server-ip "$server_ip"; require_arg --rvrs-srv-ip "$rvrs_srv_ip"; require_arg --upstream-dns "$upstream_dns"; require_arg --backup-path "$backup_path"; }
+require_all() { require_arg --server-fqdn "$server_fqdn"; require_arg --server-ip "$server_ip"; require_arg --rvrs-srv-ip "$rvrs_srv_ip"; require_arg --upstream-dns "$upstream_dns"; require_arg --backup-path "$backup_path"; require_arg --trigger "$trigger"; }
 backup_root() { printf '%s/dns' "${backup_path%/}"; }
 
 require_backup_location() {

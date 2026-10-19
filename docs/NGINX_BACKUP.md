@@ -71,6 +71,14 @@ scripts/NGINX_BACKUP/nginx_backup_runbook.sh create-checkpoint \
   --compatible-keycloak-checkpoint /mnt/camera-backup/keycloak/YYYYMMDDHHMMSSZ
 ```
 
+The value must be a path the Keycloak script has already published, captured from
+its `create-checkpoint-ok <path>` line. A checkpoint cannot reference a partner
+that does not exist yet, so the pair is recorded only in whichever checkpoint is
+created second; the earlier one keeps `not recorded`. The two checkpoints normally
+have different timestamps — the pair is identified by this metadata reference, not
+by matching directory names, and a timestamped checkpoint directory must never be
+pre-created.
+
 The script performs the checkpoint workflow:
 
 - verifies `nginx -t`, active HTTPS listener evidence, enabled-site inventory,

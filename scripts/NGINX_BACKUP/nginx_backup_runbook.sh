@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'USAGE'
 Usage:
-  nginx_backup_runbook.sh create-checkpoint --server-fqdn HOST --backup-path PATH [--trigger NAME] [--compatible-keycloak-checkpoint PATH]
+  nginx_backup_runbook.sh create-checkpoint --server-fqdn HOST --backup-path PATH --trigger NAME [--compatible-keycloak-checkpoint PATH]
   nginx_backup_runbook.sh status --backup-path PATH
 
 Implements only the "Create a checkpoint" workflow from docs/NGINX_BACKUP.md.
@@ -14,7 +14,7 @@ USAGE
 cmd="${1:-}"; [[ -n "$cmd" ]] || { usage; exit 64; }
 [[ "$cmd" == "-h" || "$cmd" == "--help" ]] && { usage; exit 0; }
 shift || true
-server_fqdn=""; backup_path=""; trigger="KEYCLOAK.md"; compatible_keycloak_checkpoint="not recorded"
+server_fqdn=""; backup_path=""; trigger=""; compatible_keycloak_checkpoint="not recorded"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --server-fqdn) server_fqdn="${2:?missing --server-fqdn value}"; shift 2 ;;
@@ -178,7 +178,7 @@ write_metadata() {
 }
 
 create_checkpoint() {
-  require_arg --server-fqdn "$server_fqdn"; require_arg --backup-path "$backup_path"; require_backup_location; preflight
+  require_arg --server-fqdn "$server_fqdn"; require_arg --backup-path "$backup_path"; require_arg --trigger "$trigger"; require_backup_location; preflight
   local root timestamp staging final
   root="$(backup_root)"
   timestamp="$(date -u +%Y%m%d%H%M%SZ)"

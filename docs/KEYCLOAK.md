@@ -216,10 +216,24 @@ scripts/KEYCLOAK_BACKUP/keycloak_backup_runbook.sh create-checkpoint \
   --trigger KEYCLOAK.md
 ```
 
-If creating coordinated nginx and Keycloak checkpoints, prepare both target paths
-and pass the compatible checkpoint path to the other script before publication.
-Publish only after each checkpoint's own checks pass. Do not mutate a completed
-checkpoint to add links.
+If creating a coordinated nginx and Keycloak pair, work in the order above and
+link them one-directionally:
+
+1. Run the first script and capture the path it publishes on its
+   `create-checkpoint-ok <path>` line.
+2. Pass that path to the second script's `--compatible-*` flag so the second
+   checkpoint records the pair.
+
+The first checkpoint records `not recorded` for its counterpart. That is the
+expected result, not a defect: a completed checkpoint cannot be edited to add
+the reverse link, so a fully linked pair is not achievable. If a linked pair is
+needed after one side is already published, create a new pair instead.
+
+Each script generates its own capture timestamp at publication. The pair is
+identified by the metadata reference, not by matching directory names, so the
+two timestamps are normally different. Do not pre-create a timestamped checkpoint
+directory: the scripts refuse an existing name and abort. Publish only after each
+checkpoint's own checks pass.
 
 Host-unit configuration outside nginx is separate. Reinstall the backup script
 and unit from this runbook's script rather than storing them in nginx or
