@@ -42,6 +42,10 @@ import json, sys, urllib.request, datetime
 server=sys.argv[1]
 def mcp_call(name, args=None):
     url=f'https://{server}/mcp'
+    try:
+        urllib.request.urlopen(urllib.request.Request(url, method='GET'), timeout=10)
+    except Exception:
+        url=f'http://{server}/mcp'
     init={"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"apps-runbook","version":"1"}}}
     with urllib.request.urlopen(urllib.request.Request(url, data=json.dumps(init).encode(), headers={'Content-Type':'application/json','Accept':'text/event-stream, application/json'}, method='POST'), timeout=60) as r:
         sid=r.headers.get('mcp-session-id'); r.read()

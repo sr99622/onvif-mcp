@@ -89,7 +89,14 @@ import json, sys, urllib.parse, urllib.request
 server, username, password = sys.argv[1:4]
 
 def mcp_call(name, args=None):
+    # TLS is added by a later runbook (SITE_CERT); at this stage the MCP endpoint
+    # is plain HTTP. Try https first, fall back to http so the script works both
+    # before and after TLS is configured.
     url=f'https://{server}/mcp'
+    try:
+        urllib.request.urlopen(urllib.request.Request(url, method='GET'), timeout=10)
+    except Exception:
+        url=f'http://{server}/mcp'
     init={"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"mediamtx-runbook","version":"1"}}}
     req=urllib.request.Request(url, data=json.dumps(init).encode(), headers={'Content-Type':'application/json','Accept':'text/event-stream, application/json'}, method='POST')
     with urllib.request.urlopen(req, timeout=60) as r:

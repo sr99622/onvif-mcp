@@ -8,7 +8,7 @@ Do not obsess over every camera detail. Many cameras have bugs that will cause t
 
 As you work through the scripts, keep an audit log in the folder that holds the script. Please suppress the echo to terminal when writing the logs so that the file edits do not display in the user interface, which is very distracting to the user. Record any files that are downloaded with the exact url used to download the file. Any programs that are installed, record the name and the version of the program. If errors or issues are encountered, record the error and the steps used to overcome it. The log should  be written to the same folder in the scripts/ directory as the script itself and have the same name root as the script with a .log extension, e.g. onvif-mcp/scripts/GPG_KEY/gpg_key_runbook.log. Create a {{BACKUP_PATH}}/log folder and copy each log file there.
 
-There are several scripts that require camera data that is acquired using the camera MCP server. Call the MCP server from within the agent context. ** DO NOT ATTEMPT TO CALL THE CAMERA MCP SERVER DIRECTLY FROM A MANUALLY WRITTEN PYTHON SCRIPT **, you will almost certainly fail to do this properly. ** ALWAYS CALL THE CAMERA MCP SERVER FROM WITHIN AGENT CONTEXT **.
+There are several scripts that require camera data that is acquired using the camera MCP server tool get_cameras. Call the MCP server from within the agent context. Do not attempt to call the camera MCP server from a manually written python script, you will almost certainly fail to do this properly.
 
 **Required Values**
 
