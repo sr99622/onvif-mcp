@@ -14,8 +14,7 @@ The scripts below configure the server in preparation for the installation of th
 * Install the uv python management system
 * Download Nerd Fonts for LazyVim
 * Refresh the font cache, which may require a second attempt for successful completion
-* The terminal will exit to install the Nerd Fonts, continue with the second part of the script in a new terminal
-* The second part of the script installs LazyVim and Hermes
+* Install LazyVim and Hermes
 * Hermes requires a model that it can run, you can use you ChatGPT, Claude, Local or other model
 
 **NOTE**: The document assumes that all commands are run from the $HOME directory.

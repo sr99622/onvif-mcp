@@ -35,6 +35,7 @@ replace it with ad hoc shell fragments from this document.
 | `{{SMB_SERVER_FQDN}}` | FQDN of the machine hosting the Samba share |
 | `{{SMB_USERNAME}}` | Existing Linux account on the SMB host that exclusively owns this share |
 | `{{SMB_MOUNT}}` | Mount point on the camera host |
+| `{{REPO_PATH}}` | The full pathname to this repository |
 
 ## Non-echo value entered at runtime
 
