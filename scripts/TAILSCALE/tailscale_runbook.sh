@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 usage() { cat <<'HELP'
-Usage: tailscale_runbook.sh apply|verify|status --server-fqdn FQDN [--tailscale-ip IP] [--lan-dns IP] [--subnet CIDR]
-       tailscale_runbook.sh remove
+Usage: tailscale_runbook.sh apply|verify|status --server-fqdn FQDN --lan-dns IP --subnet CIDR [--tailscale-ip IP]
+       tailscale_runbook.sh remove --subnet CIDR
 Configures an isolated DNS-only dnsmasq instance for Tailscale.
+--lan-dns and --subnet are resolved from the runbook Required Values
+({{LAN_DNS_IP}} and {{LAN_SUBNET}}); the script carries no installation defaults.
 Unknown home.arpa names are forwarded to the LAN dnsmasq instance (single source of truth);
 the server's own name is answered locally with the Tailscale IP.
 The Tailscale admin console split-DNS setting and subnet-route enablement are configured separately.
 HELP
 }
 cmd="${1:-}"; [[ -n "$cmd" ]] || { usage; exit 64; }; shift || :
-fqdn=""; ip=""; lan_dns="10.1.1.6"; subnet="10.1.1.0/24"
+fqdn=""; ip=""; lan_dns=""; subnet=""
 while (($#)); do
  case "$1" in
   --server-fqdn) fqdn="${2:?missing fqdn}"; shift 2;;
@@ -34,6 +36,8 @@ get_ip() {
 }
 validate() {
  [[ "$fqdn" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*\.home\.arpa$ ]] || { echo 'Expected --server-fqdn under home.arpa' >&2; exit 64; }
+ [[ -n "$lan_dns" ]] || { echo 'Missing --lan-dns (resolve {{LAN_DNS_IP}} from the runbook Required Values)' >&2; exit 64; }
+ [[ -n "$subnet" ]] || { echo 'Missing --subnet (resolve {{LAN_SUBNET}} from the runbook Required Values)' >&2; exit 64; }
  get_ip
 }
 apply() {
@@ -76,10 +80,8 @@ ENDUNIT
  sudo systemctl daemon-reload
  sudo systemctl enable --now dnsmasq-tailscale.service
  sudo systemctl restart dnsmasq-tailscale.service
- if [[ -n "$subnet" ]]; then
-  sudo tailscale set --advertise-routes="$subnet"
-  echo "Advertised subnet route $subnet. Enable it in Admin Console > Machines > this node > Edit route settings if not auto-approved."
- fi
+ sudo tailscale set --advertise-routes="$subnet"
+ echo "Advertised subnet route $subnet. Enable it in Admin Console > Machines > this node > Edit route settings if not auto-approved."
  verify
  echo 'Next: Tailscale Admin Console > DNS > restricted nameserver for home.arpa must point at the IP above; enable the advertised subnet route.'
 }
@@ -92,9 +94,7 @@ verify() {
  grep -Fx "address=/$fqdn/$ip" "$CONF" >/dev/null
  grep -Fx "server=$lan_dns" "$CONF" >/dev/null
  [[ "$(dig +time=2 +tries=1 +short @"$ip" "$fqdn" A)" == "$ip" ]] || { echo 'DNS lookup failed' >&2; exit 1; }
- if [[ -n "$subnet" ]]; then
-  tailscale status --json | grep -q "$subnet" || echo "WARNING: subnet $subnet not visible in tailscale status; enable the route in the admin console." >&2
- fi
+ tailscale status --json | grep -q "$subnet" || echo "WARNING: subnet $subnet not visible in tailscale status; enable the route in the admin console." >&2
  for proto in udp tcp; do
   sudo ss -H "$( [[ "$proto" == tcp ]] && echo -lntp || echo -lnup )" 'sport = :53' | grep -F "$ip:53" >/dev/null || { echo "Missing $proto listener" >&2; exit 1; }
  done
@@ -107,10 +107,11 @@ status() {
  echo '== configuration =='; sudo cat "$CONF" || :
 }
 remove() {
+ [[ -n "$subnet" ]] || { echo 'Missing --subnet (resolve {{LAN_SUBNET}} from the runbook Required Values)' >&2; exit 64; }
  sudo systemctl disable --now dnsmasq-tailscale.service
  sudo rm -f "$SERVICE" "$CONF"
  sudo systemctl daemon-reload
- if [[ -n "$subnet" ]]; then sudo tailscale set --advertise-routes=; fi
+ sudo tailscale set --advertise-routes=
  echo 'Tailscale DNS service removed. Remove the home.arpa split-DNS nameserver in Tailscale Admin Console manually.'
 }
 case "$cmd" in

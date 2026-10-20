@@ -114,7 +114,8 @@ Review the output before applying changes, especially if Tailscale's IP changed.
 
 ## 1. Apply the Tailscale DNS configuration (AGENT-run)
 
-Run the script's `apply` command with `--server-fqdn {{SERVER_FQDN}}`.
+Run the script's `apply` command with `--server-fqdn {{SERVER_FQDN}}`,
+`--lan-dns {{LAN_DNS_IP}}`, and `--subnet {{LAN_SUBNET}}`.
 
 The `apply` command:
 
@@ -162,7 +163,8 @@ resolver settings on remote devices.
 
 ## 4. Verify (AGENT-run and remote-client test)
 
-Run the script's `verify` command with `--server-fqdn {{SERVER_FQDN}}`.
+Run the script's `verify` command with `--server-fqdn {{SERVER_FQDN}}`,
+`--lan-dns {{LAN_DNS_IP}}`, and `--subnet {{LAN_SUBNET}}`.
 It checks configuration syntax, service enabled/active state, the expected DNS
 record, the `server={{LAN_DNS_IP}}` forwarding line, the advertised route, and
 UDP/TCP listeners on the Tailscale IP.
@@ -209,10 +211,10 @@ Use the script's `status` command. Investigate the following in order:
 
 ## 6. Rollback (AGENT-run plus MANUAL)
 
-Run the script's `remove` command to disable the Tailscale-only DNS service,
-remove its unit/configuration, and un-advertise `{{LAN_SUBNET}}`. Then remove
-the restricted `home.arpa` nameserver from the Tailscale admin console. Existing
-LAN and camera DNS are unchanged.
+Run the script's `remove` command with `--subnet {{LAN_SUBNET}}` to disable the
+Tailscale-only DNS service, remove its unit/configuration, and un-advertise the
+route. Then remove the restricted `home.arpa` nameserver from the Tailscale
+admin console. Existing LAN and camera DNS are unchanged.
 
 ## Security and scope
 
