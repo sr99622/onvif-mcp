@@ -44,6 +44,8 @@ assume the historical value remains current.
 | `10.1.1.6:53` | `/etc/dnsmasq.d-10/` | `10.1.1.6` | per that conf-dir (authoritative host list) |
 | `{{TAILSCALE_IP}}:53` | `/etc/dnsmasq.d-tailscale/tailscale.conf` | `{{TAILSCALE_IP}}` | forwarded to `{{LAN_DNS_IP}}` |
 
+- The table above shows multiple DNS server nodes configured on the same machine 
+  for separate network adapters on independent subnets.
 - Values shown above are for example purposes only, do not assume that they apply
   to the current installation. In most cases, there will only be one local network
   to consider, this example shows two local networks.
@@ -145,7 +147,7 @@ unaffected.
 
 Tailnet ACLs/grants must permit the subnet for the clients that need it.
 
-## 3. Configure split DNS in Tailscale (MANUAL)
+## 3. Configure split DNS in Tailscale (USER-run MANUAL)
 
 In the [Tailscale DNS admin console](https://login.tailscale.com/admin/dns):
 
