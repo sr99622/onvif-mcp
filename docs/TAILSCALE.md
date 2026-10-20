@@ -2,6 +2,9 @@
 
 ## Purpose
 
+For the purposes of example, the name `nuc.home.arpa` is used as the 
+{{SERVER_FQDN}} in this document. Your actual installation will be different.
+
 Enable remote access to the existing OAuth-protected HTTPS camera server at
 `https://nuc.home.arpa` over Tailscale, without replacing its certificate or
 changing OAuth redirect URLs. Tailscale's MagicDNS name
@@ -23,10 +26,10 @@ The Tailscale admin-console operation is a manual step.
 | Symbol | Value / description |
 |---|---|
 | `{{SERVER_FQDN}}` | `nuc.home.arpa` for this installation |
-| `{{TAILSCALE_IP}}` | Detected from `tailscale ip -4`; currently `100.102.249.72` |
+| `{{TAILSCALE_IP}}` | Detected from `tailscale ip -4` |
 | `{{REPO_PATH}}` | Local checkout of `onvif-mcp` |
 | `{{TAILNET_DNS_NAME}}` | `nuc.tail7fbde1.ts.net` (not the HTTPS URL) |
-| `{{LAN_DNS_IP}}` | LAN dnsmasq instance that holds the host mappings; `10.1.1.6` for this installation |
+| `{{LAN_DNS_IP}}` | LAN dnsmasq instance that holds the host mappings |
 | `{{LAN_SUBNET}}` | `10.1.1.0/24` — advertised as a Tailscale subnet route |
 
 **Agent presentation rule:** Resolve placeholders before showing or executing
@@ -35,12 +38,15 @@ assume the historical value remains current.
 
 ## Architecture and design decisions
 
-| DNS endpoint | dnsmasq configuration | Answer for `nuc.home.arpa` | Other `home.arpa` names |
+| DNS endpoint | dnsmasq configuration | Answer for `{{SERVER_FQDN}}` | Other `home.arpa` names |
 |---|---|---|---|
 | `192.168.68.6:53` | `/etc/dnsmasq.d/camera-system.conf` | `192.168.68.6` | per that conf-dir |
 | `10.1.1.6:53` | `/etc/dnsmasq.d-10/` | `10.1.1.6` | per that conf-dir (authoritative host list) |
 | `{{TAILSCALE_IP}}:53` | `/etc/dnsmasq.d-tailscale/tailscale.conf` | `{{TAILSCALE_IP}}` | forwarded to `{{LAN_DNS_IP}}` |
 
+- Values shown above are for example purposes only, do not assume that they apply
+  to the current installation. In most cases, there will only be one local network
+  to consider, this example shows two local networks./
 - The new DNS instance is separate from the existing LAN and camera DNS services.
 - Bind only to the Tailscale IPv4 address, on UDP and TCP port 53; do not bind
   to `0.0.0.0`, localhost, or either LAN interface.
