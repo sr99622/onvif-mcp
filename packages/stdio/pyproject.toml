@@ -1,6 +1,6 @@
 [project]
 name = "onvif-mcp-stdio"
-version = "0.1.10"
+version = "0.1.11"
 description = "MCP server for ONVIF camera using stdio transport"
 requires-python = ">=3.10"
 dependencies = [
@@ -12,6 +12,9 @@ dependencies = [
 
 [project.scripts]
 onvif-mcp-stdio = "camera:main"
+
+[tool.uv]
+package = true
 
 [tool.uv.sources]
 onvif-mcp-core = { workspace = true }
