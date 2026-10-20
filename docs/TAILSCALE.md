@@ -8,7 +8,7 @@ For the purposes of example, the name `nuc.home.arpa` is used as the
 Enable remote access to the existing OAuth-protected HTTPS camera server at
 `https://nuc.home.arpa` over Tailscale, without replacing its certificate or
 changing OAuth redirect URLs. Tailscale's MagicDNS name
-(`nuc.tail7fbde1.ts.net`) is **not** used as the HTTPS origin because the
+(`nuc.tailxxxxxx.ts.net`) is **not** used as the HTTPS origin because the
 existing certificate covers `nuc.home.arpa`.
 
 The executable workflow lives in:
@@ -28,7 +28,7 @@ The Tailscale admin-console operation is a manual step.
 | `{{SERVER_FQDN}}` | `nuc.home.arpa` for this installation |
 | `{{TAILSCALE_IP}}` | Detected from `tailscale ip -4` |
 | `{{REPO_PATH}}` | Local checkout of `onvif-mcp` |
-| `{{TAILNET_DNS_NAME}}` | `nuc.tail7fbde1.ts.net` (not the HTTPS URL) |
+| `{{TAILNET_DNS_NAME}}` | `nuc.tailxxxxxx.ts.net` (not the HTTPS URL) |
 | `{{LAN_DNS_IP}}` | LAN dnsmasq instance that holds the host mappings |
 | `{{LAN_SUBNET}}` | `10.1.1.0/24` — advertised as a Tailscale subnet route |
 
@@ -46,7 +46,7 @@ assume the historical value remains current.
 
 - Values shown above are for example purposes only, do not assume that they apply
   to the current installation. In most cases, there will only be one local network
-  to consider, this example shows two local networks./
+  to consider, this example shows two local networks.
 - The new DNS instance is separate from the existing LAN and camera DNS services.
 - Bind only to the Tailscale IPv4 address, on UDP and TCP port 53; do not bind
   to `0.0.0.0`, localhost, or either LAN interface.
