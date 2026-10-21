@@ -113,7 +113,7 @@ def verify(iface, expected, gateway, dns, profile):
         raise RuntimeError('Unexpected active connection profile')
     if device(iface, 'IP4.GATEWAY') != gateway:
         raise RuntimeError('Gateway differs from captured DHCP gateway')
-    if device(iface, 'IP4.DNS').splitlines() != dns:
+    if device(iface, 'IP4.DNS').split("|") != dns:
         raise RuntimeError('DNS differs from captured DHCP DNS servers')
     routes = json.loads(run('ip', '-j', '-4', 'route', 'show', 'default', 'dev', iface))
     if not any(r.get('gateway') == gateway for r in routes):
@@ -123,7 +123,7 @@ def main():
     candidates = []
     for line in nm('-t', '-f', 'DEVICE,TYPE,STATE', 'device', 'status').splitlines():
         iface, kind, state = line.split(':')
-        if kind != 'ethernet' or state != 'connected':
+        if kind not in ['ethernet', 'wifi'] or state != 'connected':
             continue
         profile = device(iface, 'GENERAL.CON-UUID')
         if setting(profile, 'ipv4.method') == 'auto' and device(iface, 'IP4.GATEWAY'):
@@ -152,7 +152,7 @@ def main():
     cidr = lease_cidrs[0]
     current = ipaddress.IPv4Interface(cidr)
     gateway = device(iface, 'IP4.GATEWAY')
-    dns = device(iface, 'IP4.DNS').splitlines()
+    dns = device(iface, 'IP4.DNS').split("|")
     search = device(iface, 'IP4.DOMAIN').splitlines()
     if not gateway or not dns:
         raise RuntimeError('DHCP gateway or DNS is missing')
@@ -178,7 +178,7 @@ def main():
             print('Choose another address.', flush=True)
     if device(iface, 'GENERAL.CON-UUID') != old or addresses(iface) != initial_addresses:
         raise RuntimeError('Connection or addresses changed during input; rerun the script')
-    if device(iface, 'IP4.GATEWAY') != gateway or device(iface, 'IP4.DNS').splitlines() != dns:
+    if device(iface, 'IP4.GATEWAY') != gateway or device(iface, 'IP4.DNS').split("|") != dns:
         raise RuntimeError('DHCP settings changed during input; rerun the script')
 
     recovery = static = None
