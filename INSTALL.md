@@ -60,7 +60,7 @@ At the completion of Phase 1, pause and allow the user to check for available co
 
 [KEYCLOAK_EMAIL.md](docs/KEYCLOAK_EMAIL.md)
 
-The system is now installed, pause and allow the user to check for available context. Continue with Phase 3 to add users by adding entries to the table below. 
+The system is now installed, pause and allow the user to check for available context before continuing with Phase 3 to add users by adding entries to the table below. 
 
 ### Phase 3.
 
@@ -77,6 +77,8 @@ Runbook
 
 [ADD_USER_EMAIL](docs/ADD_USER_EMAIL)
 
+Pause and allow the user to check their email and test the camera apps before continuing. Remind the user to affirm a successful login attempt and request a backup.
+
 ### Phase 4.
 
 Required Values
@@ -89,5 +91,4 @@ Runbook
 
 [ADD_CLIENT_ON_SERVER](docs/ADD_CLIENT_ON_SERVER)
 
-
-
+Pause and allow the user to verfiy a successful hermes mcp login before continuing. Remind the user to affirm a successful login attempt and request a backup.
