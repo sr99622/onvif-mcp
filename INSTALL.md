@@ -14,15 +14,15 @@ There are several scripts that require camera data that is acquired using the ca
 
 | Name | Value |
 |---|---|
-| `{{PRVT_NET_EN_NAME}}` | enp171s0 |
+| `{{PRVT_NET_EN_NAME}}` | --- |
+| `{{SERVER_IP}}`        | --- |
+| `{{GMAIL_ADDRESS}}`    | --- |
 | `{{SERVER_FQDN}}`      | $HOSTNAME.home.arpa |
 | `{{CAMERA_USERNAME}}`  | admin |
 | `{{REPO_PATH}}`        | $HOME/onvif-mcp |
 | `{{SERVER_USER}}`      | $USER |
 | `{{CA_ROOT_PATH}}`     | $HOME/Private-CA |
 | `{{BACKUP_PATH}}`      | $HOME/camera-backup |
-| `{{SERVER_IP}}`        | 10.1.1.5 |
-| `{{GMAIL_ADDRESS}}`    | keycloak.admin.sample@gmail.com |
 
 **Runbooks**
 
@@ -68,10 +68,10 @@ Required Values
 
 | Name | Description |
 |---|---|
-| `{{NEW_USER_LOGIN}}` | stephen |
-| `{{FIRST_NAME}}` | Stephen |
-| `{{LAST_NAME}}` | Rhodes |
-| `{{USER_EMAIL}}` | sr99622@gmail.com |
+| `{{NEW_USER_LOGIN}}` | --- |
+| `{{FIRST_NAME}}` | --- |
+| `{{LAST_NAME}}` | --- |
+| `{{USER_EMAIL}}` | --- |
 
 Runbook
 
@@ -83,7 +83,7 @@ Required Values
 
 | Name | Description |
 |---|---|
-| `{{CLIENT_SOURCE_IP}}` | 192.168.68.57 |
+| `{{CLIENT_SOURCE_IP}}` | --- |
 
 Runbook
 

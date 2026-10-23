@@ -4,7 +4,7 @@ This is a suggested configuration for the server. The best way to build this sys
 
 The camera system requires a static IP address on the LAN. You may need to consult your router settings to know what the range of acceptable static IP addresses is available on your LAN. These will usually be at the bottom and top of the range of the last dot number of the IP address between 0 and 255. The x.x.x.1 address is usually reserved for the router. The script that sets the static IP address will preserve the settings from the default address assigned by your router when the system is first started, so the only thing you need to provide is the static IP. If you run the command `ip a` or `nmcli dev show` you should be able to identify the current IP address. When prompted to enter the static IP address, you re-use the first three dot numbers of the existing default address and change only the last number. If you are unsure what to use for the last dot number, .4 is a good guess. The script will prompt you for the address when it runs.
 
-The scripts below configure the server in preparation for the installation of the camera system. The scripts are broken up into two parts because it is necessary to re-start the terminal to install the font library needed for LazyVim. The scripts perform these functions needed for proper operation of the camera system
+The script below configures the server in preparation for the installation of the camera system. Upon completion of the script, the terminal will exit. Restart the terminal and start hermes to begin system configuration.
 
 * Essential dependencies needed for Hermes and LazyVim
 * SSH server for remote access, enabled and started
@@ -21,7 +21,7 @@ The scripts below configure the server in preparation for the installation of th
 
 ##  Part 1. Install dependencies and set static IP
 
-This script will exit the terminal when done. Re-open the terminal and run the second part.
+This script will exit the terminal when done.
 
 ```
 sudo apt install git curl tar xz-utils build-essential ripgrep wl-clipboard xclip xsel openssh-server -y
@@ -91,7 +91,8 @@ return {
 EOF
 nvim --headless "+Lazy! sync" +qa > /dev/null 2>&1
 curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
-echo "The camera server preparation is complete. Press the enter key to exit the terminal. Open a new terminal and follow the instructions in the INSTALL.md runbook."
+printf "\n\n"
+echo "The camera server preparation is complete. Press the enter key to exit the terminal. Open a new terminal, start hermes, then prompt hermes to follow the instructions in the INSTALL.md runbook."
 read </dev/tty
 exit
 ```

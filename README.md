@@ -60,7 +60,7 @@ A complex system in a production environment requires a robust backup strategy t
 
 ## Building the Server
 
-The Hermes agent is used to perform the configuration by running the plan set in the [INSTALL.md](docs/INSTALL.md) runbook. Required Values needed for the installation are set in the tables prior to asking Hermes to configure the system.
+The Hermes agent is used to perform the configuration by running the plan set in the [INSTALL.md](docs/INSTALL.md) runbook. Required Values needed for the installation are set in the tables prior to asking Hermes to configure the system. Default values are prefilled in the table, values showing as `---` need to be entered by the user based on site specific requirements.
 
 Be mindful of model context size when running the configurations shown below. Starting a fresh context after it reaches 50 percent is advised. Runbooks can be executed individually on systems with modest context if necessary. The runbooks can be found in the `{{REPO_PATH}}/docs` directory. The runbooks are intended to be executed in the order listed.
 
@@ -76,17 +76,21 @@ Be mindful of model context size when running the configurations shown below. St
 
   Enter Required Values into the tables in [INSTALL.md](INSTALL.md), including users and allowed machine IP addresses.
 
+  * `{{PRVT_NET_EN_NAME}}`
+
+    The name of the ethernet adapter used for hosting the private camera subnet. The adapter should first be connected to the switch, then run the `nmcli dev show` command to look for the unconnected ethernet adapter. There should be one connected adapter that has the static IP address set earlier during server preparation, which should be left undisturbed.
+
   * `{{SERVER_IP}}`
 
     The static IP address of the server set during the server preparation step.
 
+  * `{{GMAIL_ADDRESS}}`
+
+    A Gmail address that can be used by the server to send out subscription emails for system users to sign up for a password to allow access. Please refer to [KEYCLOAK_EMAIL.md](docs/KEYCLOAK_EMAIL.md) for more details. The salient point here is that the google email account needs an App Password set that allows the script to automatically send the subscription email. Note that the App Password setting will require two factor authentication for the google account. To set this up, sign up for a gmail account and follow the instructions at [Google app passwords](https://support.google.com/accounts/answer/185833) and [Gmail SMTP settings](https://support.google.com/mail/answer/7104828).
+
   * `{{SERVER_FQDN}}` 
 
-    The Fully Qualified Domain Name of the server. It should end in .home.arpa, which is the reserved domain name for private servers. An example might be `camera.home.arpa`.
-
-  * `{{PRVT_NET_EN_NAME}}`
-
-    The name of the ethernet adapter used for hosting the private camera subnet. The adapter should first be connected to the switch, then run the `nmcli dev show` command to look for the unconnected ethernet adapter. There should be one connected adapter that has the static IP address set earlier during server preparation, which should be left undisturbed.
+    The Fully Qualified Domain Name of the server. It should end in .home.arpa, which is the reserved domain name for private servers. An example might be `camera.home.arpa`. The default value is the computer name set in the Ubuntu installation process corresponding to the environment variable $HOSTNAME.
 
   * `{{CAMERA_USERNAME}}`
 
@@ -94,7 +98,7 @@ Be mindful of model context size when running the configurations shown below. St
 
   * `{{REPO_PATH}}`
 
-    The full pathname of the onvif-mcp repository, which will be $HOME/onvif-mcp as configured during server preparation. Use the actual pathname rather than the environment variable.
+    The full pathname of the onvif-mcp repository, which will be $HOME/onvif-mcp as configured during server preparation.
 
   * `{{SERVER_USER}}`
 
@@ -102,20 +106,16 @@ Be mindful of model context size when running the configurations shown below. St
 
   * `{{CA_ROOT_PATH}}`
 
-    A storage location for the CA certificate artifacts. A good choice is $HOME/Private-CA, where the actual path name is used rather than the environment variable.
+    A storage location for the CA certificate artifacts. The default is $HOME/Private-CA.
 
   * `{{BACKUP_PATH}}`
 
-    The backup path as determined from [BACKUP.md](docs/BACKUP.md)
+    The backup path as determined from [BACKUP.md](docs/BACKUP.md). 
 
-  * `{{GMAIL_ADDRESS}}`
+4. ### Start the hermes agent and prompt it
 
-    A Gmail address that can be used by the server to send out subscription emails for system users to sign up for a password to allow access. Please refer to [KEYCLOAK_EMAIL.md](docs/KEYCLOAK_EMAIL.md) for more details. The salient point here is that the google email account needs an App Password set that allows the script to automatically send the subscription email. Note that the App Password setting will require two factor authentication for the google account. To set this up, sign up for a gmail account and follow the instructions at [Google app passwords](https://support.google.com/accounts/answer/185833) and [Gmail SMTP settings](https://support.google.com/mail/answer/7104828).
-
-  Start the hermes agent and prompt it
-
-  ```
-  Execute the runbook onvif-mcp/INSTALL.md
+```
+Execute the runbook onvif-mcp/INSTALL.md
 ```
 
   The installation will require you to perform several actions in a separate terminal to initialize and manage the passwords used by the system. Watch for prompts from the agent and copy the commands it generates for you into your terminal and then copy paste the results back to the agent. One of the things it will ask you to do is to generate a gpg key password using the PinEntry program which is a text interface. There are a number of variable selections for which you should accept the default choice by pressing the Enter key. After the certificate expiration is set to Never, the application will ask you to confirm, and the default choice is No, so type y to accept the choice.  After creating the encrypted key certificate, it will ask you to create a password. Enter the password once, then press the Tab key to advance to the second password entry, then press the Enter key to finish.
@@ -142,4 +142,4 @@ Execute Phase 3 of the runbook onvif-mcp/INSTALL.md
 Execute Phase 4 of the runbook onvif-mcp/INSTALL.md
 ```
 
-Following successful login to the MCP server, prompt the agent again to backup the Keycloak authentication server.
+Following successful login to the MCP server, prompt the agent again, telling it that the operation was successful and to backup the Keycloak authentication server.
