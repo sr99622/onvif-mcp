@@ -4,7 +4,11 @@ This project builds a secure IP camera network with enterprise grade OAuth authe
 
 A Hermes agent is used to build out the server and network so only a minimal level of technical expertise is required to build and maintain the system. Hermes will create a skill set for itself as it builds the system so that it becomes your resident expert system adminstrator with all the specialized knowledge required to maintain the system once it is up and running. Advanced system features can be developed by the agent by prompting, so you can expand and customize the system to your requirements without specialized technical expertise.
 
-## How it works
+## Testers Wanted
+
+A limited number of tester sponsorships are available. If your Github account is registered for sponsorship, you can receive $100 USD for installing and testing this system. Fork the onvif-mcp repository, install it and send me a screenshot of the working camera feed from your mobile device and you will get paid. Send me an email for details, you can find my address in my profile. If you have any difficulty getting the system running, open an issue on this page and I will respond with the solution.
+
+## Installation Overview
 
 Take a freshly installed Ubuntu computer with at least two network adapters, and plug in your cameras to one ethernet interface and your LAN to the other. If your machine has only one ethernet adapter, you can add one with a USB adapter, or use the wireless connection. Wireless is not as reliable as wired connections, so keep that in mind. Run the SERVER_PREP script on the computer, which installs all the necessary software, including Hermes. You will need a source of intelligence such as a cloud model provider or local LLM. Hermes will guide you through the installation of the model.
 
