@@ -12,11 +12,11 @@ During installation, you will be prompted to enter a static IP address for the s
 
 When server preparation is complete, fill out the INSTALL.md document so Hermes will have the information it needs for the installation. An important piece you need to know is the name of the ethernet adapter to which the camera are connected. Use the command `nmcli dev show` to get a list of adapters. You should see one that has the static IP you configured during installation and another that is not connected. The one that is not connected is your camera interface and will be configured by Hermes to control the camera network, this it the one you want as {{PRVT_NET_EN_NAME}}. The {{SERVER_IP}} is the static IP set during installation.
 
-You will need an email account for the server so that it can send out invitations to users to set thier passwords for access to the system. This can be done with a Google account that you can configure for this purpose. You will need to add an App Password that allows the script to automatically send the subscription email. Note that the App Password setting will require two factor authentication for the Google account. To set this up, refer to [Google app passwords](https://support.google.com/accounts/answer/185833) and [Gmail SMTP settings](https://support.google.com/mail/answer/7104828).
+You will need an email account for the server so that it can send out invitations to users to set their passwords for access to the system. This can be done with a Google account that you can configure for this purpose. You will need to add an App Password that allows the script to automatically send the subscription email. Note that the App Password setting will require two factor authentication for the Google account. To set this up, refer to [Google app passwords](https://support.google.com/accounts/answer/185833) and [Gmail SMTP settings](https://support.google.com/mail/answer/7104828).
 
 A backup location is needed for the system. For simplicity, you can just make a local folder as the backup. Please refer to the BACKUP.md instructions for details.
 
-Once you have the necessary information, kick off the installation by prompting the Hermes agent. It will prompt you to set up a GPG key to protect your passwords, then ask you to enter a password for the cameras. This is done to prevent your passwords from entering into the agent context, which is important for security. You will need a second terminal open to do these things. Watch the model output and follow the instuctions, pasting the repsonse to the commands it gives you so it knows how to proceed. Passwords are never included in the responses, so pasting is a safe operation.
+Once you have the necessary information, kick off the installation by prompting the Hermes agent. It will prompt you to set up a GPG key to protect your passwords, then ask you to enter a password for the cameras. This is done to prevent your passwords from entering into the agent context, which is important for security. You will need a second terminal open to do these things. Watch the model output and follow the instructions, pasting the response to the commands it gives you so it knows how to proceed. Passwords are never included in the responses, so pasting is a safe operation.
 
 The process of setting up the system requires significant model context. The agent will pause during the setup and ask you to check your available context at certain points during the installation. It is a good idea to use the `/new` directive in the agent prompt to clear context during these breaks to prevent context overflow. A good minimum context of at least 128k is recommended.
 
@@ -28,7 +28,7 @@ Remote access is enabled using Tailscale. The agent can make some of the configu
 
 For advanced applications using the camera MCP server, you will need to register the client IP address with the server. It is a good idea to set a static IP address on the client for this capability similar to what was done during server preparation. Setting a static IP address will depend on your operating system, you can ask the agent for instructions.
 
-For detailed step by step instuctions of the process desribed here, please review the [Building The Server](#building-the-server) section of this document.
+For detailed step by step instructions of the process described here, please review the [Building The Server](#building-the-server) section of this document.
 
 ## System Requirements
 
