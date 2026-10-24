@@ -6,7 +6,7 @@ A Hermes agent is used to build out the server and network so only a minimal lev
 
 ## Testers Wanted
 
-A limited number of tester sponsorships are available. If your Github account is registered for sponsorship, you can receive $100 USD for installing and testing this system. Fork the onvif-mcp repository, install it and send me a screenshot of the working camera feed from your mobile device and you will get paid. Send me an email for details, you can find my address in my profile. If you have any difficulty getting the system running, open an issue on this page and I will respond with the solution.
+A limited number of tester sponsorships are available. If your Github account is registered for sponsorship, you can receive $100 USD for installing and testing this system. Fork the onvif-mcp repository, install it and send me a screenshot of the working camera feed from your mobile device as proof and you will get paid. Send me an email for details, you can find my address in my profile. If you have any difficulty getting the system running, open an issue on this page and I will respond with the solution.
 
 ## Installation Overview
 
