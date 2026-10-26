@@ -41,8 +41,10 @@ not the Gmail account's main password. Do not paste either password into Hermes.
 
 Prompt the user to run the script
 
+```bash
 cd {{REPO_PATH}}
 sudo scripts/KEYCLOAK_EMAIL/keycloak_email_runbook.sh user-store-password
+```
 
 The script creates `/opt/keycloak/gmail-smtp.pass` as `0600 root:root` and never
 prints the secret. An existing file is not overwritten. To rotate the credential

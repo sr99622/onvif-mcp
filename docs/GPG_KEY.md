@@ -116,7 +116,14 @@ can execute those commands and return the result to the agent for evaluation.
   Stop if the new key or its encryption subkey is missing. Do not create a second
   key just to retry the backup.
 
-3. ### Export the secret key locally (USER-run)
+## Password Store Operations
+
+The following commands are run by the user in their own terminal. The executable
+commands are grouped together at the end of this section for presentation to the
+user. Please read through each of the steps and make the appropriate substitutions
+to the commands at the end of the section and ask the user to run them.
+
+1. ### Export the secret key locally (USER-run)
 
   Replace `{{GPG_FINGERPRINT}}` with the full fingerprint from step 2. The
   fingerprint is the string under the sec line from `gpg --list-secret-keys --fingerprint`
@@ -146,21 +153,11 @@ can execute those commands and return the result to the agent for evaluation.
   `{{GPG_FINGERPRINT}}` with the full fingerprint from step 2, preserving
   spaces and quoting:
 
-  ```bash
-  cd {{REPO_PATH}}
-  scripts/GPG_KEY/gpg_key_runbook.sh export-key --fingerprint "{{GPG_FINGERPRINT}}"
-  ```
-
-4. ### Verify the local export before password-store creation (USER-run)
+2. ### Verify the local export before password-store creation (USER-run)
 
   The export must be nonempty and readable as a secret-key export. These
   checks display metadata, not the private key bytes. Use the script as the
   source of truth for the verification commands:
-
-  ```bash
-  cd {{REPO_PATH}}
-  scripts/GPG_KEY/gpg_key_runbook.sh verify-export --fingerprint "{{GPG_FINGERPRINT}}"
-  ```
 
   The packet listing must show a secret primary key and a secret subkey. Keep the
   GPG passphrase independently memorable or recoverable: losing both the live
@@ -168,28 +165,18 @@ can execute those commands and return the result to the agent for evaluation.
   future `pass` store. Once verified, initialize the password store and back up
   both the GPG export and password store to `{{BACKUP_PATH}}`.
 
-5. ### Initialize the password store (USER-run)
+3. ### Initialize the password store (USER-run)
 
   Install `pass` if it is missing, then initialize the store with the same full
   fingerprint used for the GPG key backup. Bare `pass init` can select the wrong
   key or fail on some systems, so use the explicit fingerprint through the
   helper script. Run this after `pass` is installed:
 
-  ```bash
-  cd {{REPO_PATH}}
-  scripts/GPG_KEY/gpg_key_runbook.sh init-store --fingerprint "{{GPG_FINGERPRINT}}"
-  ```
-
-6. ### Add camera password (USER-run)
+4. ### Add camera password (USER-run)
 
   Add the operational password that other build procedures consume. It is
   entered interactively in the terminal so it does not appear in shell history,
   an agent transcript, or a committed runbook.
-
-  ```bash
-  cd {{REPO_PATH}}
-  scripts/GPG_KEY/gpg_key_runbook.sh insert-passwords
-  ```
 
   `camera` is the shared camera password used in RTSP/ONVIF camera access.
   Use the first line of the entry as the password. If the entry needs notes,
@@ -199,12 +186,7 @@ can execute those commands and return the result to the agent for evaluation.
   Verify only that the entry exists and decrypts; do not paste the password into
   the agent chat or logs:
 
-  ```bash
-  cd {{REPO_PATH}}
-  scripts/GPG_KEY/gpg_key_runbook.sh verify-passwords
-  ```
-
-7. ### Back up the password store (USER-run)
+5. ### Back up the password store (USER-run)
 
   First copy the local GPG secret-key export to `{{BACKUP_PATH}}` and
   verify the copy.
@@ -227,15 +209,22 @@ can execute those commands and return the result to the agent for evaluation.
   The agent must resolve `{{BACKUP_PATH}}` before presenting or running this
   command. Do not ask the user to type the double-curly-brace value literally.
 
-  ```bash
-  cd {{REPO_PATH}}
-  scripts/GPG_KEY/gpg_key_runbook.sh backup --backup-path {{BACKUP_PATH}}
-  ```
-
   The backup command refuses to write into a missing or unwritable location,
   copies `ca-vault-gpg.key.gpg` without overwriting a different existing
   export, creates `password-store-backup-<label>.tar.gz`, writes
   `pass-gpg-id.txt`, and prints non-secret verification metadata.
+
+### Tell the user to run these commands in their own terminal and return the results
+
+  ```bash
+  cd {{REPO_PATH}}
+  scripts/GPG_KEY/gpg_key_runbook.sh export-key --fingerprint "{{GPG_FINGERPRINT}}"
+  scripts/GPG_KEY/gpg_key_runbook.sh verify-export --fingerprint "{{GPG_FINGERPRINT}}"
+  scripts/GPG_KEY/gpg_key_runbook.sh init-store --fingerprint "{{GPG_FINGERPRINT}}"
+  scripts/GPG_KEY/gpg_key_runbook.sh insert-passwords
+  scripts/GPG_KEY/gpg_key_runbook.sh verify-passwords
+  scripts/GPG_KEY/gpg_key_runbook.sh backup --backup-path {{BACKUP_PATH}}
+  ```
 
 # Recovery
 
