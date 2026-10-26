@@ -151,7 +151,7 @@ can execute those commands and return the result to the agent for evaluation.
   scripts/GPG_KEY/gpg_key_runbook.sh export-key --fingerprint "{{GPG_FINGERPRINT}}"
   ```
 
-4. ### Verify the local export before password-store creation
+4. ### Verify the local export before password-store creation (USER-run)
 
   The export must be nonempty and readable as a secret-key export. These
   checks display metadata, not the private key bytes. Use the script as the

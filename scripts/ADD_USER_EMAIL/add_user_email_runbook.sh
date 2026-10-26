@@ -285,7 +285,7 @@ creds=jget(base+'/'+urllib.parse.quote(uid, safe='')+'/credentials')
 required=set(user.get('requiredActions') or [])
 if creds or not {'VERIFY_EMAIL','UPDATE_PASSWORD'} <= required or user.get('emailVerified'):
     raise SystemExit('User is not in pending no-credential invite state; not resending')
-status, _ = req(base+'/'+urllib.parse.quote(uid, safe='')+'/execute-actions-email?'+urllib.parse.urlencode({'lifespan':'86400'}), 'PUT', json.dumps(['VERIFY_EMAIL','UPDATE_PASSWORD']), token=token, expect={204})
+status, _ = req(server+base+'/'+urllib.parse.quote(uid, safe='')+'/execute-actions-email?'+urllib.parse.urlencode({'lifespan':'86400'}), 'PUT', json.dumps(['VERIFY_EMAIL','UPDATE_PASSWORD']), token=token, expect={204})
 print('resend-api-status:', status)
 print('new-user-id:', uid)
 print('username:', user.get('username'))

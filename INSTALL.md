@@ -75,7 +75,7 @@ Required Values
 
 Runbook
 
-[ADD_USER_EMAIL](docs/ADD_USER_EMAIL)
+[ADD_USER_EMAIL.md](docs/ADD_USER_EMAIL.md)
 
 Pause and allow the user to check their email and test the camera apps before continuing. Remind the user to affirm a successful login attempt and request a backup.
 
@@ -89,6 +89,6 @@ Required Values
 
 Runbook
 
-[ADD_CLIENT_ON_SERVER](docs/ADD_CLIENT_ON_SERVER)
+[ADD_CLIENT_ON_SERVER.md](docs/ADD_CLIENT_ON_SERVER.md)
 
 Pause and allow the user to verfiy a successful hermes mcp login before continuing. Remind the user to affirm a successful login attempt and request a backup.
