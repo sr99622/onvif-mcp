@@ -7,7 +7,7 @@
 | `{{GMAIL_ADDRESS}}` | Dedicated Gmail sender address |
 | `{{SERVER_FQDN}}` | Camera server hostname used by clients |
 | `{{BACKUP_PATH}}` | Existing backup folder |
-| {{REPO_PATH}} | The full pathname for this repository |
+| `{{REPO_PATH}}` | The full pathname for this repository |
 
 Deployment defaults from KEYCLOAK.md: realm `mcp`, administrator
 `keycloak-admin` in `master`, loopback URL `http://127.0.0.1:8080/auth`,
@@ -18,7 +18,8 @@ Compose directory `/opt/keycloak`. Confirm these against this installation.
 The user has created a Google app password named Camera Keycloak for the
 dedicated Gmail account. Tell the user to run the script below in their own 
 terminal and enter the 16 character password when prompted. The password 
-should not ever be entered into Hermes.
+should not ever be entered into Hermes. Do not print anything else to the 
+screen until the user has responded with the result.
 
 ```bash
 cd {{REPO_PATH}}

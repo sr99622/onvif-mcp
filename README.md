@@ -143,7 +143,7 @@ Be mindful of model context size when running the configurations shown below. St
 4. ### Start the hermes agent and prompt it
 
 ```
-Execute the runbook onvif-mcp/INSTALL.md
+Execute the runbook onvif-mcp/INSTALL.md. Note that the user will be prompted to run some of the commands in their own terminal. Wait for the user to respond to your prompt before continuing.
 ```
 
   The installation will require you to perform several actions in a separate terminal to initialize and manage the passwords used by the system. Watch for prompts from the agent and copy the commands it generates for you into your terminal and then copy paste the results back to the agent. One of the things it will ask you to do is to generate a gpg key password using the PinEntry program which is a text interface. There are a number of variable selections for which you should accept the default choice by pressing the Enter key. After the certificate expiration is set to Never, the application will ask you to confirm, and the default choice is No, so type y to accept the choice.  After creating the encrypted key certificate, it will ask you to create a password. Enter the password once, then press the Tab key to advance to the second password entry, then press the Enter key to finish.
@@ -151,7 +151,7 @@ Execute the runbook onvif-mcp/INSTALL.md
   After the Phase 1 actions are completed, the agent will prompt you to check the available context. In most cases, the context will have been used to a significant degree and should be cleared for the next phase, which again requires significant context. Type `/new` in the hermes prompt window to clear the context, then prompt it to continue configuration.
 
 ```
-Continue executing the runbook onvif-mcp/INSTALL.md starting with Phase 2
+Continue executing the runbook onvif-mcp/INSTALL.md starting with Phase 2. Note that the user will be prompted to enter the Camera App Password in their own terminal. Wait for the user to respond to the prompt before continuing.
 ```
 
   Upon completion of Phase 2, the system is ready for client access. The agent will prompt you to check the available context again, it can be safely cleared as before using the `/new` directive in the agent prompt. Assuming that the user information has been filled out in the Required Values table, prompt the agent

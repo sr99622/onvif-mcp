@@ -58,9 +58,8 @@ After step 2, extract the full fingerprint from the `sec` block and use it to
 replace `{{GPG_FINGERPRINT}}` in later commands. Preserve the fingerprint exactly,
 including spaces, and quote it in shell commands.
 
-Steps 3 - 7 are USER-run, and can be presented to the user as a single block of 
-commands that can be entered into their terminal at the same time. The user 
-can execute those commands and return the result to the agent for evaluation.
+When a user is prompted for input, do not print anything else to the screen 
+until after the user has responded to the prompt.
 
 ## Key Generation
 
