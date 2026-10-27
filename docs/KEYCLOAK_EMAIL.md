@@ -15,12 +15,10 @@ Compose directory `/opt/keycloak`. Confirm these against this installation.
 
 ## 1. Store the app password privately (USER-run)
 
-The administrator creates a Google app password named Camera Keycloak for the
-dedicated Gmail account, then runs the script in their own interactive terminal
-on the camera server. Enter the Google app password at the hidden prompt. It is
-not the Gmail account's main password. Do not paste either password into Hermes.URL
-
-Prompt the user to run the script in their own terminal.
+The user has created a Google app password named Camera Keycloak for the
+dedicated Gmail account. Tell the user to run the script below in their own 
+terminal and enter the 16 character password when prompted. The password 
+should not ever be entered into Hermes.
 
 ```bash
 cd {{REPO_PATH}}
