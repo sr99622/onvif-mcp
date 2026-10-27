@@ -50,7 +50,7 @@ There are several scripts that require camera data that is acquired using the ca
 
 [FIREWALL.md](docs/FIREWALL.md)
 
-At the completion of Phase 1, pause and allow the user to check for available context before continuing with Phase 2.
+At the completion of Phase 1, stop and allow the user to reset context before continuing with Phase 2.
 
 ### Phase 2
 
@@ -91,4 +91,4 @@ Runbook
 
 [ADD_CLIENT_ON_SERVER.md](docs/ADD_CLIENT_ON_SERVER.md)
 
-Pause and allow the user to verfiy a successful hermes mcp login before continuing. Remind the user to affirm a successful login attempt and request a backup.
+Pause and allow the user to verify a successful hermes mcp login before continuing. Remind the user to affirm a successful login attempt and request a backup.
