@@ -1,10 +1,5 @@
 # Configure Gmail delivery for Keycloak using Hermes
 
-Run this once after README Step 7. Then use ADD_USER_EMAIL.md instead of the
-older ADD_USER.md for human accounts. Commands run on the camera server. This
-runbook uses the existing Docker Compose installation and Keycloak Admin API; it
-does not require the Keycloak web administrator console.
-
 ## Inputs
 
 | Value | Meaning |
@@ -18,20 +13,6 @@ Deployment defaults from KEYCLOAK.md: realm `mcp`, administrator
 `keycloak-admin` in `master`, loopback URL `http://127.0.0.1:8080/auth`,
 Compose directory `/opt/keycloak`. Confirm these against this installation.
 
-## Executable source of truth
-
-Executable actions for this runbook are implemented by:
-
-```bash
-scripts/KEYCLOAK_EMAIL/keycloak_email_runbook.sh
-```
-
-That script is the single source of truth for commands that store the SMTP app
-password, verify prerequisites, configure SMTP in Keycloak, create pre/post
-Keycloak checkpoints, and perform redacted status checks. The prose below states
-intent, boundaries, and expected verification output without duplicating shell
-fragments that can drift from the script.
-
 ## 1. Store the app password privately (USER-run)
 
 The administrator creates a Google app password named Camera Keycloak for the
@@ -39,7 +20,7 @@ dedicated Gmail account, then runs the script in their own interactive terminal
 on the camera server. Enter the Google app password at the hidden prompt. It is
 not the Gmail account's main password. Do not paste either password into Hermes.URL
 
-Prompt the user to run the script
+Prompt the user to run the script in their own terminal.
 
 ```bash
 cd {{REPO_PATH}}
