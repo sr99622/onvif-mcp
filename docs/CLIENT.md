@@ -181,7 +181,7 @@ Once the client has been prepared with the requisite software and the certificat
 * ### Install the certificate
 
   ```powershell
-  curl -O http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt 
+  Invoke-WebRequest -Uri "http://nuc.home.arpa/ca/camera-system-root-ca.crt" -OutFile "camera-system-root-ca.crt"
   ```
 
   #### Open the Certificate Manager
@@ -383,6 +383,12 @@ hermes config set agent.disabled_toolsets '["a2a","bot_room","clarify","code_exe
 After making this change, a reboot is recommended and open Hermes desktop to a new chat session before attempting to control the preview pane from the prompt.
 
 From the Hermes desktop, you can prompt in a similar way as using the Chrome browser, just change the reference to preview pane.
+
+Start Hermes desktop
+
+```
+hermes desktop
+```
 
 Get a list of cameras
 
