@@ -274,7 +274,7 @@ A login dialog box will appear asking for your credentials. Enter your username 
 
 ## Configure the MCP server in Hermes
 
-Edit `~/.hermes/config.yaml` and add the following towards the end of the file above the comments and replace the {{...}} fields with your local values:
+Edit `~/.hermes/config.yaml` (for Windows PowerShell, this is $Env:LOCALAPPDATA\hermes\config.yaml) and add the following towards the end of the file above the comments and replace the {{...}} fields with your local values:
 
 ```yaml
 mcp_servers:
