@@ -181,7 +181,7 @@ Once the client has been prepared with the requisite software and the certificat
 * ### Install the certificate
 
   ```powershell
-  Invoke-WebRequest -Uri "http://nuc.home.arpa/ca/camera-system-root-ca.crt" -OutFile "camera-system-root-ca.crt"
+  Invoke-WebRequest -Uri "http://{{SERVER_FQDN}}/ca/camera-system-root-ca.crt" -OutFile "camera-system-root-ca.crt"
   ```
 
   #### Open the Certificate Manager
