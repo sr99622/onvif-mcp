@@ -2,6 +2,8 @@
 
 This project builds a secure IP camera network with enterprise grade OAuth authentication and isolated private network ONVIF cameras. Cameras can be configured such that there is no direct access between the cameras and the local network or wider internet. All camera network traffic is proxied by a single secure server protected by firewall and encrypted by TLS with a private CA certificate. Camera live streams can be accessed remotely by mobile devices using a secured Tailscale connection in addition to the protections already provided.
 
+<image src="assets/camera-network-dark.png">
+
 A Hermes agent is used to build out the server and network so only a minimal level of technical expertise is required to build and maintain the system. Hermes will create a skill set for itself as it builds the system so that it becomes your resident expert system adminstrator with all the specialized knowledge required to maintain the system once it is up and running. Advanced system features can be developed by the agent by prompting, so you can expand and customize the system to your requirements without specialized technical expertise.
 
 ## Installation Overview
