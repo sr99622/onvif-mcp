@@ -198,6 +198,36 @@ chromium --headless=new --user-data-dir="$HOME/.config/chromium" --dump-dom 'htt
 
 3. Once the file is on disk, remux it into a seekable static MP4 (`-c copy -movflags +faststart`, see the static workflow below) and display it in the preview pane with a player HTML page pointing at the local file.
 
+## Windows notes
+
+These apply when running path B/C from a Windows workstation (typically without server shell access). They generalize across Chrome/Edge versions; behavior was verified on Chrome 157 and Edge 156.
+
+### CDP launches and profile locking
+- Closing all browser windows does NOT reliably release the profile directory on Windows — background-app instances keep holding it. A launch with `--user-data-dir` targeting a live profile silently hands off to the existing instance and exits WITHOUT binding its debug port. Symptom: browser processes are alive but `/json` never comes up.
+- Before every CDP launch, verify no process of that browser flavor is running (e.g. `tasklist | grep -i chrome`), force-kill if needed. Orphaned instances can reappear; re-check immediately before launching.
+- Observed on the versions above: `--headless=new` against an *existing* user-data-dir may start and render yet never bind the debug port, while a fresh temp profile binds fine. If an existing-profile launch fails to bind, fall back to either (a) a visible (non-headless) instance with CDP where the user signs in once — then drive that same instance over its websocket; or (b) a fresh scratch profile directory.
+- `--remote-debugging-pipe` is unreliable on these Windows builds; prefer `--remote-debugging-port`. Always pass `--remote-allow-origins=*` so non-browser websocket clients (e.g. Python `websockets`) can attach.
+- Launch long-lived browser instances as managed background processes, never inline `&`; health-check `/json` in a separate call after every launch before scripting against it.
+
+### Sessions and login
+- A fresh profile holds no session, and headless cannot complete an interactive Keycloak login. Establish the session first — path A pane login, or a visible window where the user signs in — then perform the retrieval in that same live instance rather than relaunching.
+
+### Streaming large responses through CDP
+- Stream binary responses out of the page in ~1 MB base64 chunks via `Runtime.evaluate` (`awaitPromise` + `returnByValue`), held on `window` after a single `fetch`.
+- V8 call-stack limit: `String.fromCharCode.apply(null, …)` with more than ~100k arguments throws "Maximum call stack size exceeded". Use slices of 32 KB or less inside the per-chunk loop.
+- If streaming fails mid-way, resume from the in-page buffer (track a running offset) instead of re-fetching — JS errors do not invalidate bytes already captured.
+
+### Transient auth failures
+- `/playback/get` can return 500 (auth-token timeout) even while `/playback/list` returns 200 — for browser display and programmatic retrieval alike. Retry once before treating it as failure; only re-authenticate if the session has genuinely expired.
+
+### Shell and tooling on this host
+- MSYS path translation is disabled for native programs in the agent shell: pass `C:/Users/…` forward-slash native paths to native tools (ffmpeg, curl, python); `/c/Users/…` works only for POSIX-side tools.
+- curl (schannel) can fail TLS verification against the self-signed camera CA with a revocation-status error; prefer Python `ssl.create_default_context(cafile=…)` for scripted HTTPS.
+- The hermes-bundled ffmpeg on Windows lives under `%LOCALAPPDATA%\hermes\tools\ffmpeg-*/bin/ffmpeg` (win32-x64 build), alongside the Linux layout in "ffmpeg availability".
+
+### Retrieval without server shell access
+- When the workstation has no shell access to the server, perform the loopback GET from the Windows host through an authenticated browser session (the path C principle) and remux locally with the bundled ffmpeg. The nginx `/playback-cache/` static-serve step applies only when you must display through the authenticated public origin; delivering a local file makes it unnecessary.
+
 ## Selecting recordings
 
 Prefer the main stream paths because this deployment records only main streams. Substreams are live-only unless explicitly configured otherwise.
