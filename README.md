@@ -2,7 +2,7 @@
 
 This project builds a secure IP camera network with an isolated private subnet for ONVIF cameras. Enterprise grade OAuth authentication provided by KeyCloak. Camera RTSP streams are converted to WebRTC protocal by MediaMTX. Camera discovery and control is available through ONVIF MCP. All camera network traffic is proxied by a single secure NGINX server protected by ufw firewall and encrypted for HTTPS with a private CA certificate. Remote access availale with a secured Tailscale connection.
 
-<image src="assets/camera-network-dark.png">
+<image src="assets/camera-network-redrawn-dark.png">
 
 A Hermes agent is used to build out the server and network so only a minimal level of technical expertise is required to build and maintain the system. Hermes will create a skill set for itself as it builds the system so that it becomes your resident expert system adminstrator with all the specialized knowledge required to maintain the system once it is up and running. Advanced system features can be developed by the agent by prompting, so you can expand and customize the system to your requirements without specialized technical expertise.
 
