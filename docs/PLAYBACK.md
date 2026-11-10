@@ -188,13 +188,23 @@ When the goal is to save the recording file to disk rather than display it, head
 chromium --headless=new --user-data-dir="$HOME/.config/chromium" --remote-debugging-port=9222 --remote-allow-origins=* 'https://{{SERVER_FQDN}}/playback/list?path=4B0013BPAABE264%2FMediaProfile000'
 ```
 
+Pitfall (verified 2026-11-05): the browser refuses `--remote-debugging-port` when `--user-data-dir` is its DEFAULT data directory (e.g. `$HOME/.config/google-chrome` for Google Chrome on Linux). The process keeps running but prints "DevTools remote debugging requires a non-default data directory" and never opens port 9222 — the health check then fails with connection refused. When that happens, copy the profile to a non-default directory (`Local State` + `Default/Cookies` carry the session; a full profile is small, ~57M), remove stale lock files from the COPY, and launch against the copy:
+
+```bash
+cp -a "$HOME/.config/google-chrome" "$HOME/.config/chrome-cdp-profile"
+rm -f "$HOME/.config/chrome-cdp-profile"/Singleton{Lock,Socket,Cookie}
+google-chrome --headless=new --user-data-dir="$HOME/.config/chrome-cdp-profile" --remote-debugging-port=9222 --remote-allow-origins=* 'https://{{SERVER_FQDN}}/playback/list?path=4B0013BPAABE264%2FMediaProfile000'
+```
+
+The copy remains usable until its session expires; re-copy from the live profile when it does.
+
 Health-check with `curl -s http://127.0.0.1:9222/json` before scripting. Confirm the session carried over by dumping the list page — it must return the JSON directly, not the Keycloak sign-in page:
 
 ```bash
 chromium --headless=new --user-data-dir="$HOME/.config/chromium" --dump-dom 'https://{{SERVER_FQDN}}/playback/list?path=4B0013BPAABE264%2FMediaProfile000'
 ```
 
-2. Binary responses cannot be saved from `--dump-dom`. Fetch them in the page context over CDP (`Runtime.evaluate` with `awaitPromise` + `returnByValue`), store the bytes on `window`, and read them out as base64 chunks (~1 MB per call). Filter CDP responses by `id` so stray event messages don't break the read loop. Playwright's persistent-context download API is an equivalent alternative.
+2. Binary responses cannot be saved from `--dump-dom`. Fetch them in the page context over CDP (`Runtime.evaluate` with `awaitPromise` + `returnByValue`), store the bytes on `window`, and read them out as base64 chunks (~1 MB per call). Filter CDP responses by `id` so stray event messages don't break the read loop. Playwright's persistent-context download API is an equivalent alternative. Verified on a 296MB MP4 (2026-11-05): if the first in-page fetch returns HTTP 500 (transient auth-token timeout), one `Page.reload` plus a single retry clears it.
 
 3. Once the file is on disk, remux it into a seekable static MP4 (`-c copy -movflags +faststart`, see the static workflow below) and display it in the preview pane with a player HTML page pointing at the local file.
 
