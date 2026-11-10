@@ -6,7 +6,7 @@ Integrate one newly discovered ONVIF camera into the running system without
 disturbing existing configuration. Addition is incremental: the runbook adds
 only the new camera's registry entry, MediaMTX paths, and snapshot routes.
 Existing cameras' entries are never modified, so any site-specific features
-baked into the current configuration stay intact.
+of the current configuration stay intact.
 
 Browser authorization (Keycloak + oauth2-proxy) is route-family based, not
 per-camera, so the new camera inherits `auth_request` protection on
