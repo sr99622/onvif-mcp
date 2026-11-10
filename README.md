@@ -1,6 +1,6 @@
 ## ONVIF MCP
 
-This project builds a secure IP camera network with enterprise grade OAuth authentication and isolated private subnet for ONVIF cameras. Camera RTSP streams are converted to WebRTC protocal. Camera discovery and control is available through ONVIF MCP. All camera network traffic is proxied by a single secure server protected by firewall and encrypted for HTTPS with a private CA certificate. Remote access availale with a secured Tailscale connection.
+This project builds a secure IP camera network with an isolated private subnet for ONVIF cameras. Enterprise grade OAuth authentication provided by KeyCloak. Camera RTSP streams are converted to WebRTC protocal by MediaMTX. Camera discovery and control is available through ONVIF MCP. All camera network traffic is proxied by a single secure NGINX server protected by ufw firewall and encrypted for HTTPS with a private CA certificate. Remote access availale with a secured Tailscale connection.
 
 <image src="assets/camera-network-dark.png">
 
