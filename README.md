@@ -1,6 +1,6 @@
 ## ONVIF MCP
 
-This project builds a secure IP camera network with enterprise grade OAuth authentication and isolated private network ONVIF cameras. Cameras can be configured such that there is no direct access between the cameras and the local network or wider internet. All camera network traffic is proxied by a single secure server protected by firewall and encrypted by TLS with a private CA certificate. Camera live streams can be accessed remotely by mobile devices using a secured Tailscale connection in addition to the protections already provided.
+This project builds a secure IP camera network with enterprise grade OAuth authentication and isolated private subnet for ONVIF cameras. Camera RTSP streams are converted to WebRTC protocal. Camera discovery and control is available through ONVIF MCP. All camera network traffic is proxied by a single secure server protected by firewall and encrypted for HTTPS with a private CA certificate. Remote access availale with a secured Tailscale connection.
 
 <image src="assets/camera-network-dark.png">
 
